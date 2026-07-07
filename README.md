@@ -111,11 +111,29 @@ Two ways to run it:
   The app's **Export config** button writes a `bridge-config.json` the Node
   service reads directly.
 
+## Desktop app (Electron)
+
+Prefer a real app? [**`desktop/`**](desktop/) is an Electron build of the same
+three tabs with **native MIDI** — and it can **create its own virtual port**, so
+the Bridge needs no IAC/loopMIDI setup (the port `SL MkIII Bridge` just appears
+for your DAW). All MIDI runs in the main process via `@julusian/midi`; the shared
+`js/midi.js` auto-detects Electron and routes through it instead of Web MIDI.
+
+```bash
+cd desktop
+npm install
+npm start            # dev run
+npm run dist         # build a .dmg / .exe / .AppImage
+```
+
+See [desktop/README.md](desktop/README.md).
+
 ## Browser support
 
-Requires the **Web MIDI API with SysEx**: Chrome, Edge, and Opera (desktop).
-Safari and Firefox do not currently support Web MIDI SysEx — use one of the
-above, or use the exported `.syx` file with a native SysEx tool.
+The browser build requires the **Web MIDI API with SysEx**: Chrome, Edge, and
+Opera (desktop). Safari and Firefox don't support Web MIDI SysEx — use one of
+those, the exported `.syx` with a native SysEx tool, or the **desktop app**
+above (works everywhere, no Web MIDI needed).
 
 ## How it works
 

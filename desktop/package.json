@@ -1,0 +1,32 @@
+{
+  "name": "slmkiii-customizer-desktop",
+  "version": "1.0.0",
+  "description": "Desktop (Electron) build of the Novation SL MkIII LED Customizer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "node copy-assets.js && electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.1.1"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.slmkiii.customizer",
+    "productName": "SL MkIII Customizer",
+    "files": [
+      "main.js",
+      "preload.js",
+      "copy-assets.js",
+      "app/**/*"
+    ],
+    "extraMetadata": { "main": "main.js" },
+    "mac": { "category": "public.app-category.music", "target": ["dmg", "zip"] },
+    "win": { "target": ["nsis"] },
+    "linux": { "target": ["AppImage"], "category": "Audio" }
+  }
+}

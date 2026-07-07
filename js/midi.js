@@ -8,6 +8,11 @@
 (function (global) {
   'use strict';
 
+  // In the Electron desktop app, a preload script exposes `electronMIDI` and all
+  // MIDI (including a created virtual port) runs natively in the main process.
+  // Use that backend when present; otherwise fall back to the Web MIDI API.
+  if (global.electronMIDI) { installElectronBackend(global); return; }
+
   const state = {
     access: null,
     output: null, // selected MIDIOutput
@@ -130,4 +135,59 @@
     outputPorts, inputPorts, sendToOutput, subscribeInput,
     guessDefaultInputId, guessDefaultOutputId,
   };
+
+  // ---------------------------------------------------------------------------
+  // Electron backend: same public API, backed by native MIDI over IPC.
+  // Port ids are just the port names (stable enough across a session).
+  // ---------------------------------------------------------------------------
+  function installElectronBackend(g) {
+    const E = g.electronMIDI;
+    const st = { connected: false, outputs: [], inputs: [], selectedId: null, listeners: [], handlers: {} };
+    const inControl = (n) => /incontrol/i.test(n);
+
+    E.onMessage(({ port, bytes }) => (st.handlers[port] || []).forEach((h) => h(bytes)));
+    E.onPorts((p) => { applyPorts(p); st.listeners.forEach((cb) => cb(snap())); });
+
+    function applyPorts(p) {
+      st.outputs = (p.outputs || []).map((n) => ({ id: n, name: n }));
+      st.inputs = (p.inputs || []).map((n) => ({ id: n, name: n }));
+      if (!st.selectedId || !st.outputs.some((o) => o.id === st.selectedId)) st.selectedId = guessOut();
+    }
+    async function connect() {
+      applyPorts(await E.list());
+      st.connected = true;
+      const s = snap();
+      st.listeners.forEach((cb) => cb(s));
+      return s;
+    }
+    function snap() {
+      return { connected: st.connected, outputs: st.outputs.slice(),
+        selectedId: st.selectedId, selectedName: st.selectedId };
+    }
+    const guessOut = () => { const o = st.outputs.find((x) => inControl(x.name)) || st.outputs[0]; return o ? o.id : null; };
+    const guessIn = () => { const i = st.inputs.find((x) => inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
+
+    g.SLMK = g.SLMK || {};
+    g.SLMK.midi = {
+      connect,
+      snapshot: snap,
+      onChange: (cb) => st.listeners.push(cb),
+      selectOutputById: (id) => { st.selectedId = id; return { id, name: id }; },
+      send: (bytes) => { if (st.selectedId) E.send(st.selectedId, bytes); },
+      sendToOutput: (id, bytes) => { if (id) E.send(id, bytes); },
+      outputPorts: () => st.outputs.slice(),
+      inputPorts: () => st.inputs.slice(),
+      subscribeInput: (id, handler) => {
+        if (!id) return () => {};
+        (st.handlers[id] = st.handlers[id] || []).push(handler);
+        E.listen(id, true);
+        return () => {
+          st.handlers[id] = (st.handlers[id] || []).filter((h) => h !== handler);
+          if (!st.handlers[id].length) E.listen(id, false);
+        };
+      },
+      guessDefaultInputId: guessIn,
+      guessDefaultOutputId: guessOut,
+    };
+  }
 })(window);
