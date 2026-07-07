@@ -1,0 +1,15 @@
+{
+  "name": "slmkiii-bridge",
+  "version": "1.0.0",
+  "description": "Live colour + custom-mapping bridge for the Novation SL MkIII (InControl mode)",
+  "bin": { "slmkiii-bridge": "bridge.js" },
+  "scripts": {
+    "start": "node bridge.js",
+    "list": "node bridge.js --list",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@julusian/midi": "^3.1.1"
+  },
+  "license": "MIT"
+}

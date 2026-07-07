@@ -1,0 +1,33 @@
+{
+  "//": "Copy to config.json and edit. Put the SL MkIII in InControl mode.",
+
+  "inputPort": "InControl",
+  "outputPort": "InControl",
+  "virtualPort": "SL MkIII Bridge",
+  "keepAliveMs": 4000,
+  "clearOnExit": true,
+  "passthrough": false,
+
+  "//colors": "Inline map, or a string path to a .json exported by the web tool.",
+  "colors": {
+    "Pad 1": { "hex": "#ff0000", "behavior": "solid" },
+    "Pad 2": { "hex": "#ff7b00", "behavior": "solid" },
+    "Pad 3": { "hex": "#ffd200", "behavior": "solid" },
+    "Pad 4": { "hex": "#00ff44", "behavior": "solid" },
+    "Pad 9": { "hex": "#00ffff", "behavior": "pulse" },
+    "Play": { "hex": "#00ff00", "behavior": "solid" },
+    "Record": { "hex": "#ff0000", "behavior": "solid" }
+  },
+
+  "//mappings": "InControl control -> what to emit on the virtual port.",
+  "mappings": {
+    "Pad 1": { "type": "note", "number": 36, "channel": 10 },
+    "Pad 2": { "type": "note", "number": 38, "channel": 10 },
+    "Pad 3": { "type": "note", "number": 42, "channel": 10 },
+    "Pad 4": { "type": "note", "number": 46, "channel": 10 },
+    "Knob 1": { "type": "cc", "number": 20, "channel": 1 },
+    "Knob 2": { "type": "cc", "number": 21, "channel": 1 },
+    "Fader 1": { "type": "cc", "number": 7, "channel": 1 },
+    "Soft 1": { "type": "cc", "number": 64, "channel": 1 }
+  }
+}

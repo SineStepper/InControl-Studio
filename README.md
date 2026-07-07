@@ -84,6 +84,23 @@ the firmware doesn't read *some* byte as colour. So there's a second page,
 Everything runs client-side; [`js/template.js`](js/template.js) is the codec and
 [`js/template-lab.js`](js/template-lab.js) the UI.
 
+## Colours *and* your own mappings, live — the Bridge
+
+Custom colours only exist in InControl mode, where controls send *fixed*
+messages instead of your template's mapping. The [**`bridge/`**](bridge/) Node
+service reconciles that: it holds your colours on the device (re-asserting them
+so they stick) **and** remaps the fixed InControl messages to whatever you want,
+on a virtual MIDI port your DAW/synth reads. Colours + custom mappings at the
+same time, no firmware — as long as the bridge is running. See
+[bridge/README.md](bridge/README.md).
+
+```bash
+cd bridge && npm install
+node bridge.js --list          # find your ports
+cp config.example.json config.json   # edit colours + mappings
+node bridge.js                 # SL MkIII in InControl mode
+```
+
 ## Browser support
 
 Requires the **Web MIDI API with SysEx**: Chrome, Edge, and Opera (desktop).
