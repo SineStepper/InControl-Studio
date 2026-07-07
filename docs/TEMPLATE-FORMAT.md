@@ -100,8 +100,9 @@ counts):
 
 **Conclusion:** LED colours are not part of the template. Custom LED colours are
 only controllable *live* via the InControl SysEx API ([PROTOCOL.md](PROTOCOL.md)).
-The [Template Lab](../template-lab.html) exists to let you *test this on
-hardware* by poking the value bytes and observing whether the LEDs react.
+The **Template Lab** tab ([../index.html#template](../index.html#template)) exists
+to let you *test this on hardware* by poking the value bytes and observing whether
+the LEDs react.
 
 ### Hardware-confirmed (tested on a real SL MkIII)
 
@@ -117,4 +118,4 @@ Both open questions were settled on hardware:
 
 **Therefore:** custom LED colours are strictly an InControl-mode, live feature.
 They cannot be baked into a template or shown in standalone template mode. Use
-the [live customizer](../index.html) in InControl view.
+the [Live Colours tab](../index.html#customizer) in InControl view.

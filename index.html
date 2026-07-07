@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Novation SL MkIII — LED Colour Customizer</title>
+  <title>Novation SL MkIII — LED Customizer</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -11,11 +11,12 @@
   <header class="topbar">
     <div class="brand">
       <span class="dot"></span>
-      <h1>SL MkIII <em>LED Customizer</em></h1>
+      <h1>SL MkIII <em>Customizer</em></h1>
     </div>
-    <nav class="nav">
-      <a href="index.html" class="active">Live LED Customizer</a>
-      <a href="template-lab.html">Template Lab</a>
+    <nav class="tabs">
+      <button class="tab" data-view="customizer">Live Colours</button>
+      <button class="tab" data-view="template">Template Lab</button>
+      <button class="tab" data-view="bridge">Bridge</button>
     </nav>
     <div class="midi">
       <button id="connect" class="btn primary">Connect MIDI</button>
@@ -24,50 +25,133 @@
     </div>
   </header>
 
-  <div class="toolbar">
-    <label class="check"><input type="checkbox" id="autosend" checked /> Live send</label>
-    <span class="sep"></span>
-    <button class="btn" id="send-selected">Send selected</button>
-    <button class="btn" id="send-all">Send all</button>
-    <button class="btn" id="blackout">All off</button>
-    <button class="btn" id="rainbow">Rainbow pads</button>
-    <span class="sep"></span>
-    <button class="btn" id="select-all">Select all</button>
-    <button class="btn" id="select-none">Deselect</button>
-    <span id="sel-info" class="sel-info">0 selected</span>
-    <span class="spacer"></span>
-    <button class="btn" id="export-json">Save .json</button>
-    <label class="btn file">Load .json<input type="file" id="import-file" accept="application/json,.json" hidden /></label>
-    <button class="btn" id="export-syx">Export .syx</button>
-    <button class="btn" id="copy-hex">Copy SysEx</button>
-  </div>
+  <!-- ============================ LIVE COLOURS ============================ -->
+  <section id="view-customizer" class="view">
+    <div class="toolbar">
+      <label class="check"><input type="checkbox" id="autosend" checked /> Live send</label>
+      <span class="sep"></span>
+      <button class="btn" id="send-selected">Send selected</button>
+      <button class="btn" id="send-all">Send all</button>
+      <button class="btn" id="blackout">All off</button>
+      <button class="btn" id="rainbow">Rainbow pads</button>
+      <span class="sep"></span>
+      <button class="btn" id="select-all">Select all</button>
+      <button class="btn" id="select-none">Deselect</button>
+      <span id="sel-info" class="sel-info">0 selected</span>
+      <span class="spacer"></span>
+      <button class="btn" id="export-json">Save .json</button>
+      <label class="btn file">Load .json<input type="file" id="import-file" accept="application/json,.json" hidden /></label>
+      <button class="btn" id="export-syx">Export .syx</button>
+      <button class="btn" id="copy-hex">Copy SysEx</button>
+    </div>
+    <main>
+      <div id="grid" class="grid"></div>
+      <aside class="side">
+        <div class="panel">
+          <h2>Editor</h2>
+          <div id="editor"></div>
+        </div>
+        <div class="panel help">
+          <h2>How to use</h2>
+          <ol>
+            <li>Plug in the SL MkIII and press <strong>InControl</strong> on the unit.</li>
+            <li>Click <strong>Connect MIDI</strong> and choose the <strong>InControl</strong> port.</li>
+            <li>Click any control, pick a colour — with <em>Live send</em> on it lights up instantly.</li>
+            <li>Save your layout as <code>.json</code>, or export a <code>.syx</code> to replay anywhere.</li>
+          </ol>
+          <p class="fineprint">Needs Chrome, Edge, or Opera (Web MIDI). Colours are 7-bit per
+            channel on the hardware, so the on-screen colour is approximate.</p>
+        </div>
+      </aside>
+    </main>
+  </section>
 
-  <main>
-    <div id="grid" class="grid"></div>
-    <aside class="side">
-      <div class="panel">
-        <h2>Editor</h2>
-        <div id="editor"></div>
+  <!-- ============================ TEMPLATE LAB ============================ -->
+  <section id="view-template" class="view">
+    <div class="warnbar">
+      ⚠ <strong>Experimental.</strong> SL MkIII templates have no LED-colour field
+      (<a href="docs/TEMPLATE-FORMAT.md">why</a>) — confirmed on hardware. This tool decodes a
+      template and lets you poke bytes; the codec round-trips bit-exactly and recomputes the file
+      checksum, so exports import cleanly into Components. Keep your original file anyway.
+    </div>
+    <div class="toolbar">
+      <label class="btn file">Load template .syx<input type="file" id="file" accept=".syx,application/octet-stream" hidden /></label>
+      <span id="file-info" class="file-info hint">No file loaded</span>
+      <span class="spacer"></span>
+      <button class="btn" id="probe-rainbow">Probe: rainbow pads</button>
+      <button class="btn" id="probe-dark">Probe: zero pad bytes</button>
+      <button class="btn" id="reset">Revert</button>
+      <button class="btn primary" id="export">Export edited .syx</button>
+    </div>
+    <main class="single">
+      <div id="lab" class="grid"></div>
+      <aside class="side">
+        <div class="panel help">
+          <h2>What this is for</h2>
+          <p class="fineprint">Templates store control <em>mappings</em>, not colours — poking these
+            bytes does not colour the LEDs (verified on a real SL MkIII). This lab remains a safe,
+            bit-exact template editor and a way to re-test the byte theory. For actual custom colours
+            use <a href="#customizer">Live Colours</a> or the <a href="#bridge">Bridge</a>.</p>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+  <!-- ============================== BRIDGE =============================== -->
+  <section id="view-bridge" class="view">
+    <div class="warnbar">
+      The <strong>Bridge</strong> holds your <a href="#customizer">Live Colours</a> layout on the unit
+      <em>and</em> remaps its InControl messages to a destination MIDI port — colours + custom mappings
+      at once. A browser can't create a virtual port, so pick an existing one (an <strong>IAC</strong>
+      bus on macOS, <strong>loopMIDI</strong> on Windows). For a headless service that makes its own
+      port, use the Node bridge in <code>/bridge</code>.
+    </div>
+    <main class="single">
+      <div class="grid">
+        <div class="panel">
+          <h2>Ports</h2>
+          <div class="field"><label>SL output</label><select id="br-slout"></select></div>
+          <div class="field"><label>SL input</label><select id="br-in"></select></div>
+          <div class="field"><label>Destination</label><select id="br-dest"></select></div>
+          <div class="field"><label>Keep-alive</label><input type="number" id="br-keep" value="4000" min="0" step="500" /> <span class="fineprint">ms (re-send colours; 0 = off)</span></div>
+          <div class="field">
+            <button class="btn primary" id="br-start">Start bridge</button>
+            <button class="btn" id="br-sendcolors">Send colours once</button>
+            <button class="btn" id="br-export">Export config</button>
+          </div>
+          <pre id="br-log" class="log"></pre>
+        </div>
+        <div class="panel">
+          <h2>Mappings <span class="fineprint">— InControl control → emitted message</span></h2>
+          <div id="br-mappings" class="mappings"></div>
+        </div>
       </div>
-      <div class="panel help">
-        <h2>How to use</h2>
-        <ol>
-          <li>Plug in the SL MkIII and press <strong>InControl</strong> on the unit.</li>
-          <li>Click <strong>Connect MIDI</strong> and choose the <strong>InControl</strong> port.</li>
-          <li>Click any control, pick a colour — with <em>Live send</em> on it lights up instantly.</li>
-          <li>Save your layout as <code>.json</code>, or export a <code>.syx</code> to replay anywhere.</li>
-        </ol>
-        <p class="fineprint">Needs Chrome, Edge, or Opera (Web MIDI). Colours are 7-bit per
-          channel on the hardware, so the on-screen colour is approximate.</p>
-      </div>
-    </aside>
-  </main>
+      <aside class="side">
+        <div class="panel help">
+          <h2>How to run</h2>
+          <ol>
+            <li>Design colours in <a href="#customizer">Live Colours</a> (they're shared here automatically).</li>
+            <li>Put the SL MkIII in <strong>InControl</strong> mode and <strong>Connect MIDI</strong>.</li>
+            <li>Pick the SL <em>input</em>/<em>output</em> and a <em>destination</em> port.</li>
+            <li>Set mappings, then <strong>Start bridge</strong>. Point your DAW/synth at the destination port.</li>
+          </ol>
+          <p class="fineprint">The tab must stay open while the bridge runs. Colours can't persist on the
+            device standalone — that would need custom firmware, which isn't possible on this hardware.</p>
+        </div>
+      </aside>
+    </main>
+  </section>
 
   <div id="toast" class="toast"></div>
 
   <script src="js/sysex.js"></script>
   <script src="js/controls.js"></script>
+  <script src="js/template.js"></script>
+  <script src="js/incontrol.js"></script>
   <script src="js/midi.js"></script>
+  <script src="js/tabs.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/template-lab.js"></script>
+  <script src="js/bridge-web.js"></script>
 </body>
 </html>

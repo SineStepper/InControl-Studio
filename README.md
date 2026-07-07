@@ -4,9 +4,15 @@ A browser-based tool to set **custom RGB colours** on the Novation SL MkIII's
 pads, buttons and fader LEDs — the thing **Novation Components doesn't let you
 do**, even though the hardware fully supports it.
 
-It talks to the keyboard live over the **Web MIDI API** using the SL MkIII's
-documented **InControl SysEx** protocol, so you can click a pad, pick a colour,
-and watch it light up instantly. No install, nothing to sign up for.
+It's a single app with three tabs sharing one MIDI connection:
+
+- **Live Colours** — click a pad, pick a colour, watch it light up over the
+  Web MIDI API using the documented InControl SysEx protocol.
+- **Template Lab** — decode/edit the `.syx` templates Components saves
+  (bit-exact codec with recomputed checksum). Templates *can't* carry LED
+  colours — this proves why and lets you re-test on hardware.
+- **Bridge** — hold your colours on the unit **and** remap its InControl
+  messages to another MIDI port, so you get colours + custom mappings live.
 
 ![The customizer editing SL MkIII LEDs live](assets/screenshot.png)
 
@@ -65,41 +71,45 @@ value range) — every colour-looking `7F` byte is actually a control's max valu
 template LED-colour UI. Custom colours are only controllable **live** via the
 InControl SysEx API — which is what the main tool does.
 
-### Template Lab (experimental)
+**This was confirmed on real hardware:** a rainbow probe that wrote distinct
+values to every pad's value bytes (with a valid recomputed checksum, imported
+via Components) produced **no** colour change; and live RGB SysEx only affects
+LEDs in InControl view. So custom colours are strictly a live, InControl feature.
 
-Because I only had default templates and no hardware, I can't be 100% certain
-the firmware doesn't read *some* byte as colour. So there's a second page,
-[**Template Lab**](template-lab.html), that lets you **test it yourself**:
+### Template Lab (a tab)
+
+The **Template Lab** tab decodes a template into all 77 control records
+(bit-exact codec that **recomputes the file's CRC-32** on export, so edits import
+cleanly into Components), lets you poke bytes, and re-run the colour probe if you
+want to verify it yourself. It's now a genuinely safe template editor — it just
+can't do colours, because nothing in the format does.
 
 ![Template Lab probing pad value bytes](assets/template-lab.png)
 
-- Load a template `.syx`, and it's decoded into all 77 control records (with a
-  bit-exact round-trip check, so untouched bytes stay identical).
-- Poke each pad's value bytes, or hit **Probe: rainbow pads** to write distinct
-  values to every pad, then **Export edited .syx**.
-- Load it onto the SL MkIII and watch the pads. If any change colour, that byte
-  drives the LEDs and I'll build a real editor around it; if nothing changes, it
-  confirms colours aren't in templates.
+## Bridge — colours *and* your own mappings, live
 
-Everything runs client-side; [`js/template.js`](js/template.js) is the codec and
-[`js/template-lab.js`](js/template-lab.js) the UI.
+Custom colours only exist in InControl mode, where controls send *fixed* messages
+instead of your template's mapping. The **Bridge** reconciles that: it holds your
+colours on the unit (re-asserting them so they stick) **and** remaps the fixed
+InControl messages to another MIDI port your DAW/synth reads. Colours + custom
+mappings at once, no firmware — while it's running.
 
-## Colours *and* your own mappings, live — the Bridge
+![The Bridge tab: ports and per-control remapping](assets/bridge.png)
 
-Custom colours only exist in InControl mode, where controls send *fixed*
-messages instead of your template's mapping. The [**`bridge/`**](bridge/) Node
-service reconciles that: it holds your colours on the device (re-asserting them
-so they stick) **and** remaps the fixed InControl messages to whatever you want,
-on a virtual MIDI port your DAW/synth reads. Colours + custom mappings at the
-same time, no firmware — as long as the bridge is running. See
-[bridge/README.md](bridge/README.md).
+Two ways to run it:
 
-```bash
-cd bridge && npm install
-node bridge.js --list          # find your ports
-cp config.example.json config.json   # edit colours + mappings
-node bridge.js                 # SL MkIII in InControl mode
-```
+- **In the app** (Bridge tab) — pick an existing destination port (a browser
+  can't create one: use an **IAC** bus on macOS or **loopMIDI** on Windows).
+- **Headless** (`bridge/` Node service) — creates its own virtual port, good for
+  always-on use. See [bridge/README.md](bridge/README.md):
+  ```bash
+  cd bridge && npm install
+  node bridge.js --list                 # find your ports
+  cp config.example.json config.json    # edit colours + mappings
+  node bridge.js                        # SL MkIII in InControl mode
+  ```
+  The app's **Export config** button writes a `bridge-config.json` the Node
+  service reads directly.
 
 ## Browser support
 
@@ -112,9 +122,15 @@ above, or use the exported `.syx` file with a native SysEx tool.
 - [`js/sysex.js`](js/sysex.js) — builds the `F0 00 20 29 02 0A 01 03 …` LED
   messages and handles 8-bit ⟷ 7-bit colour conversion.
 - [`js/controls.js`](js/controls.js) — the map of every LED and its SysEx id.
-- [`js/midi.js`](js/midi.js) — Web MIDI wrapper (port discovery + send).
-- [`js/app.js`](js/app.js) — the editor UI, live sending and import/export.
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the full message reference.
+- [`js/midi.js`](js/midi.js) — Web MIDI wrapper (ports, send, input subscribe).
+- [`js/app.js`](js/app.js) — the Live Colours editor, sending and import/export.
+- [`js/template.js`](js/template.js) / [`js/template-lab.js`](js/template-lab.js)
+  — template codec (7-to-8 encoding, records, CRC-32) and the Template Lab UI.
+- [`js/incontrol.js`](js/incontrol.js) / [`js/bridge-web.js`](js/bridge-web.js)
+  — InControl message resolution/remap and the in-app Bridge.
+- [`js/tabs.js`](js/tabs.js) — tab switching with `#hash` deep-links.
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the full message reference;
+  [`docs/TEMPLATE-FORMAT.md`](docs/TEMPLATE-FORMAT.md) — the template format.
 
 ## Disclaimer
 
