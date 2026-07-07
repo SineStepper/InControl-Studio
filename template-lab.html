@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SL MkIII — Template Lab (experimental)</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>SL MkIII <em>Template Lab</em></h1>
+    </div>
+    <nav class="nav">
+      <a href="index.html">Live LED Customizer</a>
+      <a href="template-lab.html" class="active">Template Lab</a>
+    </nav>
+  </header>
+
+  <div class="warnbar">
+    ⚠ <strong>Experimental.</strong> SL MkIII templates have no documented LED-colour field
+    (<a href="docs/TEMPLATE-FORMAT.md">why</a>). This tool lets you poke bytes and test on
+    hardware whether any of them affect the LEDs. It will <em>not</em> corrupt the parts it
+    doesn't touch — the codec round-trips bit-exactly — but always keep your original file.
+  </div>
+
+  <div class="toolbar">
+    <label class="btn file">Load template .syx<input type="file" id="file" accept=".syx,application/octet-stream" hidden /></label>
+    <span id="file-info" class="file-info hint">No file loaded</span>
+    <span class="spacer"></span>
+    <button class="btn" id="probe-rainbow">Probe: rainbow pads</button>
+    <button class="btn" id="probe-dark">Probe: zero pad bytes</button>
+    <button class="btn" id="reset">Revert</button>
+    <button class="btn primary" id="export">Export edited .syx</button>
+  </div>
+
+  <main class="single">
+    <div id="lab" class="grid"></div>
+    <aside class="side">
+      <div class="panel help">
+        <h2>How to run the experiment</h2>
+        <ol>
+          <li>Load a template <code>.syx</code> you saved from Novation Components.</li>
+          <li>Click <strong>Probe: rainbow pads</strong> (writes distinct values to each pad's value bytes) and <strong>Export</strong>.</li>
+          <li>Send the exported file to the SL MkIII (Components, or a SysEx utility like <em>SysEx Librarian</em> / <em>MIDI-OX</em>).</li>
+          <li>Select that template on the unit and look at the pads:
+            <ul>
+              <li><strong>If colours change</strong> → we found a colour byte; tell me which pads changed and I'll build a proper colour editor around it.</li>
+              <li><strong>If nothing changes</strong> → confirms templates can't carry LED colours; the live <a href="index.html">InControl tool</a> is the only route.</li>
+            </ul>
+          </li>
+        </ol>
+        <p class="fineprint">The value bytes probed (offset 15/22/29 for pads) are, on the evidence so far, control value-ranges (max = 127) — not colour. This experiment is here to prove or disprove that on real hardware.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/sysex.js"></script>
+  <script src="js/template.js"></script>
+  <script src="js/template-lab.js"></script>
+</body>
+</html>

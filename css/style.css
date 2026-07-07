@@ -35,6 +35,33 @@ body {
 .brand h1 em { font-style: normal; color: var(--muted); font-weight: 500; }
 .midi { display: flex; align-items: center; gap: 10px; }
 
+.nav { display: flex; gap: 6px; }
+.nav a { color: var(--muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: 8px; border: 1px solid transparent; }
+.nav a:hover { color: var(--text); border-color: var(--line); }
+.nav a.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+
+.warnbar { padding: 10px 18px; background: #2a2213; border-bottom: 1px solid #4a3c17; color: #f0d79c; font-size: 13px; }
+.warnbar a { color: #ffd67a; }
+.warnbar strong { color: #ffe6ad; }
+
+main.single { grid-template-columns: 1fr 340px; }
+.file-info { font-size: 13px; }
+
+.lab-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; margin-bottom: 18px; }
+.pad-cell { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.pad-name { font-size: 11px; font-weight: 600; color: var(--muted); }
+.byte-inputs { display: flex; gap: 3px; }
+.byte-in { display: flex; flex-direction: column; align-items: center; font-size: 9px; color: var(--muted); gap: 2px; }
+.byte-in input { width: 38px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; font-size: 11px; text-align: center; }
+.pad-cell input[type=color] { width: 100%; height: 22px; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; padding: 1px; }
+
+.rec-table { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+.rec-row { display: flex; align-items: center; gap: 8px; }
+.rec-name { width: 150px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.rec-hex { flex: 1; font-family: ui-monospace, monospace; font-size: 11px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; }
+.rec-hex.bad { border-color: #d4574f; }
+details summary { cursor: pointer; color: var(--accent); margin-top: 8px; font-size: 13px; }
+
 .status { font-size: 12px; color: var(--muted); }
 .status.ok { color: var(--ok); }
 .status.warn { color: var(--warn); }

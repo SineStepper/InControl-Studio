@@ -51,6 +51,39 @@ left out. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
   utility) or **Copy SysEx** hex to the clipboard.
 - Layout autosaves to the browser between sessions.
 
+## Templates & LED colours (important)
+
+A common question: *can I bake custom LED colours into the stored **templates**
+(the ones Components saves as `.syx`)?*
+
+**Short answer: no — the template format doesn't carry LED colours.** I fully
+reverse-engineered the template `.syx` format (see
+[docs/TEMPLATE-FORMAT.md](docs/TEMPLATE-FORMAT.md)) and verified a bit-exact
+round-trip. Templates store control **mappings** (MIDI type, CC/note, channel,
+value range) — every colour-looking `7F` byte is actually a control's max value
+(127). Novation's User Guide confirms it. That's precisely why Components has no
+template LED-colour UI. Custom colours are only controllable **live** via the
+InControl SysEx API — which is what the main tool does.
+
+### Template Lab (experimental)
+
+Because I only had default templates and no hardware, I can't be 100% certain
+the firmware doesn't read *some* byte as colour. So there's a second page,
+[**Template Lab**](template-lab.html), that lets you **test it yourself**:
+
+![Template Lab probing pad value bytes](assets/template-lab.png)
+
+- Load a template `.syx`, and it's decoded into all 77 control records (with a
+  bit-exact round-trip check, so untouched bytes stay identical).
+- Poke each pad's value bytes, or hit **Probe: rainbow pads** to write distinct
+  values to every pad, then **Export edited .syx**.
+- Load it onto the SL MkIII and watch the pads. If any change colour, that byte
+  drives the LEDs and I'll build a real editor around it; if nothing changes, it
+  confirms colours aren't in templates.
+
+Everything runs client-side; [`js/template.js`](js/template.js) is the codec and
+[`js/template-lab.js`](js/template-lab.js) the UI.
+
 ## Browser support
 
 Requires the **Web MIDI API with SysEx**: Chrome, Edge, and Opera (desktop).
