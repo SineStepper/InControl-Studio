@@ -22,7 +22,31 @@ The window opens on the Live Colours tab. Put the SL MkIII in **InControl** mode
 click **Connect MIDI**, and go. On the **Bridge** tab, choose `SL MkIII Bridge`
 as the destination — it's the virtual port this app created.
 
-## Build installers
+## Get installers without building (GitHub Actions)
+
+You don't have to build locally — the repo ships a workflow
+([`.github/workflows/build-desktop.yml`](../.github/workflows/build-desktop.yml))
+that builds macOS, Windows and Linux installers for you:
+
+- **On demand:** GitHub → **Actions** tab → **Build desktop app** → **Run
+  workflow**. When it finishes, download the installers from the run's
+  **Artifacts** (`slmkiii-customizer-macos` / `-windows` / `-linux`).
+- **As a release:** push a version tag and the same build is attached to a GitHub
+  Release automatically:
+  ```bash
+  git tag v1.0.0 && git push origin v1.0.0
+  ```
+
+### Opening the unsigned app
+
+CI builds are **unsigned** (no paid certificates), so the OS will warn on first
+launch:
+
+- **macOS:** right-click the app → **Open** → **Open** (once). Or run
+  `xattr -dr com.apple.quarantine "/Applications/SL MkIII Customizer.app"`.
+- **Windows:** SmartScreen → **More info** → **Run anyway**.
+
+## Build installers locally (optional)
 
 ```bash
 npm run dist       # copies web assets into ./app, then runs electron-builder
