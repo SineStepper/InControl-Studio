@@ -8,9 +8,11 @@ It's a single app with three tabs sharing one MIDI connection:
 
 - **Live Colours** — click a pad, pick a colour, watch it light up over the
   Web MIDI API using the documented InControl SysEx protocol.
-- **Template Lab** — decode/edit the `.syx` templates Components saves
-  (bit-exact codec with recomputed checksum). Templates *can't* carry LED
-  colours — this proves why and lets you re-test on hardware.
+- **Template Editor** — a full Components-style editor for the `.syx` templates:
+  every control's MIDI mapping (message type, channel, CC/Note, min/max,
+  behaviour, velocity, knob resolution), plus a colour on the LED-bearing
+  controls. Bit-exact codec with recomputed checksum, so exports import cleanly
+  into Novation Components.
 - **Bridge** — hold your colours on the unit **and** remap its InControl
   messages to another MIDI port, so you get colours + custom mappings live.
 
@@ -71,20 +73,32 @@ value range) — every colour-looking `7F` byte is actually a control's max valu
 template LED-colour UI. Custom colours are only controllable **live** via the
 InControl SysEx API — which is what the main tool does.
 
-**This was confirmed on real hardware:** a rainbow probe that wrote distinct
-values to every pad's value bytes (with a valid recomputed checksum, imported
-via Components) produced **no** colour change; and live RGB SysEx only affects
-LEDs in InControl view. So custom colours are strictly a live, InControl feature.
+**This was confirmed on real hardware:** editing template bytes produced **no**
+colour change, and live RGB SysEx only affects LEDs in InControl view. So custom
+colours are strictly a live, InControl feature — mappings go in the template,
+colours are applied live.
 
-### Template Lab (a tab)
+### Template Editor (a tab)
 
-The **Template Lab** tab decodes a template into all 77 control records
-(bit-exact codec that **recomputes the file's CRC-32** on export, so edits import
-cleanly into Components), lets you poke bytes, and re-run the colour probe if you
-want to verify it yourself. It's now a genuinely safe template editor — it just
-can't do colours, because nothing in the format does.
+The **Template Editor** tab is a full Components-style editor. Create a new
+template or load a `.syx`, then edit every control across all eight sections
+(16 buttons, 16 knobs, 8 faders, 2 wheels, 2 pedals, 1 footswitch, 16 pad-hits,
+16 pad-pressures):
 
-![Template Lab probing pad value bytes](assets/template-lab.png)
+- **Name**, **enabled**, **message type** (CC / NRPN / Note / Program Change /
+  Song Position / Channel Pressure / Poly Aftertouch), **MIDI channel**
+  (Default or 1–16), **CC/Note number**, **min/max** value.
+- Per-type extras: button/pad **behaviour** (Momentary / Toggle / Inc-Dec /
+  Trigger) and on/off values, pad **velocity** min/max + curve, knob
+  **resolution**.
+- For pads, faders and the 8×2 buttons, a **colour** that's stored in Live
+  Colours (by LED id) and pushed live by the Bridge.
+
+The codec is a JS port of the proven [`inno/slmkiii`](https://github.com/inno/slmkiii)
+library — it round-trips both sample templates **bit-exact** and recomputes the
+CRC-32, so exports import cleanly into Novation Components.
+
+![Template Editor: mappings + colour per control](assets/template-editor.png)
 
 ## Bridge — colours *and* your own mappings, live
 
@@ -151,8 +165,9 @@ above (works everywhere, no Web MIDI needed).
 - [`js/controls.js`](js/controls.js) — the map of every LED and its SysEx id.
 - [`js/midi.js`](js/midi.js) — Web MIDI wrapper (ports, send, input subscribe).
 - [`js/app.js`](js/app.js) — the Live Colours editor, sending and import/export.
-- [`js/template.js`](js/template.js) / [`js/template-lab.js`](js/template-lab.js)
-  — template codec (7-to-8 encoding, records, CRC-32) and the Template Lab UI.
+- [`js/sltemplate.js`](js/sltemplate.js) / [`js/template-editor.js`](js/template-editor.js)
+  — full template codec (7-to-8 encoding, all mapping fields, CRC-32) and the
+  Template Editor UI.
 - [`js/incontrol.js`](js/incontrol.js) / [`js/bridge-web.js`](js/bridge-web.js)
   — InControl message resolution/remap and the in-app Bridge.
 - [`js/tabs.js`](js/tabs.js) — tab switching with `#hash` deep-links.

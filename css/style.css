@@ -70,6 +70,31 @@ main.single { grid-template-columns: 1fr 340px; }
 .byte-in input { width: 38px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; font-size: 11px; text-align: center; }
 .pad-cell input[type=color] { width: 100%; height: 22px; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; padding: 1px; }
 
+/* Template Editor */
+.te-namewrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+#te-name { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 13px; width: 160px; }
+.te-main { align-items: start; }
+.te-controls { display: flex; flex-direction: column; gap: 16px; }
+.te-section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.te-section h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.te-secgrid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+@media (max-width: 1100px) { .te-secgrid { grid-template-columns: repeat(4, 1fr); } }
+.te-ctrl { position: relative; min-height: 50px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--muted); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 4px; overflow: hidden; }
+.te-ctrl.enabled { color: var(--text); border-color: #37506e; }
+.te-ctrl.lit { box-shadow: inset 0 0 0 2px var(--c); }
+.te-ctrl.lit::after { content: ''; position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.te-ctrl.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.te-cname { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.05; }
+.te-cnum { font-size: 9px; opacity: .8; }
+
+.insp-title { font-weight: 600; margin-bottom: 12px; font-size: 14px; }
+#te-inspector .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+#te-inspector .field > label { width: 76px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+#te-inspector input[type=number], #te-inspector input[type=text], #te-inspector select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; }
+#te-inspector input.hex { flex: none; width: 90px; font-family: ui-monospace, monospace; text-transform: uppercase; }
+.insp-color { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.insp-color h4 { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+
 .rec-table { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
 .rec-row { display: flex; align-items: center; gap: 8px; }
 .rec-name { width: 150px; font-size: 12px; color: var(--muted); flex-shrink: 0; }

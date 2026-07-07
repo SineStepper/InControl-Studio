@@ -100,9 +100,16 @@ counts):
 
 **Conclusion:** LED colours are not part of the template. Custom LED colours are
 only controllable *live* via the InControl SysEx API ([PROTOCOL.md](PROTOCOL.md)).
-The **Template Lab** tab ([../index.html#template](../index.html#template)) exists
-to let you *test this on hardware* by poking the value bytes and observing whether
-the LEDs react.
+The **Template Editor** tab ([../index.html#template](../index.html#template))
+edits the template's *mappings* and, for LED-bearing controls, assigns colours
+that are applied live (via Live Colours / the Bridge) rather than stored in the
+file.
+
+> The full per-field byte layout (message type, channel, CC/Note, value range,
+> button/pad behaviour, velocity, knob resolution) is implemented in
+> [`../js/sltemplate.js`](../js/sltemplate.js), a JS port of the proven
+> [`inno/slmkiii`](https://github.com/inno/slmkiii) library; it round-trips both
+> sample templates bit-exact.
 
 ### Hardware-confirmed (tested on a real SL MkIII)
 
