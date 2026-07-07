@@ -41,6 +41,20 @@ MIDI SysEx data bytes must be 0–127, so the 8-bit body is packed as:
 with **no** MSB byte. To decode: drop the MSB byte from each group, OR its bits
 back into the high bit of the 7 data bytes.
 
+### End message (`cmd = 03`) — body checksum
+
+The `03` message carries a **CRC-32 of the decoded body** in its trailing 8
+bytes (before `F7`), stored as 8 nibbles, most-significant first:
+
+```
+… 02 00 <n0 n1 n2 n3 n4 n5 n6 n7> F7      crc = (n0<<28)|(n1<<24)|…|n7
+```
+
+It's the standard IEEE/zlib CRC-32 (`poly 0xEDB88320`, init & final-xor
+`0xFFFFFFFF`) over the entire decoded body (header + all 77 records). **This must
+be recomputed after any edit** or Novation Components rejects the file on import.
+Verified: both sample files' stored nibbles equal `zlib.crc32(body)`.
+
 ## Decoded body
 
 ```

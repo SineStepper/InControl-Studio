@@ -70,7 +70,33 @@
     return out;
   }
 
+  const CMD_END = 0x03;
   const isData = (m) => m.length > 7 && m[6] === COMMON[6] && m[7] === CMD_DATA;
+  const isEnd = (m) => m.length > 7 && m[6] === COMMON[6] && m[7] === CMD_END;
+
+  // Standard CRC-32 (IEEE / zlib): poly 0xEDB88320, init & final-xor 0xFFFFFFFF.
+  let CRC_TABLE = null;
+  function crc32(bytes) {
+    if (!CRC_TABLE) {
+      CRC_TABLE = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        CRC_TABLE[n] = c >>> 0;
+      }
+    }
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  // The template body CRC-32 is stored as 8 nibbles, most-significant first, in
+  // the trailing 8 bytes (before F7) of the `end` (cmd 03) message.
+  function crcNibbles(crc) {
+    const n = [];
+    for (let i = 7; i >= 0; i--) n.push((crc >>> (4 * i)) & 0x0f);
+    return n; // n[0] = top nibble
+  }
 
   function looksLikeTemplate(msgs) {
     if (!msgs.length) return false;
@@ -127,19 +153,27 @@
   function encode(model) {
     const out = [];
     let pos = 0;
+    // Body CRC-32 must be recomputed whenever `logical` changed, else Components
+    // rejects the file on import.
+    const nibbles = crcNibbles(crc32(model.logical));
     // Rebuild each original message; data chunks get re-encoded from `logical`.
     const dataByMsg = {};
     model._chunks.forEach((c) => (dataByMsg[c.msgIndex] = c));
     model._msgs.forEach((m, mi) => {
       const c = dataByMsg[mi];
-      if (!c) {
-        for (const b of m) out.push(b);
-      } else {
+      if (c) {
         const dec = model.logical.slice(pos, pos + c.decodedLen);
         pos += c.decodedLen;
         for (const b of c.prefix) out.push(b);
         for (const b of enc8(dec)) out.push(b);
         out.push(0xf7);
+      } else if (isEnd(m)) {
+        // Patch the trailing 8 nibble bytes (before F7) with the fresh CRC.
+        const patched = m.slice();
+        for (let i = 0; i < 8; i++) patched[patched.length - 9 + i] = nibbles[i];
+        for (const b of patched) out.push(b);
+      } else {
+        for (const b of m) out.push(b);
       }
     });
     return out;
