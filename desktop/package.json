@@ -4,6 +4,7 @@
   "description": "Desktop (Electron) build of the Novation SL MkIII LED Customizer",
   "author": "SL MkIII Customizer contributors",
   "license": "MIT",
+  "repository": "https://github.com/SteppedSine/Novation-SL-MkIII-Customizer",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -24,6 +25,9 @@
       "**/*.node",
       "**/node_modules/@julusian/**"
     ],
+    "nsis": {
+      "differentialPackage": false
+    },
     "files": [
       "main.js",
       "preload.js",

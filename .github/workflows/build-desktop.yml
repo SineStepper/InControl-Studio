@@ -40,6 +40,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifact
+        if: always() # the .exe is produced before any post-build step, so capture it regardless
         uses: actions/upload-artifact@v4
         with:
           name: slmkiii-customizer-windows
