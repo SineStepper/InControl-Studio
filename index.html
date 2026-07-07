@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Novation SL MkIII — LED Colour Customizer</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>SL MkIII <em>LED Customizer</em></h1>
+    </div>
+    <div class="midi">
+      <button id="connect" class="btn primary">Connect MIDI</button>
+      <select id="outputs" title="MIDI output port" disabled></select>
+      <span id="midi-status" class="status">Not connected</span>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <label class="check"><input type="checkbox" id="autosend" checked /> Live send</label>
+    <span class="sep"></span>
+    <button class="btn" id="send-selected">Send selected</button>
+    <button class="btn" id="send-all">Send all</button>
+    <button class="btn" id="blackout">All off</button>
+    <button class="btn" id="rainbow">Rainbow pads</button>
+    <span class="sep"></span>
+    <button class="btn" id="select-all">Select all</button>
+    <button class="btn" id="select-none">Deselect</button>
+    <span id="sel-info" class="sel-info">0 selected</span>
+    <span class="spacer"></span>
+    <button class="btn" id="export-json">Save .json</button>
+    <label class="btn file">Load .json<input type="file" id="import-file" accept="application/json,.json" hidden /></label>
+    <button class="btn" id="export-syx">Export .syx</button>
+    <button class="btn" id="copy-hex">Copy SysEx</button>
+  </div>
+
+  <main>
+    <div id="grid" class="grid"></div>
+    <aside class="side">
+      <div class="panel">
+        <h2>Editor</h2>
+        <div id="editor"></div>
+      </div>
+      <div class="panel help">
+        <h2>How to use</h2>
+        <ol>
+          <li>Plug in the SL MkIII and press <strong>InControl</strong> on the unit.</li>
+          <li>Click <strong>Connect MIDI</strong> and choose the <strong>InControl</strong> port.</li>
+          <li>Click any control, pick a colour — with <em>Live send</em> on it lights up instantly.</li>
+          <li>Save your layout as <code>.json</code>, or export a <code>.syx</code> to replay anywhere.</li>
+        </ol>
+        <p class="fineprint">Needs Chrome, Edge, or Opera (Web MIDI). Colours are 7-bit per
+          channel on the hardware, so the on-screen colour is approximate.</p>
+      </div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="js/sysex.js"></script>
+  <script src="js/controls.js"></script>
+  <script src="js/midi.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
