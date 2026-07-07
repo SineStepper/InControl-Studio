@@ -2,6 +2,8 @@
   "name": "slmkiii-customizer-desktop",
   "version": "1.0.0",
   "description": "Desktop (Electron) build of the Novation SL MkIII LED Customizer",
+  "author": "SL MkIII Customizer contributors",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
