@@ -1,14 +1,21 @@
 name: Build desktop app
 
 # Builds the Windows Electron installer.
-#   - Run manually (Actions tab -> "Build desktop app" -> "Run workflow") to get
-#     the installer as a run artifact.
+#   - Automatically on every push to a branch (installer as a run artifact).
+#   - Run manually anytime (Actions tab -> "Build desktop app" -> "Run workflow").
 #   - Push a version tag (e.g. v1.0.0) to also publish it to a GitHub Release.
 on:
   workflow_dispatch:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
+    # Skip doc-only pushes; add paths here if you want to narrow further.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'assets/**'
 
 permissions:
   contents: write
