@@ -1,9 +1,9 @@
 name: Build desktop app
 
-# Builds the Electron desktop app for macOS, Windows and Linux.
+# Builds the Windows Electron installer.
 #   - Run manually (Actions tab -> "Build desktop app" -> "Run workflow") to get
-#     downloadable installers as run artifacts.
-#   - Push a version tag (e.g. v1.0.0) to also publish them to a GitHub Release.
+#     the installer as a run artifact.
+#   - Push a version tag (e.g. v1.0.0) to also publish it to a GitHub Release.
 on:
   workflow_dispatch:
   push:
@@ -15,17 +15,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            artifact: macos
-          - os: windows-latest
-            artifact: windows
-          - os: ubuntu-latest
-            artifact: linux
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     defaults:
       run:
         working-directory: desktop
@@ -36,12 +26,6 @@ jobs:
         with:
           node-version: '20'
 
-      # node-midi needs ALSA headers to (re)build against Electron on Linux.
-      - name: Install ALSA (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-        working-directory: .
-
       - name: Install dependencies
         run: npm install
 
@@ -49,29 +33,21 @@ jobs:
         run: node copy-assets.js
 
       - name: Build installer
-        run: npx electron-builder --publish never
+        run: npx electron-builder --win --publish never
         env:
           # Build unsigned (no certificates in CI); users self-approve on first launch.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: slmkiii-customizer-${{ matrix.artifact }}
-          if-no-files-found: ignore
-          path: |
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/*.exe
-            desktop/dist/*.AppImage
+          name: slmkiii-customizer-windows
+          if-no-files-found: error
+          path: desktop/dist/*.exe
 
       - name: Publish to Release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/*.exe
-            desktop/dist/*.AppImage
+          files: desktop/dist/*.exe

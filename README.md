@@ -120,11 +120,11 @@ for your DAW). All MIDI runs in the main process via `@julusian/midi`; the share
 `js/midi.js` auto-detects Electron and routes through it instead of Web MIDI.
 
 **You don't have to build it yourself.** A GitHub Actions workflow builds the
-macOS/Windows/Linux installers for you — open the **Actions** tab → **Build
-desktop app** → **Run workflow**, then download them from the run's *Artifacts*.
-Or push a version tag (`git tag v1.0.0 && git push origin v1.0.0`) and they're
-attached to a GitHub Release. Builds are unsigned, so approve on first launch
-(macOS: right-click → Open; Windows: More info → Run anyway).
+**Windows** installer for you — open the **Actions** tab → **Build desktop app**
+→ **Run workflow**, then download it from the run's *Artifacts*. Or push a
+version tag (`git tag v1.0.0 && git push origin v1.0.0`) and it's attached to a
+GitHub Release. The build is unsigned, so approve on first launch (Windows
+SmartScreen → More info → Run anyway).
 
 To run from source instead:
 

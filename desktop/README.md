@@ -22,16 +22,16 @@ The window opens on the Live Colours tab. Put the SL MkIII in **InControl** mode
 click **Connect MIDI**, and go. On the **Bridge** tab, choose `SL MkIII Bridge`
 as the destination — it's the virtual port this app created.
 
-## Get installers without building (GitHub Actions)
+## Get the Windows installer without building (GitHub Actions)
 
 You don't have to build locally — the repo ships a workflow
 ([`.github/workflows/build-desktop.yml`](../.github/workflows/build-desktop.yml))
-that builds macOS, Windows and Linux installers for you:
+that builds the **Windows** installer for you:
 
 - **On demand:** GitHub → **Actions** tab → **Build desktop app** → **Run
-  workflow**. When it finishes, download the installers from the run's
-  **Artifacts** (`slmkiii-customizer-macos` / `-windows` / `-linux`).
-- **As a release:** push a version tag and the same build is attached to a GitHub
+  workflow**. When it finishes, download the installer from the run's
+  **Artifacts** (`slmkiii-customizer-windows`).
+- **As a release:** push a version tag and the installer is attached to a GitHub
   Release automatically:
   ```bash
   git tag v1.0.0 && git push origin v1.0.0
@@ -39,12 +39,12 @@ that builds macOS, Windows and Linux installers for you:
 
 ### Opening the unsigned app
 
-CI builds are **unsigned** (no paid certificates), so the OS will warn on first
-launch:
+The CI build is **unsigned** (no paid certificate), so Windows SmartScreen warns
+on first launch: click **More info** → **Run anyway**.
 
-- **macOS:** right-click the app → **Open** → **Open** (once). Or run
-  `xattr -dr com.apple.quarantine "/Applications/SL MkIII Customizer.app"`.
-- **Windows:** SmartScreen → **More info** → **Run anyway**.
+> Want macOS/Linux builds too? The `build` config below already targets them —
+> add `macos-latest` / `ubuntu-latest` back to the workflow (and the Linux ALSA
+> step) to produce those installers.
 
 ## Build installers locally (optional)
 
