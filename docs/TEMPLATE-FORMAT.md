@@ -102,3 +102,19 @@ counts):
 only controllable *live* via the InControl SysEx API ([PROTOCOL.md](PROTOCOL.md)).
 The [Template Lab](../template-lab.html) exists to let you *test this on
 hardware* by poking the value bytes and observing whether the LEDs react.
+
+### Hardware-confirmed (tested on a real SL MkIII)
+
+Both open questions were settled on hardware:
+
+1. **Editing template bytes does not change LED colour.** A rainbow probe that
+   wrote distinct values to every pad's value bytes (offsets 15/22/29), exported
+   with a valid recomputed CRC and imported into Components, produced **no**
+   colour change on the unit.
+2. **Live RGB SysEx only affects LEDs in InControl view.** Sending the
+   `…02 0A 01 03…` LED command while the unit is on a plain template does
+   nothing; the LEDs only respond in InControl mode.
+
+**Therefore:** custom LED colours are strictly an InControl-mode, live feature.
+They cannot be baked into a template or shown in standalone template mode. Use
+the [live customizer](../index.html) in InControl view.
