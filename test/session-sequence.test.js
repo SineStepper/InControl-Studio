@@ -50,6 +50,27 @@ eq(seq2.tracks[3].patterns[2].steps[15].notes, [{ note: 40, velocity: 1, gate: 2
 const rewrite = S.writeSequence(written, seq2);
 eq(Buffer.from(rewrite).equals(Buffer.from(written)), true, 'write(read(x)) == x is bit-exact');
 
+// ---- per-field encode/decode (tempo, swing, channel, length, sync, direction, chance, gate/tie) ----
+const fseq = S.readSequence(empty);
+fseq.tempo = 140; fseq.swing = 60;
+fseq.tracks[2].channel = 5;
+const fp = fseq.tracks[0].patterns[0];
+fp.end = 7; fp.syncRate = '1/8'; fp.direction = 'Ping-Pong';
+fp.steps[0].chance = 50;
+fp.steps[0].notes = [{ note: 72, velocity: 100, gate: 18 }];        // 3-step gate
+fp.steps[1].notes = [{ note: 60, velocity: 90, gate: 6, tie: true }]; // tied note
+const fbody = S.writeSequence(empty, fseq);
+const fr = S.readSequence(fbody);
+eq(fr.tempo, 140, 'tempo round-trips');
+eq(fr.swing, 60, 'swing round-trips');
+eq(fr.tracks[2].channel, 5, 'per-track channel round-trips');
+eq(fr.tracks[0].patterns[0].end, 7, 'pattern length (end) round-trips');
+eq(fr.tracks[0].patterns[0].syncRate, '1/8', 'sync rate round-trips');
+eq(fr.tracks[0].patterns[0].direction, 'Ping-Pong', 'direction round-trips');
+eq(fr.tracks[0].patterns[0].steps[0].chance, 50, 'per-step chance round-trips');
+eq(fr.tracks[0].patterns[0].steps[0].notes[0].gate, 18, '3-step gate round-trips');
+eq(fr.tracks[0].patterns[0].steps[1].notes[0].tie, true, 'tie flag round-trips');
+
 // ---- optional: ground-truth files ----
 const dir = '/root/.claude/uploads/82a8edf0-56ac-5b7c-9549-24618c73766c/';
 const files = { A: '6024969a-Session_A.syx', B: 'd11409b2-Session_B.syx', C: 'c1cc618e-Session_C.syx' };

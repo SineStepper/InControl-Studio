@@ -286,10 +286,8 @@
     const i = +$('#pack-sessions-sel').value;
     const s = pack.sessions[i]; if (!s || !s.bytes) return;
     S.ensureSequencer(model);
-    const seq = global.SLMK.session.readSequence(s.bytes);
-    // keep the current tempo/swing (not yet decoded from the session body)
-    seq.tempo = model.sequencer.tempo; seq.swing = model.sequencer.swing;
-    model.sequencer = seq;
+    // decodes notes + tempo/swing + per-track channel + per-pattern length/sync/direction + per-step chance
+    model.sequencer = global.SLMK.session.readSequence(s.bytes);
     packSessionSlot = i;
     ui.tab = 'sequencer'; render();
     const notes = global.SLMK.session.sequenceHasNotes(s.bytes);

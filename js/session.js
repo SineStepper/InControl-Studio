@@ -69,18 +69,34 @@
    *
    *   8 tracks x 8 patterns x 16 steps, each step a 36-byte (0x24) record.
    *   gridOffset(track,pattern) = 0x13c + track*0x2d98 + pattern*0x5ac
-   *   step record: [+0]=flag [+1]=0x64(const) then 8 note-slots of 4 bytes at +4:
-   *     slot k at step+4+k*4 = [note, velocity, gate, 0]; empty slot = [0,0x60,0,0].
-   *   A slot is a real note iff its note byte != 0 (the +0 flag is unreliable).
+   *   step record: [+0]=slot-active bitmask [+1]=chance(0-100) then 8 note-slots
+   *     of 4 bytes at +4: slot k at step+4+k*4 = [note, velocity, gate|tie, 0];
+   *     empty slot = [0,0x60,0,0]. A slot is a real note iff its note byte != 0.
+   *   pattern footer at gridOffset+0x240: [+0]=length-1 [+1]=syncIdx [+2]=direction.
+   *   globals: tempo LE @0x40, swing @0x42; per-track channel @0x115+track*0x2d98.
    */
   const GRID = { base: 0x13c, track: 0x2d98, pattern: 0x5ac, step: 0x24, steps: 16, slots: 8, tracks: 8, patterns: 8 };
   const gridOffset = (t, p) => GRID.base + t * GRID.track + p * GRID.pattern;
+  // Session-body field offsets (see docs/SESSION-FORMAT.md), all pinned from
+  // controlled single-field ground-truth captures.
+  const OFF = { tempoLo: 0x40, tempoHi: 0x41, swing: 0x42, chan: 0x115, chain: 0x119 };
+  const patFooter = (t, p) => gridOffset(t, p) + 0x240; // [+0]=length-1 [+1]=syncIdx [+2]=dir
+  const trackHdr = (t) => GRID.base - GRID.pattern + t * GRID.track; // start of track t header block
+  // Enums indexed by the raw byte value (mirror studio-sequencer.js).
+  const SYNC_ORDER = ['1/32 Triplet', '1/32', '1/16 Triplet', '1/16', '1/8 Triplet', '1/8', '1/4 Triplet', '1/4'];
+  const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
+  const GATE_PER_STEP = 6; // gate byte units: 6 == one full step
 
   /** Decode a session body's step sequence into a studio-sequencer object. */
   function readSequence(body) {
-    const seq = { tempo: 120, swing: 0, tracks: [] };
+    const seq = {
+      tempo: body[OFF.tempoLo] | (body[OFF.tempoHi] << 8),
+      swing: body[OFF.swing], // raw hardware value (50 == straight/off)
+      tracks: [],
+    };
+    if (!seq.tempo) seq.tempo = 120;
     for (let t = 0; t < GRID.tracks; t++) {
-      const track = { channel: t + 1, activePattern: 0, patterns: [] };
+      const track = { channel: (body[OFF.chan + t * GRID.track] & 0x0f) + 1, activePattern: 0, patterns: [] };
       for (let p = 0; p < GRID.patterns; p++) {
         const g = gridOffset(t, p);
         const steps = [];
@@ -91,15 +107,23 @@
             const so = step + 4 + k * 4;
             const raw = body[so];
             if (raw !== 0) {
-              const g = body[so + 2];
-              const nt = { note: raw & 0x7f, velocity: body[so + 1], gate: g & 0x7f };
-              if (g & 0x80) nt.tie = true; // gate bit 7 = tied/held note (extends past the step)
+              const gt = body[so + 2];
+              const nt = { note: raw & 0x7f, velocity: body[so + 1], gate: gt & 0x7f };
+              if (gt & 0x80) nt.tie = true; // gate bit 7 = tied/held note (extends past the step)
               notes.push(nt);
             }
           }
-          steps.push({ notes, chance: 100 });
+          steps.push({ notes, chance: body[step + 1] });
         }
-        track.patterns.push({ steps, start: 0, end: 15, direction: 'Forward', syncRate: '1/16', shift: 0 });
+        const f = patFooter(t, p);
+        track.patterns.push({
+          steps,
+          start: 0,
+          end: body[f] & 0x0f,
+          direction: DIRECTIONS[body[f + 2]] || 'Forward',
+          syncRate: SYNC_ORDER[body[f + 1]] || '1/16',
+          shift: 0,
+        });
       }
       seq.tracks.push(track);
     }
@@ -125,14 +149,25 @@
    */
   function writeSequence(baseBody, seq) {
     const body = new Uint8Array(baseBody);
+    if (seq.tempo) { body[OFF.tempoLo] = seq.tempo & 0xff; body[OFF.tempoHi] = (seq.tempo >> 8) & 0xff; }
+    if (seq.swing != null) body[OFF.swing] = seq.swing & 0xff;
     for (let t = 0; t < GRID.tracks; t++) {
       const track = seq.tracks && seq.tracks[t];
+      if (track && track.channel != null) body[OFF.chan + t * GRID.track] = (track.channel - 1) & 0x0f;
       for (let p = 0; p < GRID.patterns; p++) {
         const pat = track && track.patterns && track.patterns[p];
         const g = gridOffset(t, p);
+        if (pat) {
+          const f = patFooter(t, p);
+          if (pat.end != null) body[f] = pat.end & 0x0f;
+          const si = SYNC_ORDER.indexOf(pat.syncRate); if (si >= 0) body[f + 1] = si; // else preserve
+          const di = DIRECTIONS.indexOf(pat.direction); if (di >= 0) body[f + 2] = di;
+        }
         for (let s = 0; s < GRID.steps; s++) {
           const step = g + s * GRID.step;
-          const notes = (pat && pat.steps && pat.steps[s] && pat.steps[s].notes) || [];
+          const stepObj = pat && pat.steps && pat.steps[s];
+          const notes = (stepObj && stepObj.notes) || [];
+          if (stepObj && stepObj.chance != null) body[step + 1] = Math.max(0, Math.min(100, stepObj.chance));
           // Build the new 32-byte slot region; note whether it changed from the base.
           const before = body.slice(step + 4, step + 4 + GRID.slots * 4);
           let mask = 0;
@@ -162,6 +197,6 @@
   }
 
   global.SLMK = global.SLMK || {};
-  global.SLMK.session = { decodeSyx, encodeSyx, encodeOne, readName, GRID, gridOffset, readSequence, writeSequence, sequenceHasNotes };
+  global.SLMK.session = { decodeSyx, encodeSyx, encodeOne, readName, GRID, gridOffset, patFooter, OFF, SYNC_ORDER, DIRECTIONS, GATE_PER_STEP, readSequence, writeSequence, sequenceHasNotes };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.session;
 })(typeof window !== 'undefined' ? window : globalThis);

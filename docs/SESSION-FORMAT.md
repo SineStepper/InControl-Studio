@@ -38,7 +38,7 @@ gridOffset(track, pattern) = 0x13c + track*0x2d98 + pattern*0x5ac
 | Offset | Meaning |
 |--------|---------|
 | `+0`   | flag — per-slot **active bitmask** (bit *k* set when slot *k* holds a note). Bit 0 is cleared for tied notes, so it is *not* a reliable note-present flag on its own. |
-| `+1`   | constant `0x64` (100) |
+| `+1`   | **chance / probability** (0–100; `0x64`/100 = always) |
 | `+2,+3`| `0x00` |
 | `+4 …` | 8 **note slots**, 4 bytes each |
 
@@ -48,23 +48,42 @@ gridOffset(track, pattern) = 0x13c + track*0x2d98 + pattern*0x5ac
 |--------|---------|
 | `+0`   | **note number** (0 = empty slot) |
 | `+1`   | **velocity** (1–127; `0x60`/96 in an empty slot) |
-| `+2`   | **gate** length; **bit 7 (`0x80`) = tie** (note held past the step) |
+| `+2`   | **gate** length in **sixths of a step** (6 = one full step, 18 = three steps); **bit 7 (`0x80`) = tie** (legato into the next note) |
 | `+3`   | `0x00` |
 
 An **empty slot** is canonically `00 60 00 00`. A slot is a real note **iff its
 note byte ≠ 0**. Up to 8 notes per step gives chords (up to 6 observed in the
 factory sessions).
 
+### Per-pattern footer (at `gridOffset + 0x240`, i.e. just past the 16-step grid)
+
+| Offset | Meaning |
+|--------|---------|
+| `+0`   | **length − 1** (last active step index; length = value + 1) |
+| `+1`   | **sync rate** index: `0`=1/32T `1`=1/32 `2`=1/16T `3`=1/16 `4`=1/8T `5`=1/8 `6`=1/4T `7`=1/4 |
+| `+2`   | **direction**: `0`=Forward `1`=Backwards `2`=Ping-Pong `3`=Random |
+
+### Globals & per-track (in the header region before the grids)
+
+| Offset | Meaning |
+|--------|---------|
+| `0x40` | **tempo** BPM, 16-bit little-endian (`0x40` lo, `0x41` hi) |
+| `0x42` | **swing** (`50` = straight/off) |
+| `0x115 + track*0x2d98` | per-track **MIDI channel** (0-based; track *n* defaults to channel *n*) |
+| `0x119 + track*0x2d98` | per-track **pattern-chain** field (location pinned; exact chaining semantics still tentative — preserved verbatim on write) |
+
 ## What is decoded vs. preserved
 
-`js/session.js` decodes **notes** (number, velocity, gate, tie) into the
-studio-sequencer model and can write them back. `writeSequence` overwrites only
-the note slots and the per-step flag (recomputed only for steps whose slots
-actually changed), leaving every other byte untouched — so re-exporting an
-unmodified session is byte-for-byte identical to the original.
+`js/session.js` `readSequence` / `writeSequence` decode and re-encode: notes
+(number, velocity, gate, tie, chords), per-step chance, per-pattern length /
+sync rate / direction, tempo, swing, and per-track channel. Every offset above
+was pinned from **controlled single-field ground-truth captures** and verified.
 
-Per-**pattern** settings (length/start/end, play direction, sync rate, swing)
-and per-**track**/global settings (tempo, channel) live in the pattern/track
-headers and are **not yet decoded** — the ground-truth captures all used
-defaults, so those fields can't be pinned without further varied samples.
-Importing therefore loads the notes and leaves pattern settings at defaults.
+`writeSequence` overwrites only those known fields (and the per-step flag,
+recomputed only for steps whose slots actually changed), leaving every other
+byte untouched — so re-exporting an **unmodified** session is byte-for-byte
+identical to the original (verified across all 64 factory sessions and all 13
+single-field captures).
+
+Still opaque (preserved, not interpreted): the pattern-chain semantics, and any
+per-pattern *start* offset (the hardware stores only length, implying start 0).
