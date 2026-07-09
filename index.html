@@ -85,6 +85,7 @@
       <button class="btn primary" id="studio-save">Save .json</button>
       <button class="btn" id="studio-export-syx" title="Export the base mappings as a Novation Components .syx template">Export .syx</button>
       <label class="btn file">Import pack<input type="file" id="studio-pack-in" accept=".slmkiiipack,application/zip" hidden /></label>
+      <label class="btn file">Import sessions<input type="file" id="studio-sessions-in" accept=".syx,application/octet-stream" hidden /></label>
       <span id="studio-status" class="status"></span>
     </div>
     <div class="toolbar pack-bar" id="studio-pack-bar" style="display:none">
@@ -93,6 +94,7 @@
       <button class="btn" id="pack-load">Load into editor</button>
       <span class="fineprint" id="pack-sessions"></span>
       <span class="spacer"></span>
+      <button class="btn" id="pack-export-sessions">Export sessions .syx</button>
       <button class="btn" id="pack-export">Export pack</button>
     </div>
     <div class="toolbar se-bar">
@@ -172,6 +174,7 @@
   <script src="js/controls.js"></script>
   <script src="js/sltemplate.js"></script>
   <script src="js/pack.js"></script>
+  <script src="js/session.js"></script>
   <script src="js/studio-sequencer.js"></script>
   <script src="js/studio-model.js"></script>
   <script src="js/studio-engine.js"></script>

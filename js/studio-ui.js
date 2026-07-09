@@ -203,28 +203,54 @@
     });
     $('#studio-name').addEventListener('change', () => { model.name = $('#studio-name').value; });
     if ($('#studio-pack-in')) $('#studio-pack-in').addEventListener('change', (e) => { if (e.target.files[0]) importPack(e.target.files[0]); e.target.value = ''; });
+    if ($('#studio-sessions-in')) $('#studio-sessions-in').addEventListener('change', (e) => { if (e.target.files[0]) importSessions(e.target.files[0]); e.target.value = ''; });
     if ($('#pack-load')) $('#pack-load').addEventListener('click', loadPackTemplate);
     if ($('#pack-export')) $('#pack-export').addEventListener('click', exportPack);
+    if ($('#pack-export-sessions')) $('#pack-export-sessions').addEventListener('click', exportSessions);
     // expose for the future engine
     global.SLMK.studioState = { getModel: () => model };
   }
 
   // ---- Components packs (.slmkiiipack) ----
+  function showPackBar() {
+    const sel = $('#pack-templates'); sel.innerHTML = '';
+    (pack.templates || []).forEach((t, i) => sel.appendChild(el('option', { value: i }, (i + 1) + '. ' + (t.name || 'Template'))));
+    $('#pack-name').textContent = (pack.name || 'Pack') + ' (' + (pack.product || 'sl-mkiii') + ')';
+    $('#pack-load').style.display = (pack.templates || []).length ? '' : 'none';
+    $('#pack-sessions').textContent = (pack.sessions || []).length + ' sessions';
+    $('#studio-pack-bar').style.display = '';
+  }
   function importPack(file) {
     const r = new FileReader();
     r.onload = async () => {
       try {
         pack = await global.SLMK.pack.parsePack(new Uint8Array(r.result));
-        packSlot = -1;
-        const sel = $('#pack-templates'); sel.innerHTML = '';
-        pack.templates.forEach((t, i) => sel.appendChild(el('option', { value: i }, (i + 1) + '. ' + (t.name || 'Template'))));
-        $('#pack-name').textContent = pack.name + ' (' + pack.product + ')';
-        $('#pack-sessions').textContent = pack.sessions.length + ' sessions carried through';
-        $('#studio-pack-bar').style.display = '';
+        packSlot = -1; showPackBar();
         setStatus('Pack loaded — ' + pack.templates.length + ' templates, ' + pack.sessions.length + ' sessions.', 'ok');
       } catch (e) { setStatus(e.message, 'warn'); }
     };
     r.readAsArrayBuffer(file);
+  }
+  function importSessions(file) {
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const sessions = global.SLMK.session.decodeSyx(new Uint8Array(r.result));
+        if (!pack) pack = { name: 'Sessions', product: 'sl-mkiii', version: '2.0', color: '', templates: [], sessions: [] };
+        pack.sessions = sessions.map((s) => ({ name: s.name, bytes: s.body }));
+        showPackBar();
+        setStatus('Imported ' + sessions.length + ' sessions from .syx.', 'ok');
+      } catch (e) { setStatus(e.message, 'warn'); }
+    };
+    r.readAsArrayBuffer(file);
+  }
+  function exportSessions() {
+    if (!pack || !(pack.sessions || []).length) { setStatus('No sessions to export.', 'warn'); return; }
+    const bytes = global.SLMK.session.encodeSyx(pack.sessions.map((s, i) => ({ body: s.bytes, slot: i })));
+    const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' }));
+    const a = el('a', { href: url, download: (pack.name || 'sessions').replace(/[^\w -]/g, '') + '_sessions.syx' });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Exported ' + pack.sessions.length + ' sessions as .syx.', 'ok');
   }
   function loadPackTemplate() {
     if (!pack) return;
