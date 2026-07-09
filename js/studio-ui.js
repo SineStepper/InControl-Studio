@@ -11,7 +11,7 @@
 
   let model = S.newModel();
   const ui = { tab: 'rotary', knobBank: 0, buttonBank: 1, padMode: 'hits', sel: null };
-  let pack = null, packSlot = -1; // loaded pack + which template slot is in the editor
+  let pack = null, packSlot = -1, packSessionSlot = -1; // loaded pack + which template/session slot is in the editor
 
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => {
@@ -205,6 +205,7 @@
     if ($('#studio-pack-in')) $('#studio-pack-in').addEventListener('change', (e) => { if (e.target.files[0]) importPack(e.target.files[0]); e.target.value = ''; });
     if ($('#studio-sessions-in')) $('#studio-sessions-in').addEventListener('change', (e) => { if (e.target.files[0]) importSessions(e.target.files[0]); e.target.value = ''; });
     if ($('#pack-load')) $('#pack-load').addEventListener('click', loadPackTemplate);
+    if ($('#pack-load-session')) $('#pack-load-session').addEventListener('click', loadPackSession);
     if ($('#pack-export')) $('#pack-export').addEventListener('click', exportPack);
     if ($('#pack-export-sessions')) $('#pack-export-sessions').addEventListener('click', exportSessions);
     // expose for the future engine
@@ -217,6 +218,17 @@
     (pack.templates || []).forEach((t, i) => sel.appendChild(el('option', { value: i }, (i + 1) + '. ' + (t.name || 'Template'))));
     $('#pack-name').textContent = (pack.name || 'Pack') + ' (' + (pack.product || 'sl-mkiii') + ')';
     $('#pack-load').style.display = (pack.templates || []).length ? '' : 'none';
+    const ssel = $('#pack-sessions-sel');
+    if (ssel) {
+      ssel.innerHTML = '';
+      (pack.sessions || []).forEach((s, i) => {
+        const notes = s.bytes && global.SLMK.session.sequenceHasNotes(s.bytes);
+        ssel.appendChild(el('option', { value: i }, (i + 1) + '. ' + (s.name || 'Session') + (notes ? ' ♪' : '')));
+      });
+      const has = (pack.sessions || []).length > 0;
+      $('#pack-sessions-lbl').style.display = has ? '' : 'none';
+      $('#pack-load-session').style.display = has ? '' : 'none';
+    }
     $('#pack-sessions').textContent = (pack.sessions || []).length + ' sessions';
     $('#studio-pack-bar').style.display = '';
   }
@@ -225,7 +237,7 @@
     r.onload = async () => {
       try {
         pack = await global.SLMK.pack.parsePack(new Uint8Array(r.result));
-        packSlot = -1; showPackBar();
+        packSlot = -1; packSessionSlot = -1; showPackBar();
         setStatus('Pack loaded — ' + pack.templates.length + ' templates, ' + pack.sessions.length + ' sessions.', 'ok');
       } catch (e) { setStatus(e.message, 'warn'); }
     };
@@ -238,14 +250,22 @@
         const sessions = global.SLMK.session.decodeSyx(new Uint8Array(r.result));
         if (!pack) pack = { name: 'Sessions', product: 'sl-mkiii', version: '2.0', color: '', templates: [], sessions: [] };
         pack.sessions = sessions.map((s) => ({ name: s.name, bytes: s.body }));
-        showPackBar();
+        packSessionSlot = -1; showPackBar();
         setStatus('Imported ' + sessions.length + ' sessions from .syx.', 'ok');
       } catch (e) { setStatus(e.message, 'warn'); }
     };
     r.readAsArrayBuffer(file);
   }
+  // Write the on-screen sequencer back into the loaded session slot's body.
+  function writeBackSession() {
+    if (packSessionSlot >= 0 && model.sequencer && pack.sessions[packSessionSlot]) {
+      const base = pack.sessions[packSessionSlot].bytes;
+      pack.sessions[packSessionSlot].bytes = global.SLMK.session.writeSequence(base, model.sequencer);
+    }
+  }
   function exportSessions() {
     if (!pack || !(pack.sessions || []).length) { setStatus('No sessions to export.', 'warn'); return; }
+    writeBackSession();
     const bytes = global.SLMK.session.encodeSyx(pack.sessions.map((s, i) => ({ body: s.bytes, slot: i })));
     const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' }));
     const a = el('a', { href: url, download: (pack.name || 'sessions').replace(/[^\w -]/g, '') + '_sessions.syx' });
@@ -260,6 +280,21 @@
     packSlot = i; ui.knobBank = 0; ui.buttonBank = 1; ui.sel = null; syncName(); render();
     setStatus('Loaded "' + (t.name || model.name) + '" from pack.', 'ok');
   }
+  // Load a session's step sequence from the pack/.syx into the on-screen sequencer.
+  function loadPackSession() {
+    if (!pack) return;
+    const i = +$('#pack-sessions-sel').value;
+    const s = pack.sessions[i]; if (!s || !s.bytes) return;
+    S.ensureSequencer(model);
+    const seq = global.SLMK.session.readSequence(s.bytes);
+    // keep the current tempo/swing (not yet decoded from the session body)
+    seq.tempo = model.sequencer.tempo; seq.swing = model.sequencer.swing;
+    model.sequencer = seq;
+    packSessionSlot = i;
+    ui.tab = 'sequencer'; render();
+    const notes = global.SLMK.session.sequenceHasNotes(s.bytes);
+    setStatus('Loaded session "' + (s.name || 'Session') + '" into the sequencer' + (notes ? '.' : ' (no notes).'), 'ok');
+  }
   function exportPack() {
     if (!pack) return;
     // Write the current editor's template back into its pack slot before export.
@@ -268,6 +303,7 @@
       const body = bodyFromSyx(bytes); // packs hold the raw 3408-byte body
       if (body) { pack.templates[packSlot].bytes = body; pack.templates[packSlot].name = model.name; }
     }
+    writeBackSession();
     const out = global.SLMK.pack.buildPack(pack);
     const url = URL.createObjectURL(new Blob([out], { type: 'application/zip' }));
     const a = el('a', { href: url, download: (pack.name || 'pack').replace(/[^\w -]/g, '') + '.slmkiiipack' });
