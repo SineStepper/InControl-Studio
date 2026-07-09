@@ -178,7 +178,7 @@ mark = sent.length;
 RT.handleControl(CC(0x15, 4)); // Knob 1 turn
 const scr = sent.slice(mark).filter((m) => m.id === 'out' && m.bytes[7] === 0x02); // Set Screen Properties
 ok(scr.some((m) => m.bytes[9] === 0x03 && m.bytes[10] === 0), '#8 knob turn sets the graphic-knob value (type 3, value obj 0)');
-ok(scr.some((m) => m.bytes[9] === 0x01 && m.bytes[10] === 2), '#8 knob turn sets the value number below (text type 1, obj 2)');
+ok(scr.some((m) => m.bytes[9] === 0x01 && m.bytes[10] === 1), '#8 knob turn sets the value number above the glyph (text type 1, obj 1)');
 
 // --- #10 keybed light guide is OFF by default (would collide with fader/function LEDs) ---
 st.padView = 'steps'; st.rt.padMode = 'sequencer';
@@ -205,5 +205,30 @@ ok(lane && Object.keys(lane).length === 1, 'automation lane created for the move
 const laneKey = Object.keys(lane)[0];
 ok(lane[laneKey][0] && lane[laneKey][0].length === 3, 'automation captured the CC bytes at tick 0');
 st.recording = false; st.clock = null;
+
+// --- #12 LED colour scheme ---
+// helper: last RGB SysEx sent for an LED id -> {r,g,b,beh}
+function lastLed(id) {
+  for (let i = sent.length - 1; i >= 0; i--) { const b = sent[i].bytes; if (b[7] === 0x03 && b[8] === id) return { beh: b[9], r: b[10], g: b[11], b: b[12] }; }
+  return null;
+}
+st.mute.clear(); st.solo.clear(); st.recording = false; st.clock = null; st.optionsMode = false;
+st.padView = 'steps'; st.rt.padMode = 'sequencer';
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0
+st.running = true;
+RT.refreshSurface();
+const play = lastLed(36), stop = lastLed(35), loop = lastLed(37), dup = lastLed(66), clr = lastLed(67), grid = lastLed(64), trk = lastLed(30);
+ok(play && play.g > 0 && play.r === 0 && play.b === 0 && play.g < 60, '#12 Play dim green when stopped');
+ok(stop && stop.r > 60 && stop.g > 60 && stop.b > 60, '#12 Stop bright white when stopped');
+ok(loop && loop.r === 0 && loop.g === 0 && loop.b === 0, '#12 Loop unlit');
+ok(dup && dup.g > 0 && dup.r === 0, '#12 Duplicate dim green');
+ok(clr && clr.r > 0 && clr.g === 0, '#12 Clear dim red');
+ok(grid && grid.r > 0 && grid.g > 0 && grid.b > 0 && grid.r < 60, '#12 Grid dim white');
+ok(trk && trk.b > 0 && trk.r === 0 && trk.g === 0, '#12 Track Left dim blue');
+// Record engaged -> bright red
+st.recording = true; RT.refreshSurface();
+const rec = lastLed(32);
+ok(rec && rec.r > 60 && rec.g === 0, '#12 Record bright red when recording');
+st.recording = false; st.running = false;
 
 console.log('\n' + n + ' integration assertions passed');

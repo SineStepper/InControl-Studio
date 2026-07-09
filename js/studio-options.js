@@ -159,6 +159,7 @@
    */
   function softLeds(activeMenu) {
     const leds = {};
+    for (let i = 0; i < 8; i++) leds[i] = '#000000'; // unmapped menu buttons (Soft 1-8) unlit (#12)
     MICROSTEP_BUTTONS.forEach((i) => (leds[i] = LIGHT_ORANGE));
     Object.keys(MENU_BUTTONS).forEach((k) => {
       const idx = +k;

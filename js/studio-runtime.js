@@ -70,20 +70,30 @@
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
-      send(sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : '')); // name above the icon
+      send(sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : '')); // knob name at the top
       const hex = (a && a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : '#20c0ff';
       const { r, g, b } = sysex.hexTo7bit(hex);
-      send(sysex.screenRgb(i, 1, r, g, b)); // knob icon line colour
+      send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
       sendKnobValue(i);
     }
+    refreshCentreScreen();
   }
-  // Update one knob column's graphic-knob value + the number below it.
+  // Update one knob column: the graphic knob (glyph) + its value shown above it.
   function sendKnobValue(index) {
     if (!st.slOutId || !sysex || index >= 8) return;
     const v = engine.knobDisplay(st.rt, index);
     if (v == null) return;
-    send(sysex.screenValue(index, 0, v));          // graphic knob arc
-    send(sysex.screenText(index, 2, String(v)));   // value number below the icon
+    send(sysex.screenValue(index, 0, v));          // graphic-knob glyph value
+    send(sysex.screenText(index, 1, String(v)));   // value shown above the glyph, below the name (#12)
+  }
+  // Far-right screen: Part name + selected knob bank (left), selected button bank (right) (#12).
+  function refreshCentreScreen() {
+    if (!st.slOutId || !sysex || !st.rt) return;
+    const t = curTrack();
+    const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
+    send(sysex.screenText(8, 0, name));                                   // left row 1: part name
+    send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // left row 2: knob bank
+    send(sysex.screenText(8, 2, 'Btns ' + ((st.rt.buttonBank || 0) + 1)));// right row 1: button bank
   }
 
   // ---- sequencer clock / transport ----
@@ -131,12 +141,13 @@
     SEQ().start(rt);
     if (st.clock) clearInterval(st.clock);
     st.clock = setInterval(clockTick, tickInterval());
+    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();
   }
   function seqStop() {
     if (st.clock) { clearInterval(st.clock); st.clock = null; }
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
-    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();
   }
   const seqIsPlaying = () => !!st.clock;
@@ -201,9 +212,8 @@
     st.rt = runtimeForChannel(ch);         // swap in this channel's control mapping (own template if assigned)
     st.rt.padMode = padMode;
     st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
-    refreshLeds();
     refreshChannelLeds();
-    if (st.rt.padMode === 'sequencer') refreshGrid();
+    if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
     refreshArrowLeds(); refreshKnobScreens();
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('channel ' + ch);
@@ -219,9 +229,25 @@
     return st.channelRt[ch];
   }
 
-  // ---- Transport default colours ----
-  const TRANSPORT_LEDS = { 36: '#00ff00' /*Play*/, 32: '#ff0000' /*Record*/, 35: '#ff0000' /*Stop*/, 37: '#ffff00' /*Loop*/, 34: '#ffffff' /*FastFwd*/, 33: '#ffffff' /*Rewind*/ };
-  function refreshTransport() { Object.keys(TRANSPORT_LEDS).forEach((id) => ledHex(+id, TRANSPORT_LEDS[id])); }
+  // ---- Colour helpers (issue #12: dim resting, white/bright active) ----
+  const dim = (hex) => opts().scaleColor(hex, 0.28);
+  function blackout() { for (let id = 0; id <= 67; id++) ledHex(id, '#000000'); } // all LEDs off (#12: nothing lit unless stated)
+  const PRESS = '#f0f0f0'; // near-white press feedback
+  // Transport: Play/Record/Stop dim when idle, bright when active; Loop/FFW/RWD unlit (#12).
+  function refreshTransport() {
+    ledHex(36, seqIsPlaying() ? '#00ff00' : dim('#00ff00'));   // Play
+    ledHex(32, st.recording ? '#ff0000' : dim('#ff0000'));     // Record
+    ledHex(35, seqIsPlaying() ? dim('#ffffff') : '#ffffff');   // Stop (bright when stopped)
+    ledHex(37, '#000000');                                     // Loop — unlit/unmapped
+    ledHex(34, '#000000');                                     // Fast Forward — unlit
+    ledHex(33, '#000000');                                     // Rewind — unlit
+  }
+  // Function buttons: resting colours per #12 (white on press handled separately).
+  const FUNC_REST = { Duplicate: [66, dim('#00ff00')], Clear: [67, dim('#ff0000')], Grid: [64, dim('#ffffff')], 'Track Left': [30, dim('#0000ff')], 'Track Right': [31, dim('#0000ff')] };
+  function refreshFunctionLeds() {
+    Object.keys(FUNC_REST).forEach((k) => ledHex(FUNC_REST[k][0], FUNC_REST[k][1]));
+    ledHex(65, st.optionsMode ? '#ffffff' : dim('#ffffff')); // Options: dim white, bright in options mode
+  }
 
   // ---- Fader LED brightness tracks value (#2) ----
   function refreshFaderLed(index, value) {
@@ -243,11 +269,17 @@
   }
   const KEY_PLAY = '#3bd0ff', KEY_AUDITION = '#ff0000';
 
-  // ---- Press-to-lighten feedback (#5): white on press, resting colour on release ----
+  // ---- Press feedback (#5/#12): note pads show part colour (dim/bright), other buttons flash white ----
   function pressFlash(group, index, pressed) {
-    if (pressed) { const id = ledIdFor(group, index); if (id != null) ledHex(id, '#f0f0f0'); }
+    if (group === 'pad') { // instrument-mode note pad: dim part idle, bright part pressed (#12)
+      ledHex(38 + index, pressed ? opts().lighten(partColor(), 0.3) : dim(partColor()));
+      return;
+    }
+    if (pressed) { const id = ledIdFor(group, index); if (id != null) ledHex(id, PRESS); }
     else restoreLed(group, index);
   }
+  // Instrument-mode (Grid) note pads at rest: dim part colour (#12).
+  function refreshNotePads() { const c = partColor(); for (let i = 0; i < 16; i++) ledHex(38 + i, dim(c)); }
   function ledIdFor(group, index) {
     if (group === 'pad') return 38 + index;
     if (group === 'button') return 4 + index;
@@ -270,15 +302,16 @@
     const head = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1;
     const color = partColor();
     const lo = Math.min(p.start, p.end), hi = Math.max(p.start, p.end);
+    const playing = seqIsPlaying();
     for (let i = 0; i < 16; i++) {
       const has = SEQ().stepHasNotes(p, i);
       const inRange = i >= lo && i <= hi;
-      let hex;
-      if (has) hex = inRange ? color : '#ff0000';           // notes: part colour, or red if outside start/end (#14)
-      else hex = opts().scaleColor(color, 0.06);            // empty: very dim part colour
+      let hex, beh = 'solid';
+      if (has) hex = inRange ? color : '#ff0000';           // used step: bright part colour (red if outside start/end, #14)
+      else hex = dim(color);                                 // empty step: dim part colour (#12)
       if (st.optionsMenu === 'pattern' && st.optionsMode && i === p.start) hex = '#ffd000'; // start step yellow (#14)
-      if (seqIsPlaying() && i === head) hex = '#ffffff';    // playhead white
-      ledHex(38 + i, hex);
+      if (i === head) { hex = '#ffffff'; if (!playing) beh = 'pulse'; } // current step: white playing, white-pulse stopped (#12)
+      ledHex(38 + i, hex, beh);
     }
   }
   // Patterns view (#4/#7): the 16 pads show/select the 8 patterns in the part colour.
@@ -298,12 +331,19 @@
     }
     for (let i = SEQ().PATTERNS; i < 16; i++) ledHex(38 + i, '#000000');
   }
-  // Pads Up/Down arrow LEDs reflect the position in the pattern list (#7).
+  // Up/down arrow LEDs, all consistent (lit when there's somewhere to go, else off) (#12).
+  //   Pads Up/Down (0/1) and Screen Up/Down (62/63) -> pattern list position.
+  //   Right Soft Up/Down (28/29) -> button-bank position.
   function refreshArrowLeds() {
     const t = curTrack(); if (!t) return;
+    const AR = '#00aaff';
     const a = opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
-    ledHex(0, a.up ? '#00aaff' : '#000000');
-    ledHex(1, a.down ? '#00aaff' : '#000000');
+    ledHex(0, a.up ? AR : '#000000'); ledHex(62, a.up ? AR : '#000000');
+    ledHex(1, a.down ? AR : '#000000'); ledHex(63, a.down ? AR : '#000000');
+    const banks = (st.rt && st.rt.model.buttonBanks && st.rt.model.buttonBanks.length) || 1;
+    const bb = (st.rt && st.rt.buttonBank) || 0;
+    ledHex(28, bb > 0 ? AR : '#000000');            // Right Soft Up
+    ledHex(29, bb < banks - 1 ? AR : '#000000');    // Right Soft Down
   }
   // Scene 1 (Top) = Patterns view, Scene 2 (Bottom) = Steps view (#4).
   function refreshSceneLeds() {
@@ -314,8 +354,8 @@
   // The six micro-step buttons (Soft 9-14) show note presence for the selected
   // step when one is selected (bright = note, dim = empty), else light-orange.
   function refreshOptionLeds() {
-    ledHex(65, st.optionsMode ? '#ffffff' : '#101010'); // Options button
-    if (!st.optionsMode) return;
+    ledHex(65, st.optionsMode ? '#ffffff' : dim('#ffffff')); // Options button dim / bright in options
+    if (!st.optionsMode) { refreshChannelLeds(); return; } // restore part-colour buttons when leaving options
     const leds = opts().softLeds(st.optionsMenu);
     Object.keys(leds).forEach((k) => ledHex(4 + Number(k), leds[k]));
     if (st.selStep != null) {
@@ -351,15 +391,15 @@
   // Repaint the whole control surface (used after an on-screen change like a Part colour).
   function refreshSurface() {
     if (!st.running || !st.slOutId) return;
-    refreshLeds();
-    if (st.rt.padMode === 'sequencer') refreshGrid();
-    refreshChannelLeds(); refreshMuteSolo(); refreshTransport(); refreshSceneLeds(); refreshArrowLeds();
+    if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
+    refreshChannelLeds(); refreshMuteSolo(); refreshTransport(); refreshFunctionLeds(); refreshSceneLeds(); refreshArrowLeds();
+    for (let i = 0; i < 8; i++) refreshFaderLed(i, 0);
     if (st.optionsMode) { refreshOptionLeds(); refreshOptionScreens(); } else refreshKnobScreens();
   }
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
     if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
-    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (sysex) { send(sysex.screenText(8, 0, '')); send(sysex.screenText(8, 1, '')); } refreshKnobScreens(); log('options off'); }
+    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshSurface(); log('options off'); }
   }
   function setPadView(view) {
     st.padView = view;
@@ -434,7 +474,7 @@
     ref.n.gate = Math.max(1, Math.round((held / stepTicks) * 6)); // gate in sixths of a step
     notify();
   }
-  function toggleRecord() { st.recording = !st.recording; notify(); }
+  function toggleRecord() { st.recording = !st.recording; if (st.running) refreshTransport(); notify(); }
 
   function onMsg(bytes) {
     const ev = incontrol.resolve(bytes);
@@ -446,7 +486,7 @@
       else if (ev.control === 'Record') {
         if (st.shift) { // Shift+Record toggles record quantise (non-quantised record)
           const m = model(); if (m && m.sequencer) { m.sequencer.quantizeRecord = m.sequencer.quantizeRecord === false; log('quantise ' + (m.sequencer.quantizeRecord === false ? 'off' : 'on')); }
-        } else { st.recording = !st.recording; notify(); }
+        } else { st.recording = !st.recording; refreshTransport(); notify(); }
       }
       log('⏵ ' + ev.control); return;
     }
@@ -462,17 +502,21 @@
       return;
     }
     // Grid toggles pad function between playable pads and the step grid
-    if (ev.control === 'Grid') { if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshLeds(); log('grid: ' + st.rt.padMode); } return; }
+    if (ev.control === 'Grid') { ledHex(64, ev.value > 0 ? PRESS : dim('#ffffff')); if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads(); log('grid: ' + st.rt.padMode); } return; }
     // In options mode the screen arrows page between steps 1-8 and 9-16 (#6)
     if (st.optionsMode && (ev.control === 'Screen Up' || ev.control === 'Screen Down')) {
       if (ev.value > 0) { st.stepPage = ev.control === 'Screen Down' ? 1 : 0; refreshOptionScreens(); log('steps ' + (st.stepPage ? '9-16' : '1-8')); }
       return;
     }
-    // Pads Up/Down: scroll patterns, or (with Shift) transpose the pattern an octave
-    if (ev.control === 'Pads Up' || ev.control === 'Pads Down') { if (ev.value > 0) { if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12); else pagePattern(ev.control === 'Pads Down' ? 1 : -1); } return; }
-    // Clear / Duplicate held modifiers (for step editing)
-    if (ev.control === 'Clear') { st.mod = ev.value > 0 ? 'clear' : (st.mod === 'clear' ? null : st.mod); return; }
-    if (ev.control === 'Duplicate') { st.mod = ev.value > 0 ? 'dup' : (st.mod === 'dup' ? null : st.mod); if (ev.value === 0) st.dupFrom = null; return; }
+    // Pads Up/Down AND Screen Up/Down page patterns (or Shift-transpose) — same behaviour (#12).
+    if (ev.control === 'Pads Up' || ev.control === 'Pads Down' || ev.control === 'Screen Up' || ev.control === 'Screen Down') {
+      const up = ev.control === 'Pads Up' || ev.control === 'Screen Up';
+      if (ev.value > 0) { if (st.shift) transposeCurrent(up ? 12 : -12); else pagePattern(up ? -1 : 1); }
+      return;
+    }
+    // Clear / Duplicate held modifiers (for step editing); white on press, dim resting (#12)
+    if (ev.control === 'Clear') { ledHex(67, ev.value > 0 ? PRESS : dim('#ff0000')); st.mod = ev.value > 0 ? 'clear' : (st.mod === 'clear' ? null : st.mod); return; }
+    if (ev.control === 'Duplicate') { ledHex(66, ev.value > 0 ? PRESS : dim('#00ff00')); st.mod = ev.value > 0 ? 'dup' : (st.mod === 'dup' ? null : st.mod); if (ev.value === 0) st.dupFrom = null; return; }
 
     const c = mapControl(ev.control);
 
@@ -540,7 +584,7 @@
     }
 
     const navAction = engine.NAV_MAP[ev.control];
-    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); refreshLeds(); if (/knobBank/.test(navAction)) refreshKnobScreens(); log('⇄ ' + ev.control); } return; }
+    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); if (/knobBank/.test(navAction)) refreshKnobScreens(); else refreshCentreScreen(); refreshArrowLeds(); log('⇄ ' + ev.control); } return; }
     if (!c) return;
 
     // Pad in the step sequencer: hold-pad + keys note entry, clear/duplicate, audition
@@ -552,7 +596,7 @@
         st.heldPads.add(c.index);
         if (st.heldKeys.size) st.heldKeys.forEach((vel, note) => SEQ().toggleStepNote(p, c.index, note, vel, 6)); // reverse order: keys already held
         else if (!seqIsPlaying()) auditionStep(p, c.index, true); // audition when stopped
-        refreshGrid(); ledHex(38 + c.index, '#f0f0f0'); notify(); // press-to-lighten over the grid (#5)
+        refreshGrid(); ledHex(38 + c.index, '#ff0000'); notify(); // pressed sequencer pad -> red (#12)
       } else { // release
         st.heldPads.delete(c.index);
         if (!seqIsPlaying()) auditionStep(p, c.index, false);
@@ -586,12 +630,13 @@
     st.baseRt = engine.makeRuntime(global.SLMK.studioState.getModel());
     st.channelRt = {};
     st.rt = runtimeForChannel(st.activeChannel);
-    refreshLeds();
+    blackout(); // clear every LED so nothing overlaps (#12)
     refreshKnobScreens();
-    if (st.rt.padMode === 'sequencer') refreshGrid(); // pads show the step/pattern grid by default (#7)
+    if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads(); // pads show grid or dim part colour (#7/#12)
     refreshSceneLeds();
     refreshArrowLeds();
     refreshOptionLeds();
+    refreshFunctionLeds();
     refreshTransport();
     refreshMuteSolo();
     refreshChannelLeds();

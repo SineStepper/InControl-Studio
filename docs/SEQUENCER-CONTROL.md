@@ -32,13 +32,30 @@ logic in `js/studio-options.js`.
   Mute silences its channel's output; Solo restricts output to soloed channels.
   Channels are mappable (default 1-8).
 
-## LEDs
+## LED colour scheme (issue #12)
 
-- **Transport** defaults: Play green, Record red, Stop red, Loop yellow,
-  Fast-Fwd/Rewind white.
-- **Faders and wheels** have no idle/pressed state — the LED above each fader
-  brightens/darkens with the control's value.
-- Pressing any pad or button briefly **lightens** it to near-white.
+The surface is fully cleared on start and repainted from the sequencer state, so
+nothing overlaps. Default rule: **buttons are unlit at rest and flash white when
+pressed, unless stated below.**
+
+- **Sequencer pads (Steps):** empty step = dim Part colour; used step = bright
+  Part colour; current step = white (pulsing white when stopped); **pressed = red**.
+- **Note pads (Grid/instrument):** dim Part colour at rest, bright Part when
+  pressed. (Per-pad pressure→brightness is a follow-up.)
+- **Soft 1-8** (below screens): Part colours (active white). In options mode they
+  become the menu buttons (Velocity red / Gate green / Chance orange / Tempo
+  white / Pattern blue); unmapped ones are unlit.
+- **Soft 9-24** (above faders): Mute (orange) / Solo (light blue); a Part silenced
+  by another's Solo pulses.
+- **Transport:** Play dim→bright green (playing), Record dim→bright red
+  (recording), Stop bright white when stopped / dim when playing; **Loop, FFW,
+  RWD unlit and unmapped**.
+- **Duplicate** dim green, **Clear** dim red, **Track L/R** dim blue, **Grid**
+  dim white — all flash white when pressed.
+- **Up/down arrows** (Pads, Screen, Right-Soft) light only when there's somewhere
+  to go; Screen Up/Down mirror Pads Up/Down (pattern paging).
+- **Faders/wheels** have no idle/pressed state — LED brightness tracks value.
+- Every change is pushed to the SL MkIII automatically (no refresh button).
 - **Keybed light guide** (SysEx ids 54-114): **off by default.** The
   Programmer's Guide gives the key LEDs the *same* SysEx ids as the Fader LEDs
   (54-61) and function-button LEDs (62-67), so lighting keys clobbers those —
