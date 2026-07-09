@@ -11,6 +11,7 @@
 
   let model = S.newModel();
   const ui = { tab: 'rotary', knobBank: 0, buttonBank: 1, padMode: 'hits', sel: null };
+  let pack = null, packSlot = -1; // loaded pack + which template slot is in the editor
 
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => {
@@ -201,8 +202,55 @@
       setStatus('Exported Components .syx template.', 'ok');
     });
     $('#studio-name').addEventListener('change', () => { model.name = $('#studio-name').value; });
+    if ($('#studio-pack-in')) $('#studio-pack-in').addEventListener('change', (e) => { if (e.target.files[0]) importPack(e.target.files[0]); e.target.value = ''; });
+    if ($('#pack-load')) $('#pack-load').addEventListener('click', loadPackTemplate);
+    if ($('#pack-export')) $('#pack-export').addEventListener('click', exportPack);
     // expose for the future engine
     global.SLMK.studioState = { getModel: () => model };
+  }
+
+  // ---- Components packs (.slmkiiipack) ----
+  function importPack(file) {
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        pack = await global.SLMK.pack.parsePack(new Uint8Array(r.result));
+        packSlot = -1;
+        const sel = $('#pack-templates'); sel.innerHTML = '';
+        pack.templates.forEach((t, i) => sel.appendChild(el('option', { value: i }, (i + 1) + '. ' + (t.name || 'Template'))));
+        $('#pack-name').textContent = pack.name + ' (' + pack.product + ')';
+        $('#pack-sessions').textContent = pack.sessions.length + ' sessions carried through';
+        $('#studio-pack-bar').style.display = '';
+        setStatus('Pack loaded — ' + pack.templates.length + ' templates, ' + pack.sessions.length + ' sessions.', 'ok');
+      } catch (e) { setStatus(e.message, 'warn'); }
+    };
+    r.readAsArrayBuffer(file);
+  }
+  function loadPackTemplate() {
+    if (!pack) return;
+    const i = +$('#pack-templates').value;
+    const t = pack.templates[i]; if (!t) return;
+    model = S.fromTemplate(T.parse(Array.from(t.bytes)));
+    packSlot = i; ui.knobBank = 0; ui.buttonBank = 1; ui.sel = null; syncName(); render();
+    setStatus('Loaded "' + (t.name || model.name) + '" from pack.', 'ok');
+  }
+  function exportPack() {
+    if (!pack) return;
+    // Write the current editor's template back into its pack slot before export.
+    if (packSlot >= 0) {
+      const bytes = T.exportSysex(S.toTemplate(model)); // full .syx
+      const body = bodyFromSyx(bytes); // packs hold the raw 3408-byte body
+      if (body) { pack.templates[packSlot].bytes = body; pack.templates[packSlot].name = model.name; }
+    }
+    const out = global.SLMK.pack.buildPack(pack);
+    const url = URL.createObjectURL(new Blob([out], { type: 'application/zip' }));
+    const a = el('a', { href: url, download: (pack.name || 'pack').replace(/[^\w -]/g, '') + '.slmkiiipack' });
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Exported pack (' + pack.templates.length + ' templates, ' + pack.sessions.length + ' sessions).', 'ok');
+  }
+  // Extract the 3408-byte decoded body from a full template .syx (packs store bodies).
+  function bodyFromSyx(bytes) {
+    try { const tpl = T.parse(bytes); return new Uint8Array(T.toBody(tpl)); } catch (e) { return null; }
   }
   document.addEventListener('DOMContentLoaded', init);
 })(window);
