@@ -1,14 +1,25 @@
-:root {
-  --bg: #0e0f13;
-  --panel: #17191f;
-  --panel-2: #1e2129;
-  --line: #2a2e38;
-  --text: #e7e9ee;
-  --muted: #9aa0ad;
-  --accent: #6ea8ff;
-  --ok: #46d29a;
-  --warn: #f0b64c;
+:root, :root[data-theme="dark"] {
+  --bg: #060708;
+  --panel: #14161c;
+  --panel-2: #20242e;
+  --line: #39414f;
+  --text: #f6f8fc;
+  --muted: #aab2c2;
+  --accent: #7db4ff;
+  --ok: #4fe0a6;
+  --warn: #ffc55a;
   --radius: 10px;
+}
+:root[data-theme="light"] {
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --panel-2: #f2f4f8;
+  --line: #cdd4df;
+  --text: #171a21;
+  --muted: #5a6473;
+  --accent: #2b6cff;
+  --ok: #12a06a;
+  --warn: #b8791a;
 }
 
 * { box-sizing: border-box; }
@@ -34,6 +45,17 @@ body {
 .brand h1 { font-size: 16px; font-weight: 700; margin: 0; letter-spacing: .2px; }
 .brand h1 em { font-style: normal; color: var(--muted); font-weight: 500; }
 .midi { display: flex; align-items: center; gap: 10px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.icon-btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 34px; font-size: 17px; cursor: pointer; line-height: 1; }
+.icon-btn:hover { border-color: var(--accent); }
+.settings-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 90vw; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -12px 0 40px rgba(0,0,0,.4); z-index: 50; overflow: auto; }
+.settings-panel[hidden] { display: none; }
+.settings-inner { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.settings-inner h2 { margin: 0 0 4px; font-size: 15px; }
+.settings-inner hr { border: none; border-top: 1px solid var(--line); margin: 4px 0; width: 100%; }
+.settings-inner .field { display: flex; flex-direction: column; gap: 4px; }
+.settings-inner .field label { color: var(--muted); font-size: 12px; }
+.settings-inner select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; font: inherit; }
 
 .tabs { display: flex; gap: 4px; }
 .tab { color: var(--muted); background: none; border: 1px solid transparent; font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer; }

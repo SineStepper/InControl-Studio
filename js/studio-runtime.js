@@ -342,6 +342,10 @@
       send(sysex.screenValue(i, 0, c ? c.value : 0));       // value on the graphic knob
       send(sysex.screenText(i, 2, c ? c.text : ''));        // reading below the icon
     }
+    // Centre screen names the active menu ("Velocity", "Gate", … per issue #6).
+    const menu = opts().MENUS[st.optionsMenu];
+    send(sysex.screenText(8, 0, menu ? menu.label : ''));
+    if (menu && menu.perStep) send(sysex.screenText(8, 1, 'Steps ' + (st.stepPage ? '9-16' : '1-8')));
   }
   function restartClockIfRunning() { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } }
   // Repaint the whole control surface (used after an on-screen change like a Part colour).
@@ -355,7 +359,7 @@
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
     if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
-    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); refreshKnobScreens(); log('options off'); }
+    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (sysex) { send(sysex.screenText(8, 0, '')); send(sysex.screenText(8, 1, '')); } refreshKnobScreens(); log('options off'); }
   }
   function setPadView(view) {
     st.padView = view;
@@ -577,8 +581,8 @@
 
   function start() {
     if (st.running) return;
-    if (!midi.snapshot().connected) { log('Connect MIDI first (top-right).'); return; }
-    if (!st.slInId || !st.destId) { log('Pick SL input and destination.'); return; }
+    if (!midi.snapshot().connected) { log('Connecting…'); return; }
+    if (!st.slInId) { log('SL MkIII not found — plug it in and enable InControl.'); return; } // destination optional (LEDs still work)
     st.baseRt = engine.makeRuntime(global.SLMK.studioState.getModel());
     st.channelRt = {};
     st.rt = runtimeForChannel(st.activeChannel);
@@ -611,14 +615,50 @@
 
   function init() {
     if (!$('#view-studio') || !$('#se-start')) return;
+    initTheme();
+    initSettings();
     refreshPorts();
-    midi.onChange(() => { if (!st.running) refreshPorts(); });
+    midi.onChange(() => { if (!st.running) { refreshPorts(); autoStart(); } });
     $('#se-in').addEventListener('change', (e) => (st.slInId = e.target.value));
-    $('#se-out').addEventListener('change', (e) => (st.slOutId = e.target.value));
+    $('#se-out').addEventListener('change', (e) => { st.slOutId = e.target.value; if (st.running) refreshSurface(); });
     $('#se-dest').addEventListener('change', (e) => (st.destId = e.target.value));
     if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => (st.keysInId = e.target.value));
     $('#se-start').addEventListener('click', () => (st.running ? stop() : start()));
-    $('#se-refresh').addEventListener('click', () => { if (st.running) refreshLeds(); });
+    // Native MIDI (Electron) or Web MIDI: connect automatically, then auto-start.
+    if (global.electronMIDI || (global.navigator && global.navigator.requestMIDIAccess)) {
+      midi.connect().then(() => { refreshPorts(); autoStart(); }).catch((e) => log('MIDI: ' + e.message));
+    }
+  }
+  // Auto-start the engine once the SL MkIII input is detected (#8).
+  function autoStart() {
+    if (st.running) return;
+    if (!st.slInId) st.slInId = midi.guessDefaultInputId();
+    if (!st.slOutId) st.slOutId = midi.guessDefaultOutputId();
+    if (!st.keysInId) st.keysInId = midi.guessDefaultKeysInputId();
+    if (st.slInId && midi.snapshot().connected) start();
+  }
+  // Settings drawer (cog top-right) + theme toggle (#8, #10).
+  function initSettings() {
+    const panel = $('#settings-panel');
+    const toggle = (show) => { if (panel) panel.hidden = show == null ? !panel.hidden : !show; };
+    if ($('#settings-btn')) $('#settings-btn').addEventListener('click', () => toggle());
+    if ($('#settings-close')) $('#settings-close').addEventListener('click', () => toggle(false));
+    if ($('#theme-toggle')) $('#theme-toggle').addEventListener('click', toggleTheme);
+  }
+  function initTheme() {
+    let t = 'dark';
+    try { t = localStorage.getItem('slmkiii-theme') || 'dark'; } catch (e) {}
+    applyTheme(t);
+  }
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    const b = $('#theme-toggle'); if (b) b.textContent = t === 'dark' ? 'Switch to light' : 'Switch to dark';
+  }
+  function toggleTheme() {
+    const cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = cur === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try { localStorage.setItem('slmkiii-theme', next); } catch (e) {}
   }
 
   // Public API for the Sequencer UI tab.

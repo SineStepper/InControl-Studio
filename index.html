@@ -11,72 +11,32 @@
   <header class="topbar">
     <div class="brand">
       <span class="dot"></span>
-      <h1>SL MkIII <em>Customizer</em></h1>
+      <h1>SL MkIII <em>InControl Studio</em></h1>
     </div>
-    <nav class="tabs">
-      <button class="tab" data-view="customizer">Live Colours</button>
-      <button class="tab" data-view="studio">InControl Studio</button>
-      <button class="tab" data-view="bridge">Bridge</button>
-    </nav>
-    <div class="midi">
-      <button id="connect" class="btn primary">Connect MIDI</button>
-      <select id="outputs" title="MIDI output port" disabled></select>
-      <span id="midi-status" class="status">Not connected</span>
+    <div class="topbar-right">
+      <span id="se-log" class="fineprint"></span>
+      <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
 
-  <!-- ============================ LIVE COLOURS ============================ -->
-  <section id="view-customizer" class="view">
-    <div class="toolbar">
-      <label class="check"><input type="checkbox" id="autosend" checked /> Live send</label>
-      <span class="sep"></span>
-      <button class="btn" id="send-selected">Send selected</button>
-      <button class="btn" id="send-all">Send all</button>
-      <button class="btn" id="blackout">All off</button>
-      <button class="btn" id="rainbow">Rainbow pads</button>
-      <span class="sep"></span>
-      <button class="btn" id="select-all">Select all</button>
-      <button class="btn" id="select-none">Deselect</button>
-      <span id="sel-info" class="sel-info">0 selected</span>
-      <span class="spacer"></span>
-      <button class="btn" id="export-json">Save .json</button>
-      <label class="btn file">Load .json<input type="file" id="import-file" accept="application/json,.json" hidden /></label>
-      <button class="btn" id="export-syx">Export .syx</button>
-      <button class="btn" id="copy-hex">Copy SysEx</button>
+  <!-- ============================== SETTINGS ============================= -->
+  <div id="settings-panel" class="settings-panel" hidden>
+    <div class="settings-inner">
+      <h2>Settings</h2>
+      <div class="field"><label>Appearance</label>
+        <button class="btn" id="theme-toggle">Switch to light</button></div>
+      <hr />
+      <p class="fineprint">MIDI ports auto-detect for the SL MkIII and the engine starts on launch.
+        Override here only if needed.</p>
+      <div class="field"><label title="SL MkIII InControl input — receives your control moves">SL in</label><select id="se-in"></select></div>
+      <div class="field"><label title="SL MkIII InControl output — sends LED colours to the unit">SL out</label><select id="se-out"></select></div>
+      <div class="field"><label title="SL MkIII keybed (regular port) — for sequencer live-record">Keys in</label><select id="se-keys"></select></div>
+      <div class="field"><button class="btn" id="settings-close">Close</button></div>
     </div>
-    <main>
-      <div id="grid" class="grid"></div>
-      <aside class="side">
-        <div class="panel">
-          <h2>Editor</h2>
-          <div id="editor"></div>
-        </div>
-        <div class="panel help">
-          <h2>How to use</h2>
-          <ol>
-            <li>Plug in the SL MkIII and press <strong>InControl</strong> on the unit.</li>
-            <li>Click <strong>Connect MIDI</strong> and choose the <strong>InControl</strong> port.</li>
-            <li>Click any control, pick a colour — with <em>Live send</em> on it lights up instantly.</li>
-            <li>Save your layout as <code>.json</code>, or export a <code>.syx</code> to replay anywhere.</li>
-          </ol>
-          <p class="fineprint">Needs Chrome, Edge, or Opera (Web MIDI). Colours are 7-bit per
-            channel on the hardware, so the on-screen colour is approximate.</p>
-        </div>
-      </aside>
-    </main>
-  </section>
+  </div>
 
   <!-- ========================== INCONTROL STUDIO ========================= -->
-  <section id="view-studio" class="view">
-    <div class="warnbar">
-      <strong>InControl Studio.</strong> To drive the hardware: put the SL MkIII in <em>InControl</em>
-      mode, click <strong>Connect MIDI</strong> (top-right), then in the <em>Live engine</em> bar set
-      <strong>SL&nbsp;in</strong>/<strong>SL&nbsp;out</strong> to the “InControl” port and
-      <strong>Destination</strong> to a virtual port your DAW/synth listens to (IAC / loopMIDI), and
-      press <strong>Start engine</strong>. Then the <strong>Grid</strong> button toggles the pads
-      between playable and the step sequencer; transport buttons drive playback; the up/down buttons
-      by the pads page patterns. Import a Components <code>.syx</code> to start from a template.
-    </div>
+  <section id="view-studio" class="view active">
     <div class="toolbar">
       <button class="btn" id="studio-new">New setup</button>
       <label class="btn file">Import .syx<input type="file" id="studio-import" accept=".syx,application/octet-stream" hidden /></label>
@@ -108,76 +68,17 @@
     </div>
     <div class="toolbar se-bar">
       <div class="se-port">
-        <label class="se-lbl">SL in <select id="se-in" title="The SL MkIII &quot;InControl&quot; input — the app receives your knob / pad / button moves here."></select></label>
-        <span class="se-desc">SL MkIII “InControl” input — receives your control moves</span>
-      </div>
-      <div class="se-port">
-        <label class="se-lbl">SL out <select id="se-out" title="The SL MkIII &quot;InControl&quot; output — the app sends LED colours to the unit here."></select></label>
-        <span class="se-desc">SL MkIII “InControl” output — sends LED colours to the unit</span>
-      </div>
-      <div class="se-port">
-        <label class="se-lbl">Keys in <select id="se-keys" title="The SL MkIII regular (non-InControl) input — the keybed. Used for live recording into the sequencer."></select></label>
-        <span class="se-desc">SL MkIII keybed (regular port) — for sequencer live-record</span>
-      </div>
-      <div class="se-port">
         <label class="se-lbl">Destination <select id="se-dest" title="A virtual / loopback port your DAW or synth listens to (IAC on macOS, loopMIDI on Windows). Your mapped MIDI and the sequencer's notes go here — NOT the SL."></select></label>
         <span class="se-desc">Virtual port your DAW/synth listens to (IAC / loopMIDI)</span>
       </div>
       <div class="se-port">
         <button class="btn primary" id="se-start">Start engine</button>
-        <button class="btn" id="se-refresh" title="Re-send all LEDs">↻ LEDs</button>
       </div>
-      <span id="se-log" class="fineprint"></span>
     </div>
     <div id="studio-body" class="studio-body"></div>
   </section>
 
-  <!-- ============================== BRIDGE =============================== -->
-  <section id="view-bridge" class="view">
-    <div class="warnbar">
-      The <strong>Bridge</strong> holds your <a href="#customizer">Live Colours</a> layout on the unit
-      <em>and</em> remaps its InControl messages to a destination MIDI port — colours + custom mappings
-      at once. A browser can't create a virtual port, so pick an existing one (an <strong>IAC</strong>
-      bus on macOS, <strong>loopMIDI</strong> on Windows). For a headless service that makes its own
-      port, use the Node bridge in <code>/bridge</code>.
-    </div>
-    <main class="single">
-      <div class="grid">
-        <div class="panel">
-          <h2>Ports</h2>
-          <div class="field"><label>SL output</label><select id="br-slout" title="The SL MkIII &quot;InControl&quot; output — the app sends LED colours here."></select></div>
-          <div class="field"><label>SL input</label><select id="br-in" title="The SL MkIII &quot;InControl&quot; input — the app receives control moves here to remap them."></select></div>
-          <div class="field"><label>Destination</label><select id="br-dest" title="A virtual / loopback port your DAW/synth listens to (IAC / loopMIDI). Remapped MIDI goes here."></select></div>
-          <div class="field"><label>Keep-alive</label><input type="number" id="br-keep" value="4000" min="0" step="500" /> <span class="fineprint">ms (re-send colours; 0 = off)</span></div>
-          <div class="field">
-            <button class="btn primary" id="br-start">Start bridge</button>
-            <button class="btn" id="br-sendcolors">Send colours once</button>
-            <button class="btn" id="br-export">Export config</button>
-          </div>
-          <pre id="br-log" class="log"></pre>
-        </div>
-        <div class="panel">
-          <h2>Mappings <span class="fineprint">— InControl control → emitted message</span></h2>
-          <div id="br-mappings" class="mappings"></div>
-        </div>
-      </div>
-      <aside class="side">
-        <div class="panel help">
-          <h2>How to run</h2>
-          <ol>
-            <li>Design colours in <a href="#customizer">Live Colours</a> (they're shared here automatically).</li>
-            <li>Put the SL MkIII in <strong>InControl</strong> mode and <strong>Connect MIDI</strong>.</li>
-            <li>Pick the SL <em>input</em>/<em>output</em> and a <em>destination</em> port.</li>
-            <li>Set mappings, then <strong>Start bridge</strong>. Point your DAW/synth at the destination port.</li>
-          </ol>
-          <p class="fineprint">The tab must stay open while the bridge runs. Colours can't persist on the
-            device standalone — that would need custom firmware, which isn't possible on this hardware.</p>
-        </div>
-      </aside>
-    </main>
-  </section>
 
-  <div id="toast" class="toast"></div>
 
   <script src="js/sysex.js"></script>
   <script src="js/controls.js"></script>
@@ -190,11 +91,8 @@
   <script src="js/studio-options.js"></script>
   <script src="js/incontrol.js"></script>
   <script src="js/midi.js"></script>
-  <script src="js/tabs.js"></script>
-  <script src="js/app.js"></script>
   <script src="js/studio-ui.js"></script>
   <script src="js/studio-sequencer-ui.js"></script>
   <script src="js/studio-runtime.js"></script>
-  <script src="js/bridge-web.js"></script>
 </body>
 </html>

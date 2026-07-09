@@ -25,6 +25,13 @@
   function looksLikeSLMkIII(name) {
     return /sl\s*mk\s*(iii|3)/i.test(name);
   }
+  // The SL MkIII's InControl port is named differently per OS:
+  //   macOS:   "Novation SL MkIII (SL MkIII InControl)"  (in + out)
+  //   Windows: "MIDIIN2 (Novation SL MkIII)" / "MIDIOUT2 (Novation SL MkIII)"
+  // The keybed is the plain "Novation SL MkIII" port (not InControl, not port 2/3).
+  const isInControlInput = (n) => looksLikeSLMkIII(n) && (looksLikeInControl(n) || /midiin\s*2/i.test(n));
+  const isInControlOutput = (n) => looksLikeSLMkIII(n) && (looksLikeInControl(n) || /midiout\s*2/i.test(n));
+  const isKeysInput = (n) => looksLikeSLMkIII(n) && !looksLikeInControl(n) && !/midi(in|out)\s*[23]/i.test(n);
 
   function listOutputs() {
     if (!state.access) return [];
@@ -35,11 +42,11 @@
     return Array.from(state.access.inputs.values());
   }
 
-  /** Pick the best default output: prefer an InControl SL MkIII port. */
+  /** Pick the best default output: the SL MkIII's InControl output port. */
   function pickDefault() {
     const outs = listOutputs();
     return (
-      outs.find((o) => looksLikeSLMkIII(o.name) && looksLikeInControl(o.name)) ||
+      outs.find((o) => isInControlOutput(o.name)) ||
       outs.find((o) => looksLikeInControl(o.name)) ||
       outs.find((o) => looksLikeSLMkIII(o.name)) ||
       outs[0] ||
@@ -118,7 +125,7 @@
   function guessDefaultInputId() {
     const ins = listInputs();
     const pick =
-      ins.find((o) => looksLikeSLMkIII(o.name) && looksLikeInControl(o.name)) ||
+      ins.find((o) => isInControlInput(o.name)) ||
       ins.find((o) => looksLikeInControl(o.name)) ||
       ins.find((o) => looksLikeSLMkIII(o.name)) ||
       ins[0];
@@ -128,6 +135,7 @@
   function guessDefaultKeysInputId() {
     const ins = listInputs();
     const pick =
+      ins.find((o) => isKeysInput(o.name)) ||
       ins.find((o) => looksLikeSLMkIII(o.name) && !looksLikeInControl(o.name)) ||
       ins.find((o) => !looksLikeInControl(o.name)) ||
       ins[0];
@@ -173,9 +181,13 @@
       return { connected: st.connected, outputs: st.outputs.slice(),
         selectedId: st.selectedId, selectedName: st.selectedId };
     }
-    const guessOut = () => { const o = st.outputs.find((x) => inControl(x.name)) || st.outputs[0]; return o ? o.id : null; };
-    const guessIn = () => { const i = st.inputs.find((x) => inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
-    const guessKeys = () => { const i = st.inputs.find((x) => /sl\s*mk/i.test(x.name) && !inControl(x.name)) || st.inputs.find((x) => !inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
+    const isSL = (n) => /sl\s*mk\s*(iii|3)/i.test(n);
+    const icIn = (n) => isSL(n) && (inControl(n) || /midiin\s*2/i.test(n));   // Windows: MIDIIN2 (...)
+    const icOut = (n) => isSL(n) && (inControl(n) || /midiout\s*2/i.test(n)); // Windows: MIDIOUT2 (...)
+    const keys = (n) => isSL(n) && !inControl(n) && !/midi(in|out)\s*[23]/i.test(n);
+    const guessOut = () => { const o = st.outputs.find((x) => icOut(x.name)) || st.outputs.find((x) => inControl(x.name)) || st.outputs[0]; return o ? o.id : null; };
+    const guessIn = () => { const i = st.inputs.find((x) => icIn(x.name)) || st.inputs.find((x) => inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
+    const guessKeys = () => { const i = st.inputs.find((x) => keys(x.name)) || st.inputs.find((x) => isSL(x.name) && !inControl(x.name)) || st.inputs.find((x) => !inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
 
     g.SLMK = g.SLMK || {};
     g.SLMK.midi = {

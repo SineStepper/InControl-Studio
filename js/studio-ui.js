@@ -14,6 +14,8 @@
   let pack = null, packSlot = -1, packSessionSlot = -1; // loaded pack + which template/session slot is in the editor
 
   const $ = (s) => document.querySelector(s);
+  // Push LED changes to the hardware immediately (#9 — no manual refresh button).
+  function pushLeds() { const RT = global.SLMK.studioRuntime; if (RT && RT.state && RT.state().running) RT.refreshSurface(); }
   const el = (t, p = {}, c = []) => {
     const n = document.createElement(t);
     const { dataset, ...rest } = p;
@@ -130,7 +132,7 @@
     if (a.colorOnly) {
       panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its colour is editable.'));
       const c = el('input', { type: 'color', value: a.led.idle });
-      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); });
+      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); pushLeds(); });
       panel.appendChild(field('Colour', c));
       return panel;
     }
@@ -172,14 +174,14 @@
     if (a.colorMode === 'value') {
       ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
       const c = el('input', { type: 'color', value: a.led.idle });
-      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = c.value; render(); });
+      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = c.value; render(); pushLeds(); });
       ledWrap.appendChild(field('Colour', c));
     } else {
       ledWrap.appendChild(el('h4', {}, 'LED colour'));
       const states = hasPressureLed(a.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
       states.forEach((st) => {
         const c = el('input', { type: 'color', value: a.led[st] === '#000000' ? '#000000' : a.led[st] });
-        c.addEventListener('input', () => { a.led[st] = c.value; render(); });
+        c.addEventListener('input', () => { a.led[st] = c.value; render(); pushLeds(); });
         ledWrap.appendChild(field(st[0].toUpperCase() + st.slice(1), c));
       });
     }

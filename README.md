@@ -4,17 +4,21 @@ A browser-based tool to set **custom RGB colours** on the Novation SL MkIII's
 pads, buttons and fader LEDs — the thing **Novation Components doesn't let you
 do**, even though the hardware fully supports it.
 
-It's a single app with three tabs sharing one MIDI connection:
+It's a single-view app — **InControl Studio** — that drives the SL MkIII in
+*InControl* mode and does everything the old Live Colours and Bridge tabs did:
 
-- **Live Colours** — click a pad, pick a colour, watch it light up over the
-  Web MIDI API using the documented InControl SysEx protocol.
-- **InControl Studio** — a Components-style customizer that runs the SL MkIII in
-  *InControl* mode with more than Components allows: unlimited knob/button banks,
-  per-state LED colours, richer message types (14-bit, NRPN, combined continuous
-  bank-change), a live translation engine, and a built-in **step sequencer**.
-  Imports Components `.syx` templates.
-- **Bridge** — hold your colours on the unit **and** remap its InControl
-  messages to another MIDI port, so you get colours + custom mappings live.
+- **Custom RGB LED colours** on every pad/button/fader — the thing **Novation
+  Components doesn't let you do** — pushed live as you edit (no refresh button).
+- A Components-style **customizer** with more than Components allows: unlimited
+  knob/button banks, per-state LED colours, richer message types (14-bit, NRPN,
+  combined continuous bank-change), and per-Part instrument templates. Imports
+  Components `.syx` templates and `.slmkiiipack` packs.
+- A **live translation engine** that remaps InControl controls to any MIDI
+  destination (what Bridge did), plus a full **step sequencer** modelled on the
+  SL MkIII's own — driven entirely from the hardware.
+
+MIDI ports auto-detect and the engine auto-starts; a **⚙ settings** drawer
+(top-right) holds the port overrides and a **light/dark theme** toggle.
 
 ![The customizer editing SL MkIII LEDs live](assets/screenshot.png)
 
