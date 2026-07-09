@@ -47,8 +47,8 @@
       led: led('#101010', '#ffffff', '#ff3b3b'),
     };
     if (cls === 'knob') Object.assign(base, { mode: 'Absolute', resolution: 616, step: 1, pivot: 0, combined: 'None' });
-    if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 0, up_value: 127 });
-    if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 0, up_value: 127, vel_min: 1, vel_max: 127, vel_curve: 'None' });
+    if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 127, up_value: 0 });
+    if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 127, up_value: 0, vel_min: 1, vel_max: 127, vel_curve: 'None' });
     if (cls === 'pad_pressure') Object.assign(base, { message_type: 'Poly Aftertouch' });
     return Object.assign(base, over || {});
   }

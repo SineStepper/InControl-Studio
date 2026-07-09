@@ -1,0 +1,192 @@
+/*
+ * studio-engine.js — InControl Studio live engine (P3), pure core.
+ *
+ * Translates resolved InControl input (which control moved, and by how much)
+ * into outgoing MIDI per the current model / bank / channel, drives per-state
+ * LED colours, and runs the navigation state machine (bank paging, channel).
+ * No MIDI I/O or DOM here — the runtime (studio-runtime.js) wires this to ports,
+ * so every rule below is unit-testable.
+ */
+(function (global) {
+  'use strict';
+  const sysex = global.SLMK && global.SLMK.sysex;
+
+  // ---- runtime state ----
+  function makeRuntime(model) {
+    return {
+      model,
+      knobBank: 0,
+      buttonBank: 1, // 0 is the fixed Mute/Send bank
+      channel: (model.global && model.global.channel) || 1,
+      template: (model.global && model.global.template) || 1,
+      padMode: 'pads', // 'pads' | 'sequencer' (sequencer is P4)
+      toggle: {}, // key -> bool, for Toggle behaviour
+      inc: {}, // key -> current value, for Inc/Dec
+      held: {}, // key -> bool, for LED pressed state
+    };
+  }
+
+  // ---- value scaling ----
+  function scale(raw, start, end, bit) {
+    const t = Math.max(0, Math.min(127, raw)) / 127;
+    const base = start + (end - start) * t; // in the 0-127 domain the user set
+    if (bit === '14-bit') return Math.round((base / 127) * 16383) & 0x3fff;
+    if (bit === '8-bit scaled') return Math.round((base / 127) * 255) & 0xff;
+    return Math.round(base) & 0x7f;
+  }
+
+  // ---- message builders (ch is 0-15) ----
+  const CC = (ch, cc, v) => [0xb0 | ch, cc & 0x7f, v & 0x7f];
+  const NOTE_ON = (ch, n, vel) => [0x90 | ch, n & 0x7f, vel & 0x7f];
+  const NOTE_OFF = (ch, n) => [0x80 | ch, n & 0x7f, 0];
+  const PC = (ch, v) => [0xc0 | ch, v & 0x7f];
+  const CHAN_PRESSURE = (ch, v) => [0xd0 | ch, v & 0x7f];
+  const POLY_AT = (ch, n, v) => [0xa0 | ch, n & 0x7f, v & 0x7f];
+  const PITCH = (ch, v14) => [0xe0 | ch, v14 & 0x7f, (v14 >> 7) & 0x7f];
+  const SONG_POS = (v14) => [0xf2, v14 & 0x7f, (v14 >> 7) & 0x7f];
+  const NRPN = (ch, param, v14) => [CC(ch, 99, (param >> 7) & 0x7f), CC(ch, 98, param & 0x7f), CC(ch, 6, (v14 >> 7) & 0x7f), CC(ch, 38, v14 & 0x7f)];
+
+  const chanOf = (a, rt) => ((a.channel === 'default' ? rt.channel : a.channel) - 1) & 0x0f;
+
+  /**
+   * Produce outgoing MIDI messages for a continuous control move (0-127 raw).
+   * Returns an array of byte arrays.
+   */
+  function continuousOut(a, raw, rt) {
+    const ch = chanOf(a, rt);
+    const mt = a.message_type;
+    const v = scale(raw, a.start, a.end, a.bit_depth);
+    switch (mt) {
+      case 'CC': return a.bit_depth === '14-bit' ? [CC(ch, a.cc, (v >> 7) & 0x7f), CC(ch, (a.cc + 32) & 0x7f, v & 0x7f)] : [CC(ch, a.cc, a.bit_depth === '8-bit scaled' ? v >> 1 : v)];
+      case 'NRPN': return NRPN(ch, a.cc, a.bit_depth === '14-bit' ? v : v << 7);
+      case 'Note': return [NOTE_ON(ch, a.note, v & 0x7f)];
+      case 'Program Change': return [PC(ch, v & 0x7f)];
+      case 'Bank Change': return [CC(ch, 0, v & 0x7f)];
+      case 'Sub Bank Change': return [CC(ch, 32, v & 0x7f)];
+      case 'Song Position': return [SONG_POS(a.bit_depth === '14-bit' ? v : v << 7)];
+      case 'Pitch Bend': return [PITCH(ch, a.bit_depth === '14-bit' ? v : v << 7)];
+      case 'Channel Pressure': return [CHAN_PRESSURE(ch, v & 0x7f)];
+      case 'Poly Aftertouch': return [POLY_AT(ch, a.note, v & 0x7f)];
+      default: return [];
+    }
+  }
+
+  /** Fixed-value message for a switch press/release (value already chosen). */
+  function switchOut(a, value, rt, opts) {
+    const ch = chanOf(a, rt);
+    const mt = a.message_type;
+    switch (mt) {
+      case 'Note': return value > 0 ? [NOTE_ON(ch, a.note, opts && opts.velocity != null ? opts.velocity : value)] : [NOTE_OFF(ch, a.note)];
+      case 'CC': return [CC(ch, a.cc, value)];
+      case 'NRPN': return NRPN(ch, a.cc, value << 7);
+      case 'Program Change': return [PC(ch, value)];
+      case 'Bank Change': return [CC(ch, 0, value)];
+      case 'Sub Bank Change': return [CC(ch, 32, value)];
+      case 'Song Position': return [SONG_POS(value << 7)];
+      default: return [];
+    }
+  }
+
+  // velocity mapped through vel_min/vel_max/curve for pad hits
+  function padVelocity(a, raw) {
+    if (a.vel_curve === 'Clip') return Math.max(a.vel_min, Math.min(a.vel_max, raw));
+    if (a.vel_curve === 'Scale') return Math.round(a.vel_min + ((a.vel_max - a.vel_min) * raw) / 127) & 0x7f;
+    return raw & 0x7f; // None
+  }
+
+  /**
+   * Handle a resolved input event.
+   * @param rt runtime
+   * @param ev { group:'knob'|'fader'|'button'|'pad', index:0-based, kind:'cc'|'note', value:0-127 }
+   * @returns { out: byteArrays[], nav?: string, ledDirty?: bool }
+   */
+  function handle(rt, ev) {
+    const a = assignmentFor(rt, ev.group, ev.index);
+    if (!a || !a.enabled) return { out: [] };
+    const key = ev.group + ':' + (ev.group === 'button' ? rt.buttonBank + ':' : ev.group === 'knob' ? rt.knobBank + ':' : '') + ev.index;
+
+    if (ev.group === 'knob' || ev.group === 'fader') {
+      return { out: continuousOut(a, ev.value, rt) };
+    }
+    // switch-like: button or pad
+    const pressed = ev.value > 0;
+    rt.held[key] = pressed;
+    const beh = a.behavior || 'Momentary';
+    if (ev.group === 'pad' && a.message_type === 'Note') {
+      // velocity-sensitive note
+      if (pressed) return { out: [NOTE_ON(chanOf(a, rt), a.note, padVelocity(a, ev.value))], ledDirty: true };
+      return { out: [NOTE_OFF(chanOf(a, rt), a.note)], ledDirty: true };
+    }
+    if (beh === 'Momentary') return { out: switchOut(a, pressed ? a.down_value : a.up_value, rt), ledDirty: true };
+    if (beh === 'Trigger') return { out: pressed ? switchOut(a, a.down_value, rt) : [], ledDirty: true };
+    if (beh === 'Toggle') {
+      if (!pressed) return { out: [], ledDirty: true };
+      rt.toggle[key] = !rt.toggle[key];
+      return { out: switchOut(a, rt.toggle[key] ? a.down_value : a.up_value, rt), ledDirty: true };
+    }
+    if (beh === 'Inc/Dec') {
+      if (!pressed) return { out: [] };
+      const cur = (rt.inc[key] || 0) + 1;
+      rt.inc[key] = cur > 127 ? 0 : cur;
+      return { out: switchOut(a, rt.inc[key], rt), ledDirty: true };
+    }
+    return { out: [] };
+  }
+
+  function assignmentFor(rt, group, index) {
+    const m = rt.model;
+    if (group === 'knob') return (m.knobBanks[rt.knobBank] || [])[index];
+    if (group === 'fader') return m.faders[index];
+    if (group === 'button') return (m.buttonBanks[rt.buttonBank] || [])[index];
+    if (group === 'pad') return m.pads.hits[index];
+    return null;
+  }
+
+  // ---- navigation ----
+  function nav(rt, action) {
+    const m = rt.model;
+    switch (action) {
+      case 'knobBank+': rt.knobBank = (rt.knobBank + 1) % m.knobBanks.length; return { ledDirty: true };
+      case 'knobBank-': rt.knobBank = (rt.knobBank - 1 + m.knobBanks.length) % m.knobBanks.length; return { ledDirty: true };
+      case 'buttonBank+': rt.buttonBank = (rt.buttonBank + 1) % m.buttonBanks.length; return { ledDirty: true };
+      case 'buttonBank-': rt.buttonBank = (rt.buttonBank - 1 + m.buttonBanks.length) % m.buttonBanks.length; return { ledDirty: true };
+      case 'channel+': rt.channel = (rt.channel % 16) + 1; return { ledDirty: true };
+      case 'channel-': rt.channel = ((rt.channel - 2 + 16) % 16) + 1; return { ledDirty: true };
+      case 'grid': rt.padMode = rt.padMode === 'pads' ? 'sequencer' : 'pads'; return { ledDirty: true };
+      default: return {};
+    }
+  }
+
+  // Map InControl navigation control names -> nav actions.
+  const NAV_MAP = {
+    'Track Left': 'channel-', 'Track Right': 'channel+',
+    'Screen Up': 'knobBank-', 'Screen Down': 'knobBank+',
+    'Right Soft Up': 'buttonBank-', 'Right Soft Down': 'buttonBank+',
+    'Grid': 'grid',
+  };
+
+  // ---- LED output for the current bank/state ----
+  function ledFor(a, key, rt) {
+    const l = a.led || {};
+    if (rt.held[key]) return l.pressed || '#ffffff';
+    return l.idle || '#000000';
+  }
+  /** All LED SysEx messages for the current view (pads + current button bank + faders). */
+  function ledMessages(rt) {
+    if (!sysex) return [];
+    const out = [];
+    const m = rt.model;
+    const push = (ledId, a, key) => { const { r, g, b } = sysex.hexTo7bit(ledFor(a, key, rt)); out.push(sysex.ledRgb(ledId, r, g, b, 'solid')); };
+    m.pads.hits.forEach((a, i) => push(38 + i, a, 'pad::' + i));
+    (m.buttonBanks[rt.buttonBank] || []).forEach((a, i) => { if (i < 16) push(4 + i, a, 'button:' + rt.buttonBank + ':' + i); });
+    m.faders.forEach((a, i) => push(54 + i, a, 'fader::' + i));
+    return out;
+  }
+
+  global.SLMK = global.SLMK || {};
+  global.SLMK.engine = {
+    makeRuntime, scale, continuousOut, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages,
+    _msg: { CC, NOTE_ON, NOTE_OFF, PC, CHAN_PRESSURE, POLY_AT, PITCH, SONG_POS, NRPN },
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.engine;
+})(typeof window !== 'undefined' ? window : globalThis);
