@@ -449,6 +449,11 @@
     if (ev.control === 'Options') { if (ev.value > 0) toggleOptions(); return; }
     // Scene 1 (Top) -> Patterns view, Scene 2 (Bottom) -> Steps view (#4)
     if (ev.control === 'Scene Top' || ev.control === 'Scene Bottom') { if (ev.value > 0) setPadView(ev.control === 'Scene Top' ? 'patterns' : 'steps'); return; }
+    // Track Left/Right select the previous/next Part (like Soft 1-8, but stepping).
+    if (ev.control === 'Track Left' || ev.control === 'Track Right') {
+      if (ev.value > 0) { const ch = Math.max(1, Math.min(8, st.activeChannel + (ev.control === 'Track Right' ? 1 : -1))); selectChannel(ch); }
+      return;
+    }
     // Grid toggles pad function between playable pads and the step grid
     if (ev.control === 'Grid') { if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshLeds(); log('grid: ' + st.rt.padMode); } return; }
     // In options mode the screen arrows page between steps 1-8 and 9-16 (#6)
