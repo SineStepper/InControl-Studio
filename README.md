@@ -78,27 +78,13 @@ colour change, and live RGB SysEx only affects LEDs in InControl view. So custom
 colours are strictly a live, InControl feature — mappings go in the template,
 colours are applied live.
 
-### Template Editor (a tab)
+### Editing templates
 
-The **Template Editor** tab is a full Components-style editor. Create a new
-template or load a `.syx`, then edit every control across all eight sections
-(16 buttons, 16 knobs, 8 faders, 2 wheels, 2 pedals, 1 footswitch, 16 pad-hits,
-16 pad-pressures):
-
-- **Name**, **enabled**, **message type** (CC / NRPN / Note / Program Change /
-  Song Position / Channel Pressure / Poly Aftertouch), **MIDI channel**
-  (Default or 1–16), **CC/Note number**, **min/max** value.
-- Per-type extras: button/pad **behaviour** (Momentary / Toggle / Inc-Dec /
-  Trigger) and on/off values, pad **velocity** min/max + curve, knob
-  **resolution**.
-- For pads, faders and the 8×2 buttons, a **colour** that's stored in Live
-  Colours (by LED id) and pushed live by the Bridge.
-
-The codec is a JS port of the proven [`inno/slmkiii`](https://github.com/inno/slmkiii)
-library — it round-trips both sample templates **bit-exact** and recomputes the
-CRC-32, so exports import cleanly into Novation Components.
-
-![Template Editor: mappings + colour per control](assets/template-editor.png)
+Template editing lives in **InControl Studio** (below): **Import .syx** loads a
+real Components template, and **Export .syx** writes one back. The codec is a JS
+port of the proven [`inno/slmkiii`](https://github.com/inno/slmkiii) library — it
+round-trips both sample templates **bit-exact** and recomputes the CRC-32, so
+exports import cleanly into Novation Components.
 
 ## InControl Studio
 
@@ -123,8 +109,8 @@ A full customizer + live engine for InControl mode, going beyond Components:
 
 ![The InControl Studio sequencer](assets/studio-sequencer.png)
 
-Imports Components `.syx` templates as a starting point; saves/loads the whole
-setup (mappings + colours + sequence) as JSON. Modules: `js/studio-model.js`,
+**Imports and exports** Components `.syx` templates (Import/Export .syx), and
+saves/loads the whole setup (mappings + colours + sequence) as JSON. Modules: `js/studio-model.js`,
 `js/studio-ui.js`, `js/studio-engine.js` (+ `test/studio-engine.test.js`),
 `js/studio-runtime.js`, `js/studio-sequencer.js` (+ `test/studio-sequencer.test.js`),
 `js/studio-sequencer-ui.js`.
