@@ -18,7 +18,9 @@
 
   const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
-    heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map() };
+    heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
+    optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0 };
+  const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
 
@@ -109,20 +111,76 @@
     const t = m.sequencer.tracks[st.gridTrack];
     t.activePattern = (t.activePattern + dir + SEQ().PATTERNS) % SEQ().PATTERNS;
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    refreshArrowLeds();
+    if (st.optionsMode) refreshOptionScreens();
     notify(); log('pattern ' + (t.activePattern + 1));
   }
+  function curTrack() { const m = model(); return m && m.sequencer ? m.sequencer.tracks[st.gridTrack] : null; }
+  function ledHex(id, hex, beh) { if (!st.slOutId || !sysex) return; const { r, g, b } = sysex.hexTo7bit(hex); midi.sendToOutput(st.slOutId, sysex.ledRgb(id, r, g, b, beh || 'solid')); }
+
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
+    if (st.padView === 'patterns') return refreshPatternPads();
     const p = gridPattern(); if (!p) return;
-    const sysex = global.SLMK.sysex;
     const head = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1;
     for (let i = 0; i < 16; i++) {
       let hex = '#0a0a0a';
       if (SEQ().stepHasNotes(p, i)) hex = '#3bd0ff';
       if (seqIsPlaying() && i === head) hex = '#ffffff';
-      const { r, g, b } = sysex.hexTo7bit(hex);
-      midi.sendToOutput(st.slOutId, sysex.ledRgb(38 + i, r, g, b, 'solid'));
+      ledHex(38 + i, hex);
     }
+  }
+  // Patterns view (#4/#7): the 16 pads show/select the 8 patterns.
+  function refreshPatternPads() {
+    const t = curTrack(); if (!t) return;
+    opts().patternPadLeds(t.activePattern, SEQ().PATTERNS).forEach((hex, i) => ledHex(38 + i, hex));
+  }
+  // Pads Up/Down arrow LEDs reflect the position in the pattern list (#7).
+  function refreshArrowLeds() {
+    const t = curTrack(); if (!t) return;
+    const a = opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
+    ledHex(0, a.up ? '#00aaff' : '#000000');
+    ledHex(1, a.down ? '#00aaff' : '#000000');
+  }
+  // Scene 1 (Top) = Patterns view, Scene 2 (Bottom) = Steps view (#4).
+  function refreshSceneLeds() {
+    ledHex(2, st.padView === 'patterns' ? '#ffae00' : '#160f00');
+    ledHex(3, st.padView === 'steps' ? '#3bd0ff' : '#001016');
+  }
+  // Options-mode soft-button LEDs + the Options button itself (#6).
+  function refreshOptionLeds() {
+    ledHex(65, st.optionsMode ? '#ffffff' : '#101010'); // Options button
+    if (!st.optionsMode) return;
+    const leds = opts().softLeds(st.optionsMenu);
+    Object.keys(leds).forEach((k) => ledHex(4 + Number(k), leds[k]));
+  }
+  // Per-knob screen readout for the active options menu/page (#6).
+  function refreshOptionScreens() {
+    if (!st.slOutId || !sysex) return;
+    const t = curTrack(); if (!t) return;
+    const p = t.patterns[t.activePattern];
+    const seq = model().sequencer;
+    midi.sendToOutput(st.slOutId, sysex.screenLayout(1));
+    const cols = opts().columns(seq, p, st.optionsMenu, st.stepPage);
+    const menu = opts().MENUS[st.optionsMenu];
+    for (let i = 0; i < 8; i++) {
+      const c = cols[i];
+      midi.sendToOutput(st.slOutId, sysex.screenText(i, 0, c ? (menu.perStep ? c.text : c.label + ' ' + c.text) : ''));
+      if (c) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, c.value));
+    }
+  }
+  function restartClockIfRunning() { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } }
+  function toggleOptions() {
+    st.optionsMode = !st.optionsMode;
+    if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); refreshOptionScreens(); log('options on'); }
+    else { refreshOptionLeds(); refreshLeds(); refreshKnobScreens(); log('options off'); }
+  }
+  function setPadView(view) {
+    st.padView = view;
+    refreshSceneLeds();
+    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    refreshArrowLeds();
+    notify(); log('view: ' + view);
   }
 
   const trackChan = () => { const m = model(); return m && m.sequencer ? (m.sequencer.tracks[st.gridTrack].channel - 1) & 0x0f : 0; };
@@ -187,8 +245,17 @@
     }
     // Shift modifier
     if (ev.control === 'Shift') { st.shift = ev.value > 0; return; }
+    // Options button: toggle the options-editing surface (#6)
+    if (ev.control === 'Options') { if (ev.value > 0) toggleOptions(); return; }
+    // Scene 1 (Top) -> Patterns view, Scene 2 (Bottom) -> Steps view (#4)
+    if (ev.control === 'Scene Top' || ev.control === 'Scene Bottom') { if (ev.value > 0) setPadView(ev.control === 'Scene Top' ? 'patterns' : 'steps'); return; }
     // Grid toggles pad function between playable pads and the step grid
     if (ev.control === 'Grid') { if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshLeds(); log('grid: ' + st.rt.padMode); } return; }
+    // In options mode the screen arrows page between steps 1-8 and 9-16 (#6)
+    if (st.optionsMode && (ev.control === 'Screen Up' || ev.control === 'Screen Down')) {
+      if (ev.value > 0) { st.stepPage = ev.control === 'Screen Down' ? 1 : 0; refreshOptionScreens(); log('steps ' + (st.stepPage ? '9-16' : '1-8')); }
+      return;
+    }
     // Pads Up/Down: scroll patterns, or (with Shift) transpose the pattern an octave
     if (ev.control === 'Pads Up' || ev.control === 'Pads Down') { if (ev.value > 0) { if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12); else pagePattern(ev.control === 'Pads Down' ? 1 : -1); } return; }
     // Clear / Duplicate held modifiers (for step editing)
@@ -197,9 +264,36 @@
 
     const c = mapControl(ev.control);
 
+    // ---- Options mode intercepts knobs + soft buttons (#6) ----
+    if (st.optionsMode && c) {
+      if (c.group === 'button') {
+        if (ev.value > 0) {
+          const menu = opts().menuForButton(c.index);
+          if (menu) { st.optionsMenu = menu; refreshOptionLeds(); refreshOptionScreens(); log('menu: ' + menu); }
+          else if (opts().MICROSTEP_BUTTONS.indexOf(c.index) >= 0) { st.microstep = c.index; log('microstep ' + (c.index + 1)); }
+        }
+        return;
+      }
+      if (c.group === 'knob') {
+        const t = curTrack(); if (t) {
+          const seq = model().sequencer;
+          const delta = engine.knobDelta(ev.value);
+          const desc = opts().applyKnob(seq, t.patterns[t.activePattern], st.optionsMenu, c.index, delta, st.stepPage, st.shift);
+          if (desc) { refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); notify(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
+        }
+        return;
+      }
+    }
+
+    // Patterns view: a pad selects that pattern (#4/#7)
+    if (c && c.group === 'pad' && st.padView === 'patterns' && st.rt && st.rt.padMode === 'sequencer') {
+      if (ev.value > 0 && c.index < SEQ().PATTERNS) { curTrack().activePattern = c.index; refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify(); log('pattern ' + (c.index + 1)); }
+      return;
+    }
+
     // Soft buttons 1-8 select the track while in the step sequencer
     if (c && c.group === 'button' && c.index < 8 && st.rt && st.rt.padMode === 'sequencer') {
-      if (ev.value > 0) { st.gridTrack = c.index; refreshGrid(); notify(); log('track ' + (c.index + 1)); }
+      if (ev.value > 0) { st.gridTrack = c.index; refreshGrid(); refreshArrowLeds(); notify(); log('track ' + (c.index + 1)); }
       return;
     }
 
@@ -238,6 +332,10 @@
     st.rt = engine.makeRuntime(global.SLMK.studioState.getModel());
     refreshLeds();
     refreshKnobScreens();
+    if (st.rt.padMode === 'sequencer') refreshGrid(); // pads show the step/pattern grid by default (#7)
+    refreshSceneLeds();
+    refreshArrowLeds();
+    refreshOptionLeds();
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;
@@ -274,6 +372,9 @@
     setGridTrack: (i) => { st.gridTrack = i; if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); notify(); },
     gridTrack: () => st.gridTrack,
     restartClock: () => { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } },
+    // Inject a resolved-control MIDI message (used by tests and future on-screen control).
+    handleControl: (bytes) => onMsg(bytes),
+    state: () => st,
   };
 
   document.addEventListener('DOMContentLoaded', init);

@@ -1,0 +1,197 @@
+/*
+ * studio-options.js — pure logic for the SL MkIII standalone-style sequencer
+ * control surface in InControl mode (GitHub issues #4, #6, #7).
+ *
+ * The live I/O (reading knobs/buttons, driving LEDs and screens) lives in
+ * studio-runtime.js; everything here is a pure function of the model so it can
+ * be unit-tested without MIDI or a DOM.
+ *
+ * Options mode (#6): pressing Options opens an editing surface. The row of soft
+ * buttons below the screens selects a menu (Velocity / Gate / Chance / Tempo /
+ * Pattern); knobs 1-8 edit the value(s); the screens show a per-knob readout.
+ * The top six soft buttons are the microstep row and light light-orange.
+ *
+ * Scene mapping (#4): Scene 1 (Top) -> Patterns view, Scene 2 (Bottom) -> Steps
+ * view. Pattern nav (#7): Pads Up/Down page the eight patterns, and the arrow
+ * LEDs reflect the position in the list.
+ *
+ * NOTE ON SOFT-BUTTON LAYOUT: the SL MkIII exposes 24 soft buttons (LED ids
+ * 4-27). We treat Soft 1-8 (indices 0-7) as the top row and Soft 9-16 (indices
+ * 8-15) as the row below the screens. Adjust MENU_BUTTONS / MICROSTEP_BUTTONS
+ * here if a given unit's physical layout differs.
+ */
+(function (global) {
+  'use strict';
+
+  const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
+  // Slow -> fast, matching the sequencer core; index is the on-wire value.
+  const SYNC_ORDER = ['1/32 Triplet', '1/32', '1/16 Triplet', '1/16', '1/8 Triplet', '1/8', '1/4 Triplet', '1/4'];
+  // Displayed fast -> slow for the knob sweep (1/4 .. 1/32T), as the issue lists it.
+  const SYNC_DISPLAY = ['1/4', '1/4 Triplet', '1/8', '1/8 Triplet', '1/16', '1/16 Triplet', '1/32', '1/32 Triplet'];
+
+  // Per-menu definition. `field` is the per-step property the knobs edit.
+  const MENUS = {
+    velocity: { label: 'Velocity', color: '#ff0000', field: 'velocity', min: 1, max: 127, perStep: true },
+    gate: { label: 'Gate', color: '#00ff00', field: 'gate', min: 1, max: 192, perStep: true }, // 1/6-step units, up to 32 steps
+    chance: { label: 'Chance', color: '#ff6a00', field: 'chance', min: 0, max: 100, perStep: true, onStep: true },
+    tempo: { label: 'Tempo', color: '#ffffff', perStep: false },
+    pattern: { label: 'Pattern', color: '#0000ff', perStep: false },
+  };
+  const MENU_ORDER = ['velocity', 'gate', 'chance', 'tempo', 'pattern'];
+
+  // Soft-button index (0-based) -> menu key (the row below the screens).
+  const MENU_BUTTONS = { 8: 'velocity', 9: 'gate', 10: 'chance', 11: 'tempo', 15: 'pattern' };
+  // The six microstep buttons (top row) that light light-orange in options mode.
+  const MICROSTEP_BUTTONS = [0, 1, 2, 3, 4, 5];
+  const LIGHT_ORANGE = '#ff8c32';
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const menuForButton = (index) => MENU_BUTTONS[index] || null;
+
+  // Notes carrying the edited field for one step (chord-aware).
+  function stepNotes(pattern, stepIdx) {
+    const s = pattern && pattern.steps && pattern.steps[stepIdx];
+    return (s && s.notes) || [];
+  }
+
+  /**
+   * Apply an endless-encoder delta from knob `knobIndex` (0-7) in the current
+   * options menu. `page` is 0 (steps 1-8) or 1 (steps 9-16). When `shift` is
+   * true, knob 1 edits every step at once (per the issue). Mutates seq/pattern
+   * in place; returns a short description of what changed (or null).
+   */
+  function applyKnob(seq, pattern, menuKey, knobIndex, delta, page, shift) {
+    if (!delta) return null;
+    const menu = MENUS[menuKey];
+    if (!menu) return null;
+
+    if (menu.perStep) {
+      const set = (stepIdx) => {
+        if (menu.onStep) { // chance lives on the step, not the notes
+          const s = pattern.steps[stepIdx];
+          s.chance = clamp((s.chance == null ? 100 : s.chance) + delta, menu.min, menu.max);
+        } else {
+          stepNotes(pattern, stepIdx).forEach((n) => {
+            n[menu.field] = clamp((n[menu.field] == null ? menu.min : n[menu.field]) + delta, menu.min, menu.max);
+          });
+        }
+      };
+      if (shift) { for (let i = 0; i < 16; i++) set(i); return 'all ' + menu.field; }
+      if (knobIndex > 7) return null;
+      const stepIdx = page * 8 + knobIndex;
+      if (stepIdx > 15) return null;
+      set(stepIdx);
+      return menu.field + ' step ' + (stepIdx + 1);
+    }
+
+    if (menuKey === 'tempo') {
+      if (knobIndex === 0) { seq.tempo = clamp((seq.tempo || 120) + delta, 40, 240); return 'tempo ' + seq.tempo; }
+      if (knobIndex === 1) { seq.swing = clamp((seq.swing == null ? 50 : seq.swing) + delta, 10, 80); return 'swing ' + seq.swing; }
+      if (knobIndex === 2) { seq.swingSync = cycleIndex(SYNC_DISPLAY, seq.swingSync, delta); return 'swing sync ' + seq.swingSync; }
+      return null;
+    }
+
+    if (menuKey === 'pattern') {
+      if (knobIndex === 0) { pattern.start = clamp((pattern.start || 0) + delta, 0, 15); return 'start ' + pattern.start; }
+      if (knobIndex === 1) { pattern.end = clamp((pattern.end == null ? 15 : pattern.end) + delta, 0, 15); return 'end ' + pattern.end; }
+      if (knobIndex === 2) { pattern.direction = cycleIndex(DIRECTIONS, pattern.direction, delta); return 'dir ' + pattern.direction; }
+      if (knobIndex === 3) { pattern.syncRate = cycleIndex(SYNC_DISPLAY, pattern.syncRate, delta); return 'sync ' + pattern.syncRate; }
+      if (knobIndex === 4) { pattern.shift = ((pattern.shift || 0) + delta % 16 + 16) % 16; return 'shift ' + pattern.shift; } // wraps
+      return null;
+    }
+    return null;
+  }
+
+  // Step a value through a list by a signed delta (clamped, no wrap).
+  function cycleIndex(list, current, delta) {
+    let i = list.indexOf(current);
+    if (i < 0) i = 0;
+    return list[clamp(i + delta, 0, list.length - 1)];
+  }
+
+  /**
+   * Per-knob screen readout (up to 8 columns) for the current menu/page.
+   * Each column: { label, value } where value is 0-127 (for the screen bar) and
+   * text conveys the real reading. Returns [] when nothing to show.
+   */
+  function columns(seq, pattern, menuKey, page) {
+    const menu = MENUS[menuKey];
+    if (!menu) return [];
+    if (menu.perStep) {
+      const cols = [];
+      for (let i = 0; i < 8; i++) {
+        const stepIdx = page * 8 + i;
+        const notes = stepNotes(pattern, stepIdx);
+        let v;
+        if (menu.onStep) v = pattern.steps[stepIdx].chance == null ? 100 : pattern.steps[stepIdx].chance;
+        else v = notes.length ? (notes[0][menu.field] == null ? menu.min : notes[0][menu.field]) : null;
+        cols.push({ label: 'St' + (stepIdx + 1), value: v == null ? 0 : clamp(v, 0, 127), text: v == null ? '-' : String(v) });
+      }
+      return cols;
+    }
+    if (menuKey === 'tempo') {
+      return [
+        { label: 'Tempo', value: clamp(seq.tempo || 120, 0, 127), text: String(seq.tempo || 120) },
+        { label: 'Swing', value: clamp(seq.swing == null ? 50 : seq.swing, 0, 127), text: (seq.swing == null ? 50 : seq.swing) + '%' },
+        { label: 'Sw.Syn', value: 0, text: seq.swingSync || '1/16' },
+      ];
+    }
+    if (menuKey === 'pattern') {
+      return [
+        { label: 'Start', value: pattern.start || 0, text: String((pattern.start || 0) + 1) },
+        { label: 'End', value: pattern.end == null ? 15 : pattern.end, text: String((pattern.end == null ? 15 : pattern.end) + 1) },
+        { label: 'Dir', value: 0, text: (pattern.direction || 'Forward').slice(0, 4) },
+        { label: 'Sync', value: 0, text: pattern.syncRate || '1/16' },
+        { label: 'Shift', value: pattern.shift || 0, text: String(pattern.shift || 0) },
+      ];
+    }
+    return [];
+  }
+
+  /**
+   * Soft-button LED colours for options mode: menu buttons in their colour
+   * (the active one brightened), microstep row light-orange, others off.
+   * Returns { softIndex: hex }.
+   */
+  function softLeds(activeMenu) {
+    const leds = {};
+    MICROSTEP_BUTTONS.forEach((i) => (leds[i] = LIGHT_ORANGE));
+    Object.keys(MENU_BUTTONS).forEach((k) => {
+      const idx = +k;
+      const menu = MENUS[MENU_BUTTONS[idx]];
+      leds[idx] = MENU_BUTTONS[idx] === activeMenu ? menu.color : dim(menu.color);
+    });
+    return leds;
+  }
+
+  // Halve an #RRGGBB colour's brightness (for the un-selected menu buttons).
+  function dim(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return '#000000';
+    const n = parseInt(m[1], 16);
+    const h = (v) => Math.round(v / 3).toString(16).padStart(2, '0');
+    return '#' + h((n >> 16) & 0xff) + h((n >> 8) & 0xff) + h(n & 0xff);
+  }
+
+  /** Pads Up/Down arrow LED states for the pattern list (#7). */
+  function arrowLeds(activePattern, patternCount) {
+    return { up: activePattern > 0, down: activePattern < (patternCount - 1) };
+  }
+
+  /** Pad colours (16) for the Patterns view (#4/#7): active pattern bright. */
+  function patternPadLeds(activePattern, patternCount) {
+    const out = [];
+    for (let i = 0; i < 16; i++) {
+      if (i >= patternCount) out.push('#000000');
+      else out.push(i === activePattern ? '#ffffff' : '#101c3a');
+    }
+    return out;
+  }
+
+  global.SLMK = global.SLMK || {};
+  global.SLMK.studioOptions = {
+    MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
+    menuForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim,
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
+})(typeof window !== 'undefined' ? window : globalThis);

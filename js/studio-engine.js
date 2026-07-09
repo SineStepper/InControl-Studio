@@ -19,7 +19,7 @@
       buttonBank: 1, // 0 is the fixed Mute/Send bank
       channel: (model.global && model.global.channel) || 1,
       template: (model.global && model.global.template) || 1,
-      padMode: 'pads', // 'pads' | 'sequencer' (sequencer is P4)
+      padMode: 'sequencer', // 'sequencer' (pads drive the step/pattern grid) | 'pads' (instrument, via Grid)
       toggle: {}, // key -> bool, for Toggle behaviour
       inc: {}, // key -> current value, for Inc/Dec
       held: {}, // key -> bool, for LED pressed state
