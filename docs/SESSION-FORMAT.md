@@ -85,5 +85,26 @@ byte untouched — so re-exporting an **unmodified** session is byte-for-byte
 identical to the original (verified across all 64 factory sessions and all 13
 single-field captures).
 
-Still opaque (preserved, not interpreted): the pattern-chain semantics, and any
-per-pattern *start* offset (the hardware stores only length, implying start 0).
+### Reverse-engineering notes for the newer fields (in progress)
+
+Analysis of the 64 factory sessions (per-track header at `0x110 + track*0x2d98`):
+
+- `0x117 + track*0x2d98` is always the **track index** (0-7) in every factory
+  session — a Part identifier, **not** a recolourable colour field. So Part
+  colour can't be read from here; it needs a capture with recoloured Parts.
+- `0x119 + track*0x2d98` is **0** with no chain and equals the **chain span**
+  (`to - from`) otherwise (0,1,2,3,7 seen; the single ground-truth chain 1→2
+  gave 1). The chain **start** position isn't yet located, and neither is the
+  stored **active pattern**.
+- **Micro-steps, per-track swing on/off, and automation** don't appear in the
+  factory data in a decoded location (note slots' 4th byte is always 0; the
+  ~873-byte per-pattern header before each grid likely holds automation).
+
+Because none of these can be pinned without controlled captures, `writeSequence`
+still touches only the confirmed fields, so session round-trips stay bit-exact.
+The app's own **`.json` setup files do persist all of these** (colour, chain,
+per-track swing, micro-steps, automation); only the hardware `.syx`/pack format
+is pending. See `docs/QUESTIONS-AND-IDEAS.md` for the exact captures needed.
+
+Still opaque (preserved, not interpreted): the pattern-chain start/active-pattern
+bytes, micro-step/swing/automation storage, and any per-pattern *start* offset.

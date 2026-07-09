@@ -8,35 +8,55 @@ you or a known follow-up — the implemented behaviour is summarised in
 
 ## Questions for you
 
-1. **Momentary Record.** The standalone tells *tap-to-toggle* apart from
-   *hold-to-record* by how long you hold the Record button. The InControl MIDI
-   stream doesn't give reliable press-duration, so I made Record a toggle
-   (press = arm/punch-in/punch-out). Do you want (a) keep toggle, (b) always
-   hold-to-record, or (c) a press-duration threshold to emulate both?
+1. **Momentary Record.** *(Resolved — keeping the toggle for now.)* Record is a
+   toggle: press = arm / punch-in / punch-out. Revisit if you want hold-to-record.
 
-2. **Session persistence of the new fields.** The `.syx`/pack session format I
-   reverse-engineered stores notes, velocity, gate, tie, chance, pattern
-   length/direction/sync, tempo, swing and channel — and round-trips those
-   bit-exact. It does **not** yet store: **micro-steps, pattern chains,
-   per-track swing on/off, automation, or Part colours.** Those currently live
-   only in the app's own JSON. Want me to reverse-engineer where the hardware
-   stores them? Each needs a few targeted ground-truth captures (e.g. a session
-   with one note on micro-step 3, a session with a 1→3 pattern chain, a session
-   with distinct Part colours) — same method that worked before.
+2. **Session persistence of the new fields.** *(You said yes — here's where it
+   stands.)* The `.syx`/pack format stores notes, velocity, gate, tie, chance,
+   pattern length/direction/sync, tempo, swing and channel bit-exact. The app's
+   **`.json` setup files now persist everything** (Part colour, chains, per-track
+   swing, micro-steps, automation) — so nothing is lost if you Save/Load setups
+   in the app. What's still missing is writing those into the **hardware
+   `.syx`/pack** format.
 
-3. **Pattern-switch timing.** The standalone defers a single pattern change to
-   the end of the current pattern when playing (instant only with Shift). I
-   switch immediately. Want the deferred-until-boundary behaviour?
+   From analysing the 64 factory sessions I found: the byte I earlier thought
+   might be Part colour (`0x117+track*0x2d98`) is actually just the track index
+   (always 0-7), and the chain byte (`0x119+track*0x2d98`) holds the chain
+   **span** (to−from) but the chain **start**, the stored **active pattern**,
+   and the micro-step/swing/automation locations aren't pinned. I won't write
+   guesses into real sessions (that risks corrupting them), so I need these
+   controlled single-session captures — export each as its own `.syx`, named by
+   what it contains, starting from an Init session with one note on Track 1 /
+   Pattern 1 / step 1 unless noted:
+
+   - **Part colour:** recolour Track 1 to a distinctive colour, Track 2 to a
+     different one (Templates view → select Part → coloured pad). Two captures,
+     or one with several Parts recoloured.
+   - **Pattern chain:** (a) chain patterns **3→5** on Track 1; (b) chain **2→2**
+     only (single) vs a 1→4 chain. These pin the chain start + span + how the
+     active pattern is stored.
+   - **Active pattern:** set Track 1's active pattern to **Pattern 5** (Patterns
+     view → pad 5), no chain.
+   - **Micro-steps:** one note on **micro-step 4** of step 1 (Options → select
+     step 1 → hold the 4th micro button → play a key).
+   - **Per-track swing:** set Track 1 swing **Off** (Tempo menu), Track 2 On.
+   - **Automation (optional, complex):** record a single knob sweep on Track 1's
+     Pattern 1, nothing else.
+
+   Send whatever subset you can and I'll extend `readSequence`/`writeSequence`
+   the same way I decoded the note grid — verifying bit-exact against the
+   captures before shipping.
+
+3. **Pattern-switch timing.** *(Resolved — implemented.)* While playing, a
+   pattern/chain selection is queued and takes effect at the end of the current
+   pattern (the queued pad pulses); Shift or a stopped transport switches instantly.
 
 4. **Mute/Solo access.** The manual reaches Mute/Solo through a dedicated view
    (the right soft arrow). I left the 16 above-fader buttons always acting as
    Mute/Solo. Keep them always-on, or gate them behind Right Soft Up/Down like
    the hardware?
 
-5. **Arp and Scales.** These are separate SL modes, not the sequencer. Do you
-   want them in InControl too? They'd need button mappings (the Arp/Scales/Latch
-   buttons aren't exposed over InControl), so I'd map them onto spare controls —
-   tell me if that's wanted and I'll spec it.
+5. **Arp and Scales.** *(Resolved — not needed; they live on the keyboard.)*
 
 6. **Soft-button / micro-step physical mapping.** I mapped menus to Soft 1-8 and
    micro-steps/mute-solo to Soft 9-24 from the guide. If anything is off on your
