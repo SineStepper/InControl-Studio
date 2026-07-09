@@ -71,9 +71,13 @@
           const s = pattern.steps[stepIdx];
           s.chance = clamp((s.chance == null ? 100 : s.chance) + delta, menu.min, menu.max);
         } else {
-          stepNotes(pattern, stepIdx).forEach((n) => {
-            n[menu.field] = clamp((n[menu.field] == null ? menu.min : n[menu.field]) + delta, menu.min, menu.max);
-          });
+          // Velocity/Gate snap every note on the step to one uniform value, based on
+          // the highest present value (User Guide: favours higher, snaps closest).
+          const notes = stepNotes(pattern, stepIdx);
+          if (!notes.length) return;
+          const cur = Math.max.apply(null, notes.map((n) => (n[menu.field] == null ? menu.min : n[menu.field])));
+          const nv = clamp(cur + delta, menu.min, menu.max);
+          notes.forEach((n) => (n[menu.field] = nv));
         }
       };
       if (shift) { for (let i = 0; i < 16; i++) set(i); return 'all ' + menu.field; }
@@ -124,7 +128,7 @@
         const notes = stepNotes(pattern, stepIdx);
         let v;
         if (menu.onStep) v = pattern.steps[stepIdx].chance == null ? 100 : pattern.steps[stepIdx].chance;
-        else v = notes.length ? (notes[0][menu.field] == null ? menu.min : notes[0][menu.field]) : null;
+        else v = notes.length ? Math.max.apply(null, notes.map((n) => (n[menu.field] == null ? menu.min : n[menu.field]))) : null; // highest of the step's notes
         cols.push({ label: 'St' + (stepIdx + 1), value: v == null ? 0 : clamp(v, 0, 127), text: v == null ? '-' : String(v) });
       }
       return cols;

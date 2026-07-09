@@ -83,4 +83,11 @@ eq(O.arrowLeds(0, 8), { up: false, down: true }, 'top of list: up off, down on')
 eq(O.arrowLeds(7, 8), { up: true, down: false }, 'bottom of list: up on, down off');
 eq(O.patternPadLeds(2, 8)[2], '#ffffff', 'active pattern pad is white');
 
+// velocity snapping: multiple notes on a step snap to one uniform value (favouring higher)
+const chordP = Q.newPattern();
+Q.toggleStepNote(chordP, 0, 60, 25, 6);
+Q.toggleStepNote(chordP, 0, 64, 89, 6); // step 0 has velocities 25 and 89
+O.applyKnob(seq(), chordP, 'velocity', 0, +1, 0, false); // nudge up from the max (89)
+eq(chordP.steps[0].notes.map((x) => x.velocity), [90, 90], 'both notes snap to 90 (max 89 +1)');
+
 console.log('\n' + n + ' assertions passed');

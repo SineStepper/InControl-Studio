@@ -382,10 +382,17 @@
   }
   function recordNoteOn(note, velocity) {
     const p = gridPattern(); if (!p) return;
-    const step = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : 0; // quantise to the current step
+    const step = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : 0; // quantise note-on to the current step
+    // Non-quantised record: place the note on the nearest micro-step within the step.
+    let micro = 0;
+    const m = model();
+    if (m && m.sequencer && m.sequencer.quantizeRecord === false && st.seqRt) {
+      const stepTicks = SEQ().SYNC[p.syncRate] || 6;
+      micro = Math.round(((st.seqRt.tick % stepTicks) / stepTicks) * 6) % 6;
+    }
     const s = p.steps[step];
-    let n = s.notes.find((x) => x.note === note);
-    if (!n) { n = { note, velocity, gate: 6 }; s.notes.push(n); }
+    let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
+    if (!n) { n = { note, velocity, gate: 6, micro }; s.notes.push(n); }
     st.recRef.set(note, { n, startTick: st.seqRt.tick });
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     notify(); log('● rec ' + note + ' @step ' + (step + 1));
@@ -408,7 +415,11 @@
     if (ev.value > 0 && (ev.control === 'Play' || ev.control === 'Stop' || ev.control === 'Record')) {
       if (ev.control === 'Play') seqPlay();
       else if (ev.control === 'Stop') seqStop();
-      else if (ev.control === 'Record') { st.recording = !st.recording; notify(); }
+      else if (ev.control === 'Record') {
+        if (st.shift) { // Shift+Record toggles record quantise (non-quantised record)
+          const m = model(); if (m && m.sequencer) { m.sequencer.quantizeRecord = m.sequencer.quantizeRecord === false; log('quantise ' + (m.sequencer.quantizeRecord === false ? 'off' : 'on')); }
+        } else { st.recording = !st.recording; notify(); }
+      }
       log('⏵ ' + ev.control); return;
     }
     // Shift modifier

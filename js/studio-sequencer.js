@@ -65,6 +65,19 @@
 
   const gateTicks = (gateSixths, stepTicks) => Math.max(1, Math.round(((gateSixths || 6) / 6) * stepTicks));
 
+  // Swing offset (in ticks) for the note firing at rt.tick on this track. Swing
+  // pushes the off-beat of the swing sync-rate pair later (positive swing) or the
+  // on-beat later (negative swing). Per-track On/Off; global 20-80%, 50 = none.
+  function swingDelay(rt, track) {
+    const s = rt.seq.swing;
+    if (track.swing === 'Off' || s == null || s === 50) return 0;
+    const swingStepTicks = SYNC[rt.seq.swingSync] || 6;
+    const odd = Math.floor(rt.tick / swingStepTicks) % 2 === 1; // off-beat of the pair
+    if (s > 50 && odd) return Math.round(((s - 50) / 50) * swingStepTicks);
+    if (s < 50 && !odd) return Math.round(((50 - s) / 50) * swingStepTicks);
+    return 0;
+  }
+
   /**
    * Advance one 24-PPQN tick. Returns [{type:'on'|'off', channel, note, velocity}].
    * rng is injectable for deterministic tests (defaults to Math.random).
@@ -108,9 +121,10 @@
           const roll = (rng ? rng() : Math.random()) * 100;
           if (roll < (step.chance == null ? 100 : step.chance)) {
             const ch = (track.channel - 1) & 0x0f;
+            const swingOff = swingDelay(rt, track);
             step.notes.forEach((nt) => {
               const gateT = gateTicks(nt.gate, stepTicks);
-              const microOff = Math.round(((nt.micro || 0) / 6) * stepTicks); // offset within the step
+              const microOff = Math.round(((nt.micro || 0) / 6) * stepTicks) + swingOff; // micro-step + swing offset
               if (microOff <= 0) {
                 events.push({ type: 'on', channel: ch, note: nt.note, velocity: nt.velocity || 100 });
                 pstate.pending.push({ ch, note: nt.note, offTick: rt.tick + gateT });

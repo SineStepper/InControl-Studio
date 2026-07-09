@@ -5,6 +5,7 @@ const Q = require('../js/studio-sequencer.js');
 const assert = require('assert');
 let n = 0;
 const eq = (a, b, m) => { assert.deepStrictEqual(a, b, m + ' got ' + JSON.stringify(a)); console.log('ok  :', m); n++; };
+const ok = (c, m) => { assert.ok(c, m); console.log('ok  :', m); n++; };
 const rng0 = () => 0; // deterministic: chance always passes, random dir -> first step
 
 // model shape
@@ -84,5 +85,16 @@ const mrt = Q.makeSeqRuntime(mseq); Q.start(mrt);
 const onAt = {};
 for (let k = 0; k < Q.SYNC['1/16']; k++) Q.onTick(mrt, rng0).filter((e) => e.type === 'on').forEach((e) => (onAt[e.note] = k));
 eq([onAt[60], onAt[72]], [0, 3], 'micro 0 fires at tick 0, micro 3 fires at tick 3');
+
+// swing: positive swing delays the off-beat step
+const sseq = Q.newSequencer(); sseq.swing = 80; sseq.swingSync = '1/16';
+const stp = sseq.tracks[0].patterns[0];
+Q.toggleStepNote(stp, 0, 60, 100, 6); // on-beat (step 0)
+Q.toggleStepNote(stp, 1, 62, 100, 6); // off-beat (step 1) -> swung later
+const srt = Q.makeSeqRuntime(sseq); Q.start(srt);
+const at = {};
+for (let k = 0; k < Q.SYNC['1/16'] * 2; k++) Q.onTick(srt, rng0).filter((e) => e.type === 'on').forEach((e) => (at[e.note] = k));
+eq(at[60], 0, 'on-beat note fires on the step boundary');
+ok(at[62] > 6, 'off-beat note is swung later than its step boundary (tick 6), got ' + at[62]);
 
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');
