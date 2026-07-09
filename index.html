@@ -99,6 +99,13 @@
       <button class="btn" id="pack-export-sessions">Export sessions .syx</button>
       <button class="btn" id="pack-export">Export pack</button>
     </div>
+    <div class="toolbar" id="studio-chan-bar">
+      <span class="fineprint">Per-channel instruments</span>
+      <label class="se-lbl">Channel <select id="chan-sel"></select></label>
+      <button class="btn" id="chan-assign" title="Assign the current editor setup to this channel/button">Assign current setup</button>
+      <button class="btn" id="chan-clear" title="Remove this channel's assigned template">Clear</button>
+      <span class="fineprint" id="chan-status"></span>
+    </div>
     <div class="toolbar se-bar">
       <div class="se-port">
         <label class="se-lbl">SL in <select id="se-in" title="The SL MkIII &quot;InControl&quot; input — the app receives your knob / pad / button moves here."></select></label>

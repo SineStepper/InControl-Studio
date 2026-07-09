@@ -46,6 +46,9 @@
       bit_depth: '7-bit',
       led: led('#101010', '#ffffff', '#ff3b3b'),
     };
+    // Faders and wheels have no idle/pressed state — their LED brightness tracks value.
+    // led.idle is the full-value colour; the runtime dims it toward black as the value drops.
+    if (cls === 'fader' || cls === 'pitch' || cls === 'mod') { base.colorMode = 'value'; base.led = led('#20c0ff', '#20c0ff', '#000000'); }
     if (cls === 'knob') Object.assign(base, { mode: 'Absolute', resolution: 616, step: 1, pivot: 0, combined: 'None' });
     if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 127, up_value: 0 });
     if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 127, up_value: 0, vel_min: 1, vel_max: 127, vel_curve: 'None' });
@@ -59,13 +62,18 @@
     return arr;
   }
 
-  // Fixed first button bank: Mute + Send for the first 8 MIDI channels (2 rows of 8).
-  function muteSendBank() {
+  // Fixed first button bank: Mute + Solo for the first 8 MIDI channels (2 rows of 8).
+  // These send no MIDI of their own and only their colour is editable. Mute stops
+  // MIDI on its channel; Solo restricts output to its channel. Channels are
+  // mappable (default 1-8). led.idle is the base colour; pressed shows the
+  // engaged (brighter) state.
+  function muteSoloBank() {
     const arr = [];
-    for (let i = 0; i < 8; i++) arr.push(make('button', { name: 'Mute ' + (i + 1), message_type: 'CC', cc: 0x10 + i, behavior: 'Toggle', channel: i + 1, led: led('#0a1a0a', '#ffd23b', '#000000'), fixed: true }));
-    for (let i = 0; i < 8; i++) arr.push(make('button', { name: 'Send ' + (i + 1), message_type: 'CC', cc: 0x18 + i, behavior: 'Toggle', channel: i + 1, led: led('#0a0a1a', '#3bd0ff', '#000000'), fixed: true }));
+    for (let i = 0; i < 8; i++) arr.push(make('button', { name: 'Mute ' + (i + 1), role: 'mute', channel: i + 1, fixed: true, colorOnly: true, led: led('#ff6a00', '#ffd9a8', '#000000') }));
+    for (let i = 0; i < 8; i++) arr.push(make('button', { name: 'Solo ' + (i + 1), role: 'solo', channel: i + 1, fixed: true, colorOnly: true, led: led('#5bc8ff', '#c8ecff', '#000000') }));
     return arr;
   }
+  const muteSendBank = muteSoloBank; // back-compat alias
 
   function newModel() {
     return {
@@ -174,7 +182,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studio = {
     MSG, BIT_DEPTHS, BEHAVIORS, VEL_CURVES, KNOB_MODES, COMBINED,
-    make, newBank, muteSendBank, newModel, addKnobBank, addButtonBank, fromTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
+    make, newBank, muteSendBank, muteSoloBank, newModel, addKnobBank, addButtonBank, fromTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studio;
 })(typeof window !== 'undefined' ? window : globalThis);

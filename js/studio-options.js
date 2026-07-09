@@ -15,10 +15,10 @@
  * view. Pattern nav (#7): Pads Up/Down page the eight patterns, and the arrow
  * LEDs reflect the position in the list.
  *
- * NOTE ON SOFT-BUTTON LAYOUT: the SL MkIII exposes 24 soft buttons (LED ids
- * 4-27). We treat Soft 1-8 (indices 0-7) as the top row and Soft 9-16 (indices
- * 8-15) as the row below the screens. Adjust MENU_BUTTONS / MICROSTEP_BUTTONS
- * here if a given unit's physical layout differs.
+ * SOFT-BUTTON LAYOUT: Soft 1-8 (indices 0-7) are the row below the screens and
+ * select the menus; Soft 9-24 (indices 8-23) are the 16 buttons above the
+ * faders (the Mute/Solo bank in normal mode). In options mode the first six of
+ * those (indices 8-13) become the microstep row.
  */
 (function (global) {
   'use strict';
@@ -39,10 +39,10 @@
   };
   const MENU_ORDER = ['velocity', 'gate', 'chance', 'tempo', 'pattern'];
 
-  // Soft-button index (0-based) -> menu key (the row below the screens).
-  const MENU_BUTTONS = { 8: 'velocity', 9: 'gate', 10: 'chance', 11: 'tempo', 15: 'pattern' };
-  // The six microstep buttons (top row) that light light-orange in options mode.
-  const MICROSTEP_BUTTONS = [0, 1, 2, 3, 4, 5];
+  // Soft-button index (0-based) -> menu key (the row below the screens, Soft 1-8).
+  const MENU_BUTTONS = { 0: 'velocity', 1: 'gate', 2: 'chance', 3: 'tempo', 7: 'pattern' };
+  // The six microstep buttons (first six above-fader buttons) — light light-orange.
+  const MICROSTEP_BUTTONS = [8, 9, 10, 11, 12, 13];
   const LIGHT_ORANGE = '#ff8c32';
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -165,11 +165,27 @@
   }
 
   // Halve an #RRGGBB colour's brightness (for the un-selected menu buttons).
-  function dim(hex) {
+  function dim(hex) { return scaleColor(hex, 1 / 3); }
+
+  /** Scale an #RRGGBB colour's brightness by `frac` (0..1). */
+  function scaleColor(hex, frac) {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
     if (!m) return '#000000';
     const n = parseInt(m[1], 16);
-    const h = (v) => Math.round(v / 3).toString(16).padStart(2, '0');
+    const f = Math.max(0, Math.min(1, frac));
+    const h = (v) => Math.round(v * f).toString(16).padStart(2, '0');
+    return '#' + h((n >> 16) & 0xff) + h((n >> 8) & 0xff) + h(n & 0xff);
+  }
+  // Brightness for a value-mode LED: floor of 15% so a non-zero value is visible.
+  function valueColor(hex, value, max) { return scaleColor(hex, 0.15 + 0.85 * Math.max(0, Math.min(1, value / (max || 127)))); }
+
+  /** Mix an #RRGGBB colour toward white by `frac` (0..1) — used for engaged/pressed states. */
+  function lighten(hex, frac) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return '#ffffff';
+    const n = parseInt(m[1], 16);
+    const f = Math.max(0, Math.min(1, frac));
+    const h = (v) => Math.round(v + (255 - v) * f).toString(16).padStart(2, '0');
     return '#' + h((n >> 16) & 0xff) + h((n >> 8) & 0xff) + h(n & 0xff);
   }
 
@@ -191,7 +207,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studioOptions = {
     MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
-    menuForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim,
+    menuForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim, scaleColor, valueColor, lighten,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
 })(typeof window !== 'undefined' ? window : globalThis);

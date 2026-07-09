@@ -47,6 +47,7 @@
   function render() {
     const host = $('#studio-body');
     if (!host) return;
+    if ($('#chan-status')) refreshChanStatus();
     host.innerHTML = '';
     // sub-tab bar
     const bar = el('div', { className: 'studio-tabs' });
@@ -59,7 +60,7 @@
     // bank / mode controls
     const controlsBar = el('div', { className: 'studio-subbar' });
     if (ui.tab === 'rotary') controlsBar.appendChild(bankNav('Knob bank', model.knobBanks.length, ui.knobBank, (i) => { ui.knobBank = i; ui.sel = null; render(); }, () => { ui.knobBank = S.addKnobBank(model); render(); }));
-    if (ui.tab === 'buttons') controlsBar.appendChild(bankNav('Button bank', model.buttonBanks.length, ui.buttonBank, (i) => { ui.buttonBank = i; ui.sel = null; render(); }, () => { ui.buttonBank = S.addButtonBank(model); render(); }, (i) => i === 0 ? 'Mute/Send (fixed)' : 'Bank ' + i));
+    if (ui.tab === 'buttons') controlsBar.appendChild(bankNav('Button bank', model.buttonBanks.length, ui.buttonBank, (i) => { ui.buttonBank = i; ui.sel = null; render(); }, () => { ui.buttonBank = S.addButtonBank(model); render(); }, (i) => i === 0 ? 'Mute/Solo (fixed)' : 'Bank ' + i));
     if (ui.tab === 'pads') {
       ['hits', 'pressures'].forEach((mode) => { const b = el('button', { className: 'btn' + (ui.padMode === mode ? ' primary' : '') }, mode === 'hits' ? 'Pad Hit' : 'Pad Pressure'); b.addEventListener('click', () => { ui.padMode = mode; ui.sel = null; render(); }); controlsBar.appendChild(b); });
     }
@@ -124,6 +125,15 @@
     const sel = (k, opts) => { const n = el('select', {}); opts.forEach((o) => n.appendChild(el('option', { value: o, selected: o === a[k] }, o))); n.addEventListener('change', () => { a[k] = n.value; render(); }); return n; };
 
     panel.appendChild(el('div', { className: 'insp-title' }, (a.name || a.cls) + (a.fixed ? '  (fixed)' : '')));
+
+    // Colour-only controls (fixed Mute/Solo): send no MIDI, only the colour is editable.
+    if (a.colorOnly) {
+      panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its colour is editable.'));
+      const c = el('input', { type: 'color', value: a.led.idle });
+      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); });
+      panel.appendChild(field('Colour', c));
+      return panel;
+    }
     panel.appendChild(field('Enabled', chk('enabled')));
     panel.appendChild(field('Name', txt('name', 9)));
     panel.appendChild(field('Message', sel('message_type', S.MSG[a.cls])));
@@ -157,15 +167,22 @@
     }
     if (a.cls === 'pad_pressure' && a.message_type === 'Poly Aftertouch') panel.appendChild(field('Note #', num('note', 0, 127)));
 
-    // LED colours per state
+    // LED colours. Faders/wheels have no idle/pressed state — brightness tracks value.
     const ledWrap = el('div', { className: 'insp-color' });
-    ledWrap.appendChild(el('h4', {}, 'LED colour'));
-    const states = hasPressureLed(a.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
-    states.forEach((st) => {
-      const c = el('input', { type: 'color', value: a.led[st] === '#000000' ? '#000000' : a.led[st] });
-      c.addEventListener('input', () => { a.led[st] = c.value; render(); });
-      ledWrap.appendChild(field(st[0].toUpperCase() + st.slice(1), c));
-    });
+    if (a.colorMode === 'value') {
+      ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
+      const c = el('input', { type: 'color', value: a.led.idle });
+      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = c.value; render(); });
+      ledWrap.appendChild(field('Colour', c));
+    } else {
+      ledWrap.appendChild(el('h4', {}, 'LED colour'));
+      const states = hasPressureLed(a.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
+      states.forEach((st) => {
+        const c = el('input', { type: 'color', value: a.led[st] === '#000000' ? '#000000' : a.led[st] });
+        c.addEventListener('input', () => { a.led[st] = c.value; render(); });
+        ledWrap.appendChild(field(st[0].toUpperCase() + st.slice(1), c));
+      });
+    }
     panel.appendChild(ledWrap);
     return panel;
   }
@@ -208,8 +225,37 @@
     if ($('#pack-load-session')) $('#pack-load-session').addEventListener('click', loadPackSession);
     if ($('#pack-export')) $('#pack-export').addEventListener('click', exportPack);
     if ($('#pack-export-sessions')) $('#pack-export-sessions').addEventListener('click', exportSessions);
+    initChannelBar();
     // expose for the future engine
     global.SLMK.studioState = { getModel: () => model };
+  }
+
+  // ---- per-channel instrument templates (buttons 1-8 select the channel) ----
+  function initChannelBar() {
+    const sel = $('#chan-sel'); if (!sel) return;
+    for (let i = 1; i <= 8; i++) sel.appendChild(el('option', { value: i }, 'Ch ' + i));
+    refreshChanStatus();
+    $('#chan-assign').addEventListener('click', () => {
+      const ch = +sel.value;
+      model.channelTemplates = model.channelTemplates || new Array(8).fill(null);
+      // Snapshot the current control mapping (knobs/faders/pads/buttons) for this channel.
+      model.channelTemplates[ch - 1] = JSON.parse(JSON.stringify({
+        name: model.name, knobBanks: model.knobBanks, faders: model.faders, pads: model.pads, buttonBanks: model.buttonBanks,
+      }));
+      refreshChanStatus(); setStatus('Assigned current setup to channel ' + ch + '.', 'ok');
+    });
+    $('#chan-clear').addEventListener('click', () => {
+      const ch = +sel.value;
+      if (model.channelTemplates) model.channelTemplates[ch - 1] = null;
+      refreshChanStatus(); setStatus('Cleared channel ' + ch + '.', 'ok');
+    });
+    sel.addEventListener('change', refreshChanStatus);
+  }
+  function refreshChanStatus() {
+    const s = $('#chan-status'); if (!s) return;
+    const ct = model.channelTemplates || [];
+    const assigned = ct.map((t, i) => (t ? i + 1 : null)).filter((x) => x);
+    s.textContent = assigned.length ? 'Assigned: ' + assigned.join(', ') : 'No per-channel templates assigned (all channels use this setup).';
   }
 
   // ---- Components packs (.slmkiiipack) ----

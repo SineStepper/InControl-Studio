@@ -19,7 +19,8 @@
   const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
-    optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0 };
+    optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
+    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {} };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -29,7 +30,7 @@
     if ((m = /^Pad (\d+)$/.exec(name))) return { group: 'pad', index: +m[1] - 1 };
     if ((m = /^Knob (\d+)$/.exec(name))) return { group: 'knob', index: +m[1] - 1 };
     if ((m = /^Fader (\d+)$/.exec(name))) return { group: 'fader', index: +m[1] - 1 };
-    if ((m = /^Soft (\d+)$/.exec(name))) { const i = +m[1] - 1; return i < 16 ? { group: 'button', index: i } : null; }
+    if ((m = /^Soft (\d+)$/.exec(name))) { const i = +m[1] - 1; return i < 24 ? { group: 'button', index: i } : null; }
     return null;
   }
 
@@ -58,13 +59,16 @@
   // Put the SL screens into knob layout and show the current bank's names + values.
   function refreshKnobScreens() {
     if (!st.slOutId || !sysex || !st.rt) return;
-    midi.sendToOutput(st.slOutId, sysex.screenLayout(1)); // Knob Layout
+    midi.sendToOutput(st.slOutId, sysex.screenLayout(1)); // Knob Layout: a graphic knob + value per column
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
       midi.sendToOutput(st.slOutId, sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : ''));
+      const hex = (a && a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : '#20c0ff';
+      const { r, g, b } = sysex.hexTo7bit(hex);
+      midi.sendToOutput(st.slOutId, sysex.screenRgb(i, 0, r, g, b)); // colour the graphic knob
       const v = engine.knobDisplay(st.rt, i);
-      if (v != null) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, v));
+      if (v != null) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, v)); // drives the knob arc + value number
     }
   }
   function sendKnobValue(index) {
@@ -84,7 +88,11 @@
   function tickInterval() { const t = (st.seqRt && st.seqRt.seq.tempo) || 120; return Math.max(4, Math.round(60000 / t / SEQ().PPQN)); }
   function clockTick() {
     const events = SEQ().onTick(st.seqRt);
-    events.forEach((e) => { const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0]; if (st.destId) midi.sendToOutput(st.destId, msg); });
+    events.forEach((e) => {
+      const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
+      sendMusic(st.destId, msg);
+      if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
+    });
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
@@ -109,7 +117,9 @@
   function pagePattern(dir) {
     const m = model(); if (!m || !m.sequencer) return;
     const t = m.sequencer.tracks[st.gridTrack];
-    t.activePattern = (t.activePattern + dir + SEQ().PATTERNS) % SEQ().PATTERNS;
+    const next = t.activePattern + dir;
+    if (next < 0 || next >= SEQ().PATTERNS) return; // clamp at the ends (no wrap, #6)
+    t.activePattern = next;
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     refreshArrowLeds();
     if (st.optionsMode) refreshOptionScreens();
@@ -117,6 +127,96 @@
   }
   function curTrack() { const m = model(); return m && m.sequencer ? m.sequencer.tracks[st.gridTrack] : null; }
   function ledHex(id, hex, beh) { if (!st.slOutId || !sysex) return; const { r, g, b } = sysex.hexTo7bit(hex); midi.sendToOutput(st.slOutId, sysex.ledRgb(id, r, g, b, beh || 'solid')); }
+
+  // ---- Mute / Solo output gating (fixed bank, buttonBanks[0]) ----
+  function msBank() { const m = model(); return (m && m.buttonBanks && m.buttonBanks[0]) || []; }
+  function channelAudible(ch) { // ch is 1-16
+    if (st.mute.has(ch)) return false;
+    if (st.solo.size && !st.solo.has(ch)) return false;
+    return true;
+  }
+  // Send a channel-voice message only if its channel isn't muted/soloed out.
+  function sendMusic(id, msg) {
+    if (!id) return;
+    const s = msg[0] & 0xf0;
+    if (s >= 0x80 && s <= 0xef && !channelAudible((msg[0] & 0x0f) + 1)) return;
+    midi.sendToOutput(id, msg);
+  }
+  function refreshMuteSolo() {
+    const bank = msBank();
+    for (let i = 0; i < 8; i++) { const a = bank[i]; if (a) ledHex(12 + i, st.mute.has(a.channel) ? a.led.pressed : a.led.idle); }      // Soft 9-16
+    for (let i = 0; i < 8; i++) { const a = bank[8 + i]; if (a) ledHex(20 + i, st.solo.has(a.channel) ? a.led.pressed : a.led.idle); }  // Soft 17-24
+  }
+  function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
+  function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
+
+  // ---- Channel / instrument select (Soft 1-8 below the screens) ----
+  function refreshChannelLeds() {
+    for (let i = 0; i < 8; i++) ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : '#0b1730'); // Soft 1-8 = LED 4-11
+  }
+  function selectChannel(ch) {
+    const padMode = st.rt ? st.rt.padMode : 'sequencer';
+    st.activeChannel = ch;
+    st.gridTrack = ch - 1;                 // the sequencer track follows the channel
+    st.rt = runtimeForChannel(ch);         // swap in this channel's control mapping (own template if assigned)
+    st.rt.padMode = padMode;
+    st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
+    refreshLeds();
+    refreshChannelLeds();
+    if (st.rt.padMode === 'sequencer') refreshGrid();
+    refreshArrowLeds(); refreshKnobScreens();
+    if (st.optionsMode) refreshOptionScreens();
+    notify(); log('channel ' + ch);
+  }
+  // Return (and cache) the engine runtime for a channel. Channels with an
+  // assigned template get their own runtime built from it; otherwise the base
+  // runtime is reused. Never mutates the shared model (#7).
+  function runtimeForChannel(ch) {
+    const m = model();
+    const t = m && m.channelTemplates && m.channelTemplates[ch - 1];
+    if (!t) return st.baseRt;
+    if (!st.channelRt[ch]) st.channelRt[ch] = engine.makeRuntime(t);
+    return st.channelRt[ch];
+  }
+
+  // ---- Transport default colours ----
+  const TRANSPORT_LEDS = { 36: '#00ff00' /*Play*/, 32: '#ff0000' /*Record*/, 35: '#ff0000' /*Stop*/, 37: '#ffff00' /*Loop*/, 34: '#ffffff' /*FastFwd*/, 33: '#ffffff' /*Rewind*/ };
+  function refreshTransport() { Object.keys(TRANSPORT_LEDS).forEach((id) => ledHex(+id, TRANSPORT_LEDS[id])); }
+
+  // ---- Fader LED brightness tracks value (#2) ----
+  function refreshFaderLed(index, value) {
+    const m = model(); const a = m && m.faders && m.faders[index]; if (!a) return;
+    ledHex(54 + index, opts().valueColor((a.led && a.led.idle) || '#20c0ff', value, 127));
+  }
+
+  // ---- Keybed light guide (SysEx ids 54-114; key index 0 = note LOW_NOTE) ----
+  const LOW_NOTE = 36; // configurable base note for the 61-key light guide
+  function keyLed(note, hex) {
+    const idx = note - LOW_NOTE;
+    if (idx < 0 || idx > 60) return; // outside the light guide range
+    ledHex(54 + idx, hex);
+    if (hex === '#000000') st.litKeys.delete(note); else st.litKeys.add(note);
+  }
+  const KEY_PLAY = '#3bd0ff', KEY_AUDITION = '#ff0000';
+
+  // ---- Press-to-lighten feedback (#5): white on press, resting colour on release ----
+  function pressFlash(group, index, pressed) {
+    if (pressed) { const id = ledIdFor(group, index); if (id != null) ledHex(id, '#f0f0f0'); }
+    else restoreLed(group, index);
+  }
+  function ledIdFor(group, index) {
+    if (group === 'pad') return 38 + index;
+    if (group === 'button') return 4 + index;
+    return null;
+  }
+  function restoreLed(group, index) {
+    if (group === 'pad') { if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); else { const l = engine.ledOne(st.rt, 'pad', index); if (l) midi.sendToOutput(st.slOutId, l); } return; }
+    if (group === 'button') {
+      if (index < 8) refreshChannelLeds();
+      else if (index < 24) refreshMuteSolo();
+      else { const l = engine.ledOne(st.rt, 'button', index); if (l) midi.sendToOutput(st.slOutId, l); }
+    }
+  }
 
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
@@ -187,7 +287,10 @@
   function auditionStep(p, step, on) {
     if (!st.destId) return;
     const ch = trackChan();
-    p.steps[step].notes.forEach((n) => midi.sendToOutput(st.destId, on ? [0x90 | ch, n.note & 0x7f, n.velocity & 0x7f] : [0x80 | ch, n.note & 0x7f, 0]));
+    p.steps[step].notes.forEach((n) => {
+      sendMusic(st.destId, on ? [0x90 | ch, n.note & 0x7f, n.velocity & 0x7f] : [0x80 | ch, n.note & 0x7f, 0]);
+      keyLed(n.note, on ? KEY_AUDITION : '#000000'); // red while auditioning/holding a step (#10)
+    });
   }
   function transposeCurrent(semi) { const p = gridPattern(); if (p && SEQ().transposePattern(p, semi)) { refreshGrid(); notify(); log('transpose ' + (semi > 0 ? '+' : '') + semi); } }
 
@@ -198,7 +301,7 @@
     const note = bytes[1], vel = bytes[2];
     const isOn = status === 0x90 && vel > 0;
     const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-    if (st.destId) midi.sendToOutput(st.destId, bytes); // monitor through
+    sendMusic(st.destId, bytes); // monitor through (respecting mute/solo)
     if (isOn) {
       st.heldKeys.set(note, vel);
       // Hold pad(s) + press key -> toggle that note on those steps.
@@ -291,9 +394,14 @@
       return;
     }
 
-    // Soft buttons 1-8 select the track while in the step sequencer
-    if (c && c.group === 'button' && c.index < 8 && st.rt && st.rt.padMode === 'sequencer') {
-      if (ev.value > 0) { st.gridTrack = c.index; refreshGrid(); refreshArrowLeds(); notify(); log('track ' + (c.index + 1)); }
+    // Soft buttons: 1-8 (below the screens) select the channel/instrument;
+    // 9-24 (above the faders) are the fixed Mute/Solo bank. Press-to-lighten (#5).
+    if (c && c.group === 'button') {
+      pressFlash('button', c.index, ev.value > 0);
+      if (ev.value > 0) {
+        if (c.index < 8) selectChannel(c.index + 1);              // Soft 1-8 -> channel 1-8 (#7)
+        else if (c.index < 24) { const a = msBank()[c.index - 8]; if (a) (c.index < 16 ? toggleMute : toggleSolo)(a.channel); } // Soft 9-16 Mute, 17-24 Solo (#1)
+      }
       return;
     }
 
@@ -310,18 +418,21 @@
         st.heldPads.add(c.index);
         if (st.heldKeys.size) st.heldKeys.forEach((vel, note) => SEQ().toggleStepNote(p, c.index, note, vel, 6)); // reverse order: keys already held
         else if (!seqIsPlaying()) auditionStep(p, c.index, true); // audition when stopped
-        refreshGrid(); notify();
+        refreshGrid(); ledHex(38 + c.index, '#f0f0f0'); notify(); // press-to-lighten over the grid (#5)
       } else { // release
         st.heldPads.delete(c.index);
         if (!seqIsPlaying()) auditionStep(p, c.index, false);
+        refreshGrid();
       }
       return;
     }
 
     const res = engine.handle(st.rt, { group: c.group, index: c.index, value: ev.value });
-    res.out.forEach((mb) => midi.sendToOutput(st.destId, mb));
+    res.out.forEach((mb) => sendMusic(st.destId, mb));
     if (c.group === 'knob') sendKnobValue(c.index); // show adjustment on the SL screens
-    if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }
+    if (c.group === 'fader') refreshFaderLed(c.index, ev.value); // LED brightness tracks value (#2)
+    if (c.group === 'pad') pressFlash('pad', c.index, ev.value > 0); // press-to-lighten in instrument mode (#5)
+    else if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }
     if (res.out.length) log('▶ ' + ev.control);
   }
 
@@ -329,13 +440,19 @@
     if (st.running) return;
     if (!midi.snapshot().connected) { log('Connect MIDI first (top-right).'); return; }
     if (!st.slInId || !st.destId) { log('Pick SL input and destination.'); return; }
-    st.rt = engine.makeRuntime(global.SLMK.studioState.getModel());
+    st.baseRt = engine.makeRuntime(global.SLMK.studioState.getModel());
+    st.channelRt = {};
+    st.rt = runtimeForChannel(st.activeChannel);
     refreshLeds();
     refreshKnobScreens();
     if (st.rt.padMode === 'sequencer') refreshGrid(); // pads show the step/pattern grid by default (#7)
     refreshSceneLeds();
     refreshArrowLeds();
     refreshOptionLeds();
+    refreshTransport();
+    refreshMuteSolo();
+    refreshChannelLeds();
+    st.rt.channel = st.activeChannel;
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;

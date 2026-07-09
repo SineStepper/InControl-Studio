@@ -75,8 +75,10 @@ eq([cols[0].text, cols[1].text, cols[2].text], ['100', '-', '80'], 'columns read
 
 // ---- Soft LEDs / arrows / pattern pads ----
 const leds = O.softLeds('gate');
-eq(leds[9], '#00ff00', 'gate button bright when active');
-eq(leds[0], O.LIGHT_ORANGE, 'microstep button 0 is light orange');
+eq(leds[1], '#00ff00', 'gate button (Soft 2) bright when active');
+eq(leds[8], O.LIGHT_ORANGE, 'microstep button (Soft 9) is light orange');
+eq(O.menuForButton(0), 'velocity', 'Soft 1 -> Velocity menu');
+eq(O.menuForButton(7), 'pattern', 'Soft 8 -> Pattern menu');
 eq(O.arrowLeds(0, 8), { up: false, down: true }, 'top of list: up off, down on');
 eq(O.arrowLeds(7, 8), { up: true, down: false }, 'bottom of list: up on, down off');
 eq(O.patternPadLeds(2, 8)[2], '#ffffff', 'active pattern pad is white');

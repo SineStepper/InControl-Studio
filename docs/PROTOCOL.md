@@ -79,12 +79,13 @@ colours; method 2 is documented here for completeness.
 
 ### A note on the keybed "Light Guide"
 
-The guide also lists per-key LEDs (Key LEDs 1–61) with SysEx IDs **54–114**,
-which **overlaps** the fader and function IDs above. Those keybed LEDs are
-addressed through a separate light-guide mechanism, so this app deliberately
-omits the keybed to avoid sending an ambiguous id to hardware. If you want to
-experiment with the keybed, do it in a dedicated tool rather than through this
-editor.
+The guide lists per-key LEDs (Key LEDs 1–61) with SysEx IDs **54–114**, which
+**overlaps** the fader and function IDs above. The Studio sequencer runtime
+(`js/studio-runtime.js`) drives these via the same RGB SysEx command to light
+the keys as the sequence plays (and red while auditioning/holding a step) — but
+because of the id overlap this needs on-hardware confirmation, and the base note
+(`LOW_NOTE`) may need adjusting per keyboard size. The colour editor still omits
+the keybed so it can never send an ambiguous id from the mapping UI.
 
 ## Device inquiry (identify the unit)
 
