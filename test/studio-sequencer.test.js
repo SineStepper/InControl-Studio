@@ -86,6 +86,19 @@ const onAt = {};
 for (let k = 0; k < Q.SYNC['1/16']; k++) Q.onTick(mrt, rng0).filter((e) => e.type === 'on').forEach((e) => (onAt[e.note] = k));
 eq([onAt[60], onAt[72]], [0, 3], 'micro 0 fires at tick 0, micro 3 fires at tick 3');
 
+// deferred pattern switch: a queued change applies at the pattern boundary, not immediately
+const dseq = Q.newSequencer(); const dt = dseq.tracks[0];
+dt.patterns[0].end = 1; Q.toggleStepNote(dt.patterns[0], 0, 60, 100, 6);
+dt.patterns[1].end = 1; Q.toggleStepNote(dt.patterns[1], 0, 72, 100, 6);
+const drt = Q.makeSeqRuntime(dseq); Q.start(drt);
+Q.onTick(drt, rng0); // tick0: fires pattern 0 step 0 (note 60)
+dt.pending = { activePattern: 1, chain: null }; // queue a switch to pattern 1
+eq(dt.activePattern, 0, 'queued switch does not change activePattern immediately');
+const dplayed = [];
+for (let k = 1; k < Q.SYNC['1/16'] * 8; k++) Q.onTick(drt, rng0).filter((e) => e.type === 'on').forEach((e) => dplayed.push(e.note));
+eq(dt.activePattern, 1, 'queued switch takes effect at the pattern boundary');
+ok(dplayed.length >= 3 && dplayed.every((x) => x === 72), 'after the boundary only pattern 1 (note 72) plays, got ' + JSON.stringify(dplayed));
+
 // swing: positive swing delays the off-beat step
 const sseq = Q.newSequencer(); sseq.swing = 80; sseq.swingSync = '1/16';
 const stp = sseq.tracks[0].patterns[0];

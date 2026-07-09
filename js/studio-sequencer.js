@@ -31,7 +31,7 @@
     return { steps: Array.from({ length: STEPS }, newStep), start: 0, end: 15, direction: 'Forward', syncRate: '1/16', shift: 0 };
   }
   function newTrack(i) {
-    return { channel: i + 1, activePattern: 0, color: PART_COLORS[i % 8], swing: 'On', chain: null, patterns: Array.from({ length: PATTERNS }, newPattern) };
+    return { channel: i + 1, activePattern: 0, color: PART_COLORS[i % 8], swing: 'On', chain: null, pending: null, patterns: Array.from({ length: PATTERNS }, newPattern) };
   }
   function newSequencer() {
     return { tempo: 120, swing: 50, swingSync: '1/16', tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
@@ -101,19 +101,27 @@
       // step boundary
       if (rt.tick % stepTicks === 0) {
         pstate.counter++;
-        // Pattern chains: when the current pattern completes a cycle, advance to
-        // the next pattern in the chain (User Guide "Pattern Chains").
-        if (track.chain) {
+        // At the end of a pattern cycle, apply a queued change (deferred pattern
+        // switch, tempo-synced) or advance the chain (User Guide: "Pattern
+        // changes will take effect when playback reaches the end of the Pattern").
+        {
           const cur = track.patterns[track.activePattern];
           const len = Math.abs((cur.end || 0) - (cur.start || 0)) + 1;
           if (pstate.counter > 0 && pstate.counter % len === 0) {
-            let ap = track.activePattern + 1;
-            if (ap > track.chain.to || ap < track.chain.from) ap = track.chain.from;
-            track.activePattern = ap;
-            pstate.counter = 0; // start the next pattern from its beginning
+            if (track.pending) {
+              track.activePattern = track.pending.activePattern;
+              track.chain = track.pending.chain || null;
+              track.pending = null;
+              pstate.counter = 0;
+            } else if (track.chain) {
+              let ap = track.activePattern + 1;
+              if (ap > track.chain.to || ap < track.chain.from) ap = track.chain.from;
+              track.activePattern = ap;
+              pstate.counter = 0;
+            }
           }
         }
-        const p2 = track.patterns[track.activePattern]; // may have changed on a chain advance
+        const p2 = track.patterns[track.activePattern]; // may have changed at the boundary
         const idx = stepIndexFor(pstate.counter, p2.start, p2.end, p2.direction, p2.shift, rng);
         pstate.pad = idx;
         const step = p2.steps[idx];

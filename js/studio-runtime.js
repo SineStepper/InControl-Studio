@@ -286,7 +286,10 @@
     const t = curTrack(); if (!t) return;
     const color = t.color || '#3bd0ff';
     const chain = t.chain;
+    const pend = t.pending;
     for (let i = 0; i < SEQ().PATTERNS; i++) {
+      // A queued (deferred) pattern/chain pulses until it takes effect at the boundary (#3).
+      if (pend && (i === pend.activePattern || (pend.chain && i >= pend.chain.from && i <= pend.chain.to))) { ledHex(38 + i, '#ffffff', 'pulse'); continue; }
       let hex;
       if (i === t.activePattern) hex = '#ffffff';
       else if (chain && i >= chain.from && i <= chain.to) hex = opts().lighten(color, 0.4); // chained patterns (#11)
@@ -506,10 +509,16 @@
         if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[c.index]); refreshPatternPads(); notify(); return; }
         if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyPattern(t, st.dupFrom, c.index); refreshPatternPads(); notify(); return; }
         st.heldPatterns.add(c.index);
+        // Deferred switch: while playing, queue the change to the next pattern
+        // boundary; instantly when stopped or with Shift held (#3).
+        const instant = st.shift || !seqIsPlaying();
+        let sel;
         if (st.heldPatterns.size >= 2) {
-          const arr = [...st.heldPatterns]; t.chain = { from: Math.min(...arr), to: Math.max(...arr) }; t.activePattern = t.chain.from;
-          log('chain ' + (t.chain.from + 1) + '-' + (t.chain.to + 1));
-        } else { t.chain = null; t.activePattern = c.index; log('pattern ' + (c.index + 1)); } // Shift = instant (we switch immediately anyway)
+          const arr = [...st.heldPatterns]; sel = { activePattern: Math.min(...arr), chain: { from: Math.min(...arr), to: Math.max(...arr) } };
+          log((instant ? 'chain ' : 'queued chain ') + (sel.chain.from + 1) + '-' + (sel.chain.to + 1));
+        } else { sel = { activePattern: c.index, chain: null }; log((instant ? 'pattern ' : 'queued pattern ') + (c.index + 1)); }
+        if (instant) { t.activePattern = sel.activePattern; t.chain = sel.chain; t.pending = null; }
+        else t.pending = sel;
         refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify();
       } else if (ev.value === 0) { st.heldPatterns.delete(c.index); }
       return;
