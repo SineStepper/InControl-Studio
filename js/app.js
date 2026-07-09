@@ -376,8 +376,13 @@
       e.target.value = '';
     });
 
-    // Try to connect automatically; browsers may require the button instead.
-    if (navigator.requestMIDIAccess) connectMidi().catch(() => {});
+    // In the Electron desktop app, MIDI is native (no browser permission), so
+    // the Connect button is unnecessary — hide it and connect automatically.
+    if (window.electronMIDI) { const c = $('#connect'); if (c) c.style.display = 'none'; }
+
+    // Connect automatically. The browser build may still need the button if the
+    // permission prompt requires a user gesture.
+    if (window.electronMIDI || navigator.requestMIDIAccess) connectMidi().catch(() => {});
   }
 
   document.addEventListener('DOMContentLoaded', init);

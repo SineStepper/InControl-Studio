@@ -124,6 +124,15 @@
       ins[0];
     return pick ? pick.id : null;
   }
+  // The keybed sends on the SL's *regular* (non-InControl) port.
+  function guessDefaultKeysInputId() {
+    const ins = listInputs();
+    const pick =
+      ins.find((o) => looksLikeSLMkIII(o.name) && !looksLikeInControl(o.name)) ||
+      ins.find((o) => !looksLikeInControl(o.name)) ||
+      ins[0];
+    return pick ? pick.id : null;
+  }
   function guessDefaultOutputId() {
     const o = pickDefault();
     return o ? o.id : null;
@@ -133,7 +142,7 @@
   global.SLMK.midi = {
     connect, selectOutputById, send, snapshot, onChange,
     outputPorts, inputPorts, sendToOutput, subscribeInput,
-    guessDefaultInputId, guessDefaultOutputId,
+    guessDefaultInputId, guessDefaultOutputId, guessDefaultKeysInputId,
   };
 
   // ---------------------------------------------------------------------------
@@ -166,6 +175,7 @@
     }
     const guessOut = () => { const o = st.outputs.find((x) => inControl(x.name)) || st.outputs[0]; return o ? o.id : null; };
     const guessIn = () => { const i = st.inputs.find((x) => inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
+    const guessKeys = () => { const i = st.inputs.find((x) => /sl\s*mk/i.test(x.name) && !inControl(x.name)) || st.inputs.find((x) => !inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
 
     g.SLMK = g.SLMK || {};
     g.SLMK.midi = {
@@ -188,6 +198,7 @@
       },
       guessDefaultInputId: guessIn,
       guessDefaultOutputId: guessOut,
+      guessDefaultKeysInputId: guessKeys,
     };
   }
 })(window);

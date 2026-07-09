@@ -16,7 +16,7 @@
   const SEQ = () => global.SLMK.sequencer;
   const studio = () => global.SLMK.studio;
 
-  const st = { running: false, rt: null, unsub: null, slInId: null, slOutId: null, destId: null, log: [],
+  const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, stepCbs: [] };
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -41,9 +41,11 @@
     const outs = midi.outputPorts(), ins = midi.inputPorts();
     if (!st.slInId) st.slInId = midi.guessDefaultInputId();
     if (!st.slOutId) st.slOutId = midi.guessDefaultOutputId();
+    if (!st.keysInId) st.keysInId = midi.guessDefaultKeysInputId();
     fill($('#se-in'), ins, st.slInId);
     fill($('#se-out'), outs, st.slOutId);
     fill($('#se-dest'), outs, st.destId);
+    fill($('#se-keys'), ins, st.keysInId);
   }
 
   function log(m) { st.log.unshift(m); st.log = st.log.slice(0, 6); const n = $('#se-log'); if (n) n.textContent = st.log.join('   '); }
@@ -103,6 +105,25 @@
     }
   }
 
+  // Keyboard input (SL regular port): monitor to the destination, and record
+  // into the sequencer while Record + Play are active.
+  function onKeys(bytes) {
+    const status = bytes[0] & 0xf0;
+    // forward everything to the destination so you hear the keys through the rig
+    if (st.destId) midi.sendToOutput(st.destId, bytes);
+    if (!st.recording || !seqIsPlaying()) return;
+    if (status === 0x90 && bytes[2] > 0) recordNote(bytes[1], bytes[2]);
+  }
+  function recordNote(note, velocity) {
+    const p = gridPattern(); if (!p) return;
+    const step = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : 0; // quantise to the current step
+    const s = p.steps[step];
+    if (!s.notes.some((n) => n.note === note)) s.notes.push({ note, velocity, gate: 6 });
+    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    notify(); log('● rec ' + note + ' @step ' + (step + 1));
+  }
+  function toggleRecord() { st.recording = !st.recording; notify(); }
+
   function onMsg(bytes) {
     const ev = incontrol.resolve(bytes);
     if (!ev) return;
@@ -151,6 +172,7 @@
     st.rt = engine.makeRuntime(global.SLMK.studioState.getModel());
     refreshLeds();
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
+    if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;
     $('#se-start').textContent = 'Stop engine';
     $('#se-start').classList.add('running');
@@ -158,6 +180,7 @@
   }
   function stop() {
     if (st.unsub) { st.unsub(); st.unsub = null; }
+    if (st.keysUnsub) { st.keysUnsub(); st.keysUnsub = null; }
     st.running = false;
     $('#se-start').textContent = 'Start engine';
     $('#se-start').classList.remove('running');
@@ -171,13 +194,14 @@
     $('#se-in').addEventListener('change', (e) => (st.slInId = e.target.value));
     $('#se-out').addEventListener('change', (e) => (st.slOutId = e.target.value));
     $('#se-dest').addEventListener('change', (e) => (st.destId = e.target.value));
+    if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => (st.keysInId = e.target.value));
     $('#se-start').addEventListener('click', () => (st.running ? stop() : start()));
     $('#se-refresh').addEventListener('click', () => { if (st.running) refreshLeds(); });
   }
 
   // Public API for the Sequencer UI tab.
   global.SLMK.studioRuntime = {
-    seqPlay, seqStop, seqIsPlaying, recording: () => st.recording,
+    seqPlay, seqStop, seqIsPlaying, recording: () => st.recording, toggleRecord,
     onStep: (cb) => st.stepCbs.push(cb),
     playhead: () => (st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1),
     setGridTrack: (i) => { st.gridTrack = i; if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); notify(); },

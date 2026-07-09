@@ -44,7 +44,8 @@
     const bar = el('div', { className: 'seq-bar' });
     const play = el('button', { className: 'btn primary', id: 'seq-play' }, RT() && RT().seqIsPlaying() ? '■ Stop' : '▶ Play');
     play.addEventListener('click', () => { if (!RT()) return; RT().seqIsPlaying() ? RT().seqStop() : RT().seqPlay(); render(host); });
-    const rec = el('button', { className: 'btn' + (RT() && RT().recording() ? ' running' : '') }, '● Rec');
+    const rec = el('button', { className: 'btn' + (RT() && RT().recording() ? ' running' : ''), title: 'Record from the SL MkIII keyboard while playing' }, '● Rec');
+    rec.addEventListener('click', () => { if (RT()) { RT().toggleRecord(); render(host); } });
     const undo = el('button', { className: 'btn', title: 'Undo' }, '↶'); undo.addEventListener('click', () => restore(host, undoStack, redoStack));
     const redo = el('button', { className: 'btn', title: 'Redo' }, '↷'); redo.addEventListener('click', () => restore(host, redoStack, undoStack));
     bar.append(play, rec, undo, redo);

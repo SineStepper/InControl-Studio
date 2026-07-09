@@ -115,12 +115,26 @@
       <span id="studio-status" class="status"></span>
     </div>
     <div class="toolbar se-bar">
-      <span class="fineprint">Live engine:</span>
-      <label class="se-lbl">SL in <select id="se-in"></select></label>
-      <label class="se-lbl">SL out <select id="se-out"></select></label>
-      <label class="se-lbl">Destination <select id="se-dest"></select></label>
-      <button class="btn primary" id="se-start">Start engine</button>
-      <button class="btn" id="se-refresh" title="Re-send all LEDs">↻ LEDs</button>
+      <div class="se-port">
+        <label class="se-lbl">SL in <select id="se-in" title="The SL MkIII &quot;InControl&quot; input — the app receives your knob / pad / button moves here."></select></label>
+        <span class="se-desc">SL MkIII “InControl” input — receives your control moves</span>
+      </div>
+      <div class="se-port">
+        <label class="se-lbl">SL out <select id="se-out" title="The SL MkIII &quot;InControl&quot; output — the app sends LED colours to the unit here."></select></label>
+        <span class="se-desc">SL MkIII “InControl” output — sends LED colours to the unit</span>
+      </div>
+      <div class="se-port">
+        <label class="se-lbl">Keys in <select id="se-keys" title="The SL MkIII regular (non-InControl) input — the keybed. Used for live recording into the sequencer."></select></label>
+        <span class="se-desc">SL MkIII keybed (regular port) — for sequencer live-record</span>
+      </div>
+      <div class="se-port">
+        <label class="se-lbl">Destination <select id="se-dest" title="A virtual / loopback port your DAW or synth listens to (IAC on macOS, loopMIDI on Windows). Your mapped MIDI and the sequencer's notes go here — NOT the SL."></select></label>
+        <span class="se-desc">Virtual port your DAW/synth listens to (IAC / loopMIDI)</span>
+      </div>
+      <div class="se-port">
+        <button class="btn primary" id="se-start">Start engine</button>
+        <button class="btn" id="se-refresh" title="Re-send all LEDs">↻ LEDs</button>
+      </div>
       <span id="se-log" class="fineprint"></span>
     </div>
     <div id="studio-body" class="studio-body"></div>
@@ -139,9 +153,9 @@
       <div class="grid">
         <div class="panel">
           <h2>Ports</h2>
-          <div class="field"><label>SL output</label><select id="br-slout"></select></div>
-          <div class="field"><label>SL input</label><select id="br-in"></select></div>
-          <div class="field"><label>Destination</label><select id="br-dest"></select></div>
+          <div class="field"><label>SL output</label><select id="br-slout" title="The SL MkIII &quot;InControl&quot; output — the app sends LED colours here."></select></div>
+          <div class="field"><label>SL input</label><select id="br-in" title="The SL MkIII &quot;InControl&quot; input — the app receives control moves here to remap them."></select></div>
+          <div class="field"><label>Destination</label><select id="br-dest" title="A virtual / loopback port your DAW/synth listens to (IAC / loopMIDI). Remapped MIDI goes here."></select></div>
           <div class="field"><label>Keep-alive</label><input type="number" id="br-keep" value="4000" min="0" step="500" /> <span class="fineprint">ms (re-send colours; 0 = off)</span></div>
           <div class="field">
             <button class="btn primary" id="br-start">Start bridge</button>
