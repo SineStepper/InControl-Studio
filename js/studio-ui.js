@@ -146,7 +146,6 @@
       panel.appendChild(field('Bit depth', sel('bit_depth', S.BIT_DEPTHS)));
     }
     if (a.cls === 'pad_hit') {
-      panel.appendChild(field('Note #', num('note', 0, 127)));
       panel.appendChild(field('Vel min', num('vel_min', 0, 127)));
       panel.appendChild(field('Vel max', num('vel_max', 0, 127)));
       panel.appendChild(field('Vel curve', sel('vel_curve', S.VEL_CURVES)));
