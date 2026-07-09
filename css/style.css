@@ -70,6 +70,31 @@ main.single { grid-template-columns: 1fr 340px; }
 .byte-in input { width: 38px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 2px; font-size: 11px; text-align: center; }
 .pad-cell input[type=color] { width: 100%; height: 22px; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; padding: 1px; }
 
+/* InControl Studio */
+.studio-body { padding: 18px; }
+.studio-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 14px; }
+.stab { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; font: inherit; font-size: 13px; cursor: pointer; }
+.stab:hover { color: var(--text); }
+.stab.active { color: var(--text); background: var(--accent); border-color: transparent; color: #06122b; font-weight: 600; }
+.studio-subbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.bank-nav { display: inline-flex; align-items: center; gap: 6px; }
+.bank-label { color: var(--muted); font-size: 12px; }
+.bank-nav select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; }
+.studio-split { display: grid; grid-template-columns: 1fr 320px; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .studio-split { grid-template-columns: 1fr; } }
+.studio-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+@media (max-width: 1100px) { .studio-grid { grid-template-columns: repeat(4, 1fr); } }
+.studio-ctrl { position: relative; min-height: 58px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--muted); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 5px; overflow: hidden; }
+.studio-ctrl.enabled { color: var(--text); }
+.studio-ctrl::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, transparent); }
+.studio-ctrl.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+.sc-name { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.05; }
+.sc-sub { font-size: 9px; opacity: .8; }
+.studio-insp .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.studio-insp .field > label { width: 82px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+.studio-insp input[type=number], .studio-insp input[type=text], .studio-insp select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; }
+.studio-insp input[type=color] { width: 48px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
+
 /* Template Editor */
 .te-namewrap { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
 #te-name { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 13px; width: 160px; }

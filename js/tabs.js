@@ -1,7 +1,7 @@
 /* tabs.js — simple tab switcher with #hash deep-linking. */
 (function () {
   'use strict';
-  const VIEWS = ['customizer', 'template', 'bridge'];
+  const VIEWS = ['customizer', 'template', 'studio', 'bridge'];
 
   function activate(name) {
     if (!VIEWS.includes(name)) name = 'customizer';

@@ -16,6 +16,7 @@
     <nav class="tabs">
       <button class="tab" data-view="customizer">Live Colours</button>
       <button class="tab" data-view="template">Template Editor</button>
+      <button class="tab" data-view="studio">InControl Studio</button>
       <button class="tab" data-view="bridge">Bridge</button>
     </nav>
     <div class="midi">
@@ -94,6 +95,25 @@
     </main>
   </section>
 
+  <!-- ========================== INCONTROL STUDIO ========================= -->
+  <section id="view-studio" class="view">
+    <div class="warnbar">
+      <strong>InControl Studio</strong> — a Components-style customizer for the SL MkIII in
+      <em>InControl</em> mode, with things Components can't do: unlimited knob/button banks and
+      per-state LED colours. Edit mappings here; the live engine (driving the hardware) is the next
+      phase. Import a Components <code>.syx</code> to start from an existing template.
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="studio-new">New setup</button>
+      <label class="btn file">Import .syx<input type="file" id="studio-import" accept=".syx,application/octet-stream" hidden /></label>
+      <label class="btn file">Load .json<input type="file" id="studio-load" accept="application/json,.json" hidden /></label>
+      <label class="te-namewrap">Name <input type="text" id="studio-name" maxlength="24" placeholder="Setup name" /></label>
+      <button class="btn primary" id="studio-save">Save .json</button>
+      <span id="studio-status" class="status"></span>
+    </div>
+    <div id="studio-body" class="studio-body"></div>
+  </section>
+
   <!-- ============================== BRIDGE =============================== -->
   <section id="view-bridge" class="view">
     <div class="warnbar">
@@ -144,11 +164,13 @@
   <script src="js/sysex.js"></script>
   <script src="js/controls.js"></script>
   <script src="js/sltemplate.js"></script>
+  <script src="js/studio-model.js"></script>
   <script src="js/incontrol.js"></script>
   <script src="js/midi.js"></script>
   <script src="js/tabs.js"></script>
   <script src="js/app.js"></script>
   <script src="js/template-editor.js"></script>
+  <script src="js/studio-ui.js"></script>
   <script src="js/bridge-web.js"></script>
 </body>
 </html>
