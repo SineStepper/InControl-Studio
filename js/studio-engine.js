@@ -194,6 +194,15 @@
     return null;
   }
 
+  // Current display value (0-127) for a knob, for the SL screens.
+  function knobDisplay(rt, index) {
+    const a = (rt.model.knobBanks[rt.knobBank] || [])[index]; if (!a) return null;
+    const acc = rt.acc[keyFor(rt, 'knob', index)];
+    if (acc == null) return a.pivot || 0;
+    const FS = a.bit_depth === '14-bit' ? 16383 : 127;
+    return Math.round((acc / (FS || 127)) * 127) & 0x7f;
+  }
+
   // ---- navigation ----
   function nav(rt, action) {
     const m = rt.model;
@@ -249,7 +258,7 @@
 
   global.SLMK = global.SLMK || {};
   global.SLMK.engine = {
-    makeRuntime, scale, continuousOut, emitValue, knobOut, knobDelta, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages, ledOne, keyFor,
+    makeRuntime, scale, continuousOut, emitValue, knobOut, knobDelta, knobDisplay, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages, ledOne, keyFor,
     _msg: { CC, NOTE_ON, NOTE_OFF, PC, CHAN_PRESSURE, POLY_AT, PITCH, SONG_POS, NRPN },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.engine;

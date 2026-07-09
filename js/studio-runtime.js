@@ -52,6 +52,25 @@
   function log(m) { st.log.unshift(m); st.log = st.log.slice(0, 6); const n = $('#se-log'); if (n) n.textContent = st.log.join('   '); }
   function refreshLeds() { engine.ledMessages(st.rt).forEach((mb) => midi.sendToOutput(st.slOutId, mb)); }
 
+  const sysex = global.SLMK.sysex;
+  // Put the SL screens into knob layout and show the current bank's names + values.
+  function refreshKnobScreens() {
+    if (!st.slOutId || !sysex || !st.rt) return;
+    midi.sendToOutput(st.slOutId, sysex.screenLayout(1)); // Knob Layout
+    const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
+    for (let i = 0; i < 8; i++) {
+      const a = bank[i];
+      midi.sendToOutput(st.slOutId, sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : ''));
+      const v = engine.knobDisplay(st.rt, i);
+      if (v != null) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, v));
+    }
+  }
+  function sendKnobValue(index) {
+    if (!st.slOutId || !sysex) return;
+    const v = engine.knobDisplay(st.rt, index);
+    if (v != null && index < 8) midi.sendToOutput(st.slOutId, sysex.screenValue(index, 0, v));
+  }
+
   // ---- sequencer clock / transport ----
   function model() { return global.SLMK.studioState ? global.SLMK.studioState.getModel() : null; }
   function ensureSeqRt() {
@@ -185,7 +204,7 @@
     }
 
     const navAction = engine.NAV_MAP[ev.control];
-    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); refreshLeds(); log('⇄ ' + ev.control); } return; }
+    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); refreshLeds(); if (/knobBank/.test(navAction)) refreshKnobScreens(); log('⇄ ' + ev.control); } return; }
     if (!c) return;
 
     // Pad in the step sequencer: hold-pad + keys note entry, clear/duplicate, audition
@@ -207,6 +226,7 @@
 
     const res = engine.handle(st.rt, { group: c.group, index: c.index, value: ev.value });
     res.out.forEach((mb) => midi.sendToOutput(st.destId, mb));
+    if (c.group === 'knob') sendKnobValue(c.index); // show adjustment on the SL screens
     if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }
     if (res.out.length) log('▶ ' + ev.control);
   }
@@ -217,6 +237,7 @@
     if (!st.slInId || !st.destId) { log('Pick SL input and destination.'); return; }
     st.rt = engine.makeRuntime(global.SLMK.studioState.getModel());
     refreshLeds();
+    refreshKnobScreens();
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;

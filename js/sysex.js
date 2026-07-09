@@ -102,6 +102,19 @@
     return new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' });
   }
 
+  // ---- Screen control (InControl API, Programmer's Reference Guide) ----
+  // Set the screen layout: 0 empty, 1 knob, 2 box.
+  function screenLayout(index) { return HEADER.concat([0x01, index & 0x7f, EOX]); }
+  // Set a value property (type 3) on a column's object.
+  function screenValue(col, obj, value) { return HEADER.concat([0x02, col & 0x7f, 0x03, obj & 0x7f, clamp7(value), EOX]); }
+  // Set a text property (type 1) on a column's object (7-bit ASCII + NUL).
+  function screenText(col, obj, text) {
+    const t = []; for (const ch of String(text).slice(0, 9)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00);
+    return HEADER.concat([0x02, col & 0x7f, 0x01, obj & 0x7f], t, [EOX]);
+  }
+  // Set an RGB colour property (type 4) on a column's object.
+  function screenRgb(col, obj, r, g, b) { return HEADER.concat([0x02, col & 0x7f, 0x04, obj & 0x7f, clamp7(r), clamp7(g), clamp7(b), EOX]); }
+
   global.SLMK = global.SLMK || {};
   global.SLMK.sysex = {
     HEADER,
@@ -116,5 +129,9 @@
     hexTo7bit,
     bytesToHexString,
     syxBlob,
+    screenLayout,
+    screenValue,
+    screenText,
+    screenRgb,
   };
 })(window);
