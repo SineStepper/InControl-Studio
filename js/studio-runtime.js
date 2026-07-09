@@ -82,6 +82,13 @@
 
   // ---- pad grid (step editing + play head) in sequencer mode ----
   function gridPattern() { const m = model(); if (!m || !m.sequencer) return null; const t = m.sequencer.tracks[st.gridTrack]; return t.patterns[t.activePattern]; }
+  function pagePattern(dir) {
+    const m = model(); if (!m || !m.sequencer) return;
+    const t = m.sequencer.tracks[st.gridTrack];
+    t.activePattern = (t.activePattern + dir + SEQ().PATTERNS) % SEQ().PATTERNS;
+    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    notify(); log('pattern ' + (t.activePattern + 1));
+  }
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
     const p = gridPattern(); if (!p) return;
@@ -108,6 +115,8 @@
     }
     // Grid toggles pad function between playable pads and the step grid
     if (ev.control === 'Grid') { if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshLeds(); log('grid: ' + st.rt.padMode); } return; }
+    // Pads Up/Down page the sequencer patterns for the current track
+    if (ev.control === 'Pads Up' || ev.control === 'Pads Down') { if (ev.value > 0) pagePattern(ev.control === 'Pads Down' ? 1 : -1); return; }
     // Clear / Duplicate held modifiers (for step editing)
     if (ev.control === 'Clear') { st.mod = ev.value > 0 ? 'clear' : null; return; }
     if (ev.control === 'Duplicate') { st.mod = ev.value > 0 ? 'dup' : null; return; }
