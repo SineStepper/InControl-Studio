@@ -129,6 +129,13 @@
     return m;
   }
 
+  // Attach a sequencer to a model if it doesn't have one yet (kept out of
+  // newModel so modules that don't load the sequencer still work).
+  function ensureSequencer(m) {
+    if (!m.sequencer && global.SLMK.sequencer) m.sequencer = global.SLMK.sequencer.newSequencer();
+    return m.sequencer;
+  }
+
   const toJSON = (m) => JSON.stringify(m, null, 2);
   function fromJSON(str) {
     const m = typeof str === 'string' ? JSON.parse(str) : str;
@@ -139,7 +146,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studio = {
     MSG, BIT_DEPTHS, BEHAVIORS, VEL_CURVES, KNOB_MODES, COMBINED,
-    make, newBank, muteSendBank, newModel, addKnobBank, addButtonBank, fromTemplate, toJSON, fromJSON,
+    make, newBank, muteSendBank, newModel, addKnobBank, addButtonBank, fromTemplate, ensureSequencer, toJSON, fromJSON,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studio;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -26,6 +26,7 @@
     { key: 'rotary', label: 'Rotary' }, { key: 'faders', label: 'Faders' },
     { key: 'buttons', label: 'Buttons' }, { key: 'pads', label: 'Pads' },
     { key: 'wheels', label: 'Wheels' }, { key: 'pedals', label: 'Pedals' }, { key: 'keys', label: 'Keys' },
+    { key: 'sequencer', label: 'Sequencer' },
   ];
 
   // Which controls does the current tab expose? Returns [{ref, label, sub}]
@@ -50,6 +51,9 @@
     const bar = el('div', { className: 'studio-tabs' });
     TABS.forEach((t) => { const b = el('button', { className: 'stab' + (ui.tab === t.key ? ' active' : '') }, t.label); b.addEventListener('click', () => { ui.tab = t.key; ui.sel = null; render(); }); bar.appendChild(b); });
     host.appendChild(bar);
+
+    // Sequencer sub-tab is rendered by its own module.
+    if (ui.tab === 'sequencer') { if (global.SLMK.sequencerUI) global.SLMK.sequencerUI.render(host); return; }
 
     // bank / mode controls
     const controlsBar = el('div', { className: 'studio-subbar' });
