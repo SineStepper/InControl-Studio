@@ -23,8 +23,13 @@
       toggle: {}, // key -> bool, for Toggle behaviour
       inc: {}, // key -> current value, for Inc/Dec
       held: {}, // key -> bool, for LED pressed state
+      acc: {}, // key -> accumulated value, for endless-encoder knobs
     };
   }
+
+  // SL MkIII rotary encoders are endless: they send two's-complement deltas
+  // (1..63 = +1..+63, 64..127 = -1..-64). Decode to a signed delta.
+  function knobDelta(raw) { if (!raw) return 0; return raw < 64 ? raw : raw - 128; }
 
   // ---- value scaling ----
   function scale(raw, start, end, bit) {
@@ -58,23 +63,47 @@
    * Produce outgoing MIDI messages for a continuous control move (0-127 raw).
    * Returns an array of byte arrays.
    */
-  function continuousOut(a, raw, rt) {
+  // Emit MIDI for an already-resolved output value `v` (0-127 for 7/8-bit,
+  // 0-16383 for 14-bit).
+  function emitValue(a, v, rt) {
     const ch = chanOf(a, rt);
-    const mt = a.message_type;
-    const v = scale(raw, a.start, a.end, a.bit_depth);
-    switch (mt) {
-      case 'CC': return a.bit_depth === '14-bit' ? [CC(ch, a.cc, (v >> 7) & 0x7f), CC(ch, (a.cc + 32) & 0x7f, v & 0x7f)] : [CC(ch, a.cc, a.bit_depth === '8-bit scaled' ? v >> 1 : v)];
-      case 'NRPN': return NRPN(ch, a.cc, a.bit_depth === '14-bit' ? v : v << 7);
+    const b14 = a.bit_depth === '14-bit';
+    switch (a.message_type) {
+      case 'CC': return b14 ? [CC(ch, a.cc, (v >> 7) & 0x7f), CC(ch, (a.cc + 32) & 0x7f, v & 0x7f)] : [CC(ch, a.cc, a.bit_depth === '8-bit scaled' ? v >> 1 : v & 0x7f)];
+      case 'NRPN': return NRPN(ch, a.cc, b14 ? v : v << 7);
       case 'Note': return [NOTE_ON(ch, a.note, v & 0x7f)];
       case 'Program Change': return [PC(ch, v & 0x7f)];
       case 'Bank Change': return [CC(ch, 0, v & 0x7f)];
       case 'Sub Bank Change': return [CC(ch, 32, v & 0x7f)];
-      case 'Song Position': return [SONG_POS(a.bit_depth === '14-bit' ? v : v << 7)];
-      case 'Pitch Bend': return [PITCH(ch, a.bit_depth === '14-bit' ? v : v << 7)];
+      case 'Song Position': return [SONG_POS(b14 ? v : v << 7)];
+      case 'Pitch Bend': return [PITCH(ch, b14 ? v : v << 7)];
       case 'Channel Pressure': return [CHAN_PRESSURE(ch, v & 0x7f)];
       case 'Poly Aftertouch': return [POLY_AT(ch, a.note, v & 0x7f)];
       default: return [];
     }
+  }
+
+  // Absolute continuous control (fader/wheel/pedal): scale 0-127 -> range.
+  function continuousOut(a, raw, rt) { return emitValue(a, scale(raw, a.start, a.end, a.bit_depth), rt); }
+
+  // Endless-encoder knob: accumulate the signed delta into the output range.
+  function knobOut(a, rawDelta, rt, key) {
+    const d = knobDelta(rawDelta);
+    if (d === 0) return [];
+    if (a.mode === 'Relative') {
+      // Pass the delta through as a relative (two's-complement) CC.
+      const rel = d > 0 ? d & 0x3f : (128 + d) & 0x7f;
+      return [CC(chanOf(a, rt), a.cc, rel)];
+    }
+    const FS = a.bit_depth === '14-bit' ? 16383 : 127;
+    const lo = Math.round((Math.min(a.start, a.end) / 127) * FS);
+    const hi = Math.round((Math.max(a.start, a.end) / 127) * FS);
+    const stepU = (a.step || 1) * (a.bit_depth === '14-bit' ? 128 : 1);
+    let acc = rt.acc[key];
+    if (acc == null) { acc = a.pivot ? Math.round((a.pivot / 127) * FS) : lo; acc = Math.max(lo, Math.min(hi, acc)); }
+    acc = Math.max(lo, Math.min(hi, acc + d * stepU));
+    rt.acc[key] = acc;
+    return emitValue(a, acc, rt);
   }
 
   /** Fixed-value message for a switch press/release (value already chosen). */
@@ -111,9 +140,8 @@
     if (!a || !a.enabled) return { out: [] };
     const key = keyFor(rt, ev.group, ev.index);
 
-    if (ev.group === 'knob' || ev.group === 'fader') {
-      return { out: continuousOut(a, ev.value, rt) };
-    }
+    if (ev.group === 'knob') return { out: knobOut(a, ev.value, rt, key) };
+    if (ev.group === 'fader') return { out: continuousOut(a, ev.value, rt) };
     // switch-like: button or pad
     const pressed = ev.value > 0;
     rt.held[key] = pressed;
@@ -203,7 +231,7 @@
 
   global.SLMK = global.SLMK || {};
   global.SLMK.engine = {
-    makeRuntime, scale, continuousOut, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages, ledOne, keyFor,
+    makeRuntime, scale, continuousOut, emitValue, knobOut, knobDelta, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages, ledOne, keyFor,
     _msg: { CC, NOTE_ON, NOTE_OFF, PC, CHAN_PRESSURE, POLY_AT, PITCH, SONG_POS, NRPN },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.engine;
