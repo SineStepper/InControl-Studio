@@ -64,4 +64,15 @@ const sp = seq.tracks[0].patterns[0];
 const rt5 = Q.makeSeqRuntime(seq); Q.start(rt5); Q.onTick(rt5, rng0);
 eq(Q.stop(rt5).every((e) => e.type === 'off'), true, 'stop returns note-offs');
 
+// pattern chains: playback advances through the chained patterns
+const cseq = Q.newSequencer(); const ct = cseq.tracks[0];
+ct.patterns[0].end = 1; Q.toggleStepNote(ct.patterns[0], 0, 60, 100, 6);
+ct.patterns[1].end = 1; Q.toggleStepNote(ct.patterns[1], 0, 72, 100, 6);
+ct.chain = { from: 0, to: 1 };
+const crt = Q.makeSeqRuntime(cseq); Q.start(crt);
+const played = [];
+for (let k = 0; k < Q.SYNC['1/16'] * 8; k++) Q.onTick(crt, rng0).filter((e) => e.type === 'on').forEach((e) => played.push(e.note));
+eq(played, [60, 72, 60, 72], 'chain 0-1 alternates patterns 0 and 1');
+eq(ct.activePattern, 1, 'chain leaves activePattern on the last-played pattern');
+
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

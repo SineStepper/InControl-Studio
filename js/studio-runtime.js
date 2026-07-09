@@ -20,7 +20,8 @@
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
-    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false };
+    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
+    heldPatterns: new Set() };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -436,9 +437,19 @@
       }
     }
 
-    // Patterns view: a pad selects that pattern (#4/#7)
+    // Patterns view: select a pattern; press two+ together to chain them (#11).
     if (c && c.group === 'pad' && st.padView === 'patterns' && st.rt && st.rt.padMode === 'sequencer') {
-      if (ev.value > 0 && c.index < SEQ().PATTERNS) { curTrack().activePattern = c.index; refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify(); log('pattern ' + (c.index + 1)); }
+      const t = curTrack();
+      if (ev.value > 0 && c.index < SEQ().PATTERNS && t) {
+        if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[c.index]); refreshPatternPads(); notify(); return; }
+        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyPattern(t, st.dupFrom, c.index); refreshPatternPads(); notify(); return; }
+        st.heldPatterns.add(c.index);
+        if (st.heldPatterns.size >= 2) {
+          const arr = [...st.heldPatterns]; t.chain = { from: Math.min(...arr), to: Math.max(...arr) }; t.activePattern = t.chain.from;
+          log('chain ' + (t.chain.from + 1) + '-' + (t.chain.to + 1));
+        } else { t.chain = null; t.activePattern = c.index; log('pattern ' + (c.index + 1)); } // Shift = instant (we switch immediately anyway)
+        refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify();
+      } else if (ev.value === 0) { st.heldPatterns.delete(c.index); }
       return;
     }
 

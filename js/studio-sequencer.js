@@ -83,9 +83,22 @@
       // step boundary
       if (rt.tick % stepTicks === 0) {
         pstate.counter++;
-        const idx = stepIndexFor(pstate.counter, p.start, p.end, p.direction, p.shift, rng);
+        // Pattern chains: when the current pattern completes a cycle, advance to
+        // the next pattern in the chain (User Guide "Pattern Chains").
+        if (track.chain) {
+          const cur = track.patterns[track.activePattern];
+          const len = Math.abs((cur.end || 0) - (cur.start || 0)) + 1;
+          if (pstate.counter > 0 && pstate.counter % len === 0) {
+            let ap = track.activePattern + 1;
+            if (ap > track.chain.to || ap < track.chain.from) ap = track.chain.from;
+            track.activePattern = ap;
+            pstate.counter = 0; // start the next pattern from its beginning
+          }
+        }
+        const p2 = track.patterns[track.activePattern]; // may have changed on a chain advance
+        const idx = stepIndexFor(pstate.counter, p2.start, p2.end, p2.direction, p2.shift, rng);
         pstate.pad = idx;
-        const step = p.steps[idx];
+        const step = p2.steps[idx];
         if (step && step.notes.length) {
           const roll = (rng ? rng() : Math.random()) * 100;
           if (roll < (step.chance == null ? 100 : step.chance)) {
