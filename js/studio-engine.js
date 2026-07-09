@@ -24,6 +24,7 @@
       inc: {}, // key -> current value, for Inc/Dec
       held: {}, // key -> bool, for LED pressed state
       acc: {}, // key -> accumulated value, for endless-encoder knobs
+      bank: {}, // key -> bank number, for combined continuous bank-change knobs
     };
   }
 
@@ -90,6 +91,23 @@
   function knobOut(a, rawDelta, rt, key) {
     const d = knobDelta(rawDelta);
     if (d === 0) return [];
+    // Combined continuous bank-change: one knob sweeps Program Changes 0-127, then
+    // rolls the (sub-)bank up/down and continues — the SL can't do this.
+    if (a.combined && a.combined !== 'None' && a.message_type === 'Program Change') {
+      const ch = chanOf(a, rt);
+      const stepU = a.step || 1;
+      let pc = rt.acc[key]; if (pc == null) pc = a.pivot || 0;
+      let bank = rt.bank[key] || 0;
+      pc += d * stepU;
+      let bankChanged = false;
+      while (pc > 127) { pc -= 128; if (bank < 127) { bank++; bankChanged = true; } else { pc = 127; } }
+      while (pc < 0) { pc += 128; if (bank > 0) { bank--; bankChanged = true; } else { pc = 0; } }
+      rt.acc[key] = pc; rt.bank[key] = bank;
+      const out = [];
+      if (bankChanged) out.push(CC(ch, a.combined === 'Sub-bank when full' ? 32 : 0, bank));
+      out.push(PC(ch, pc));
+      return out;
+    }
     if (a.mode === 'Relative') {
       // Pass the delta through as a relative (two's-complement) CC.
       const rel = d > 0 ? d & 0x3f : (128 + d) & 0x7f;

@@ -12,6 +12,9 @@
 
   let selStep = 0;
   let hooked = false;
+  let undoStack = [], redoStack = [];
+  function pushUndo(m) { undoStack.push(JSON.stringify(m.sequencer)); if (undoStack.length > 50) undoStack.shift(); redoStack = []; }
+  function restore(host, from, to) { const m = model(); if (!from.length) return; to.push(JSON.stringify(m.sequencer)); m.sequencer = JSON.parse(from.pop()); render(host); }
 
   const el = (t, p = {}, c = []) => {
     const n = document.createElement(t);
@@ -42,7 +45,9 @@
     const play = el('button', { className: 'btn primary', id: 'seq-play' }, RT() && RT().seqIsPlaying() ? '■ Stop' : '▶ Play');
     play.addEventListener('click', () => { if (!RT()) return; RT().seqIsPlaying() ? RT().seqStop() : RT().seqPlay(); render(host); });
     const rec = el('button', { className: 'btn' + (RT() && RT().recording() ? ' running' : '') }, '● Rec');
-    bar.append(play, rec);
+    const undo = el('button', { className: 'btn', title: 'Undo' }, '↶'); undo.addEventListener('click', () => restore(host, undoStack, redoStack));
+    const redo = el('button', { className: 'btn', title: 'Redo' }, '↷'); redo.addEventListener('click', () => restore(host, redoStack, undoStack));
+    bar.append(play, rec, undo, redo);
     bar.appendChild(numField('Tempo', c.m.sequencer.tempo, 20, 300, (v) => { c.m.sequencer.tempo = v; if (RT()) RT().restartClock(); }));
     bar.appendChild(selField('Track', range(8).map((i) => [i, 'Track ' + (i + 1)]), c.ti, (v) => { if (RT()) RT().setGridTrack(+v); selStep = 0; render(host); }));
     bar.appendChild(selField('Pattern', range(8).map((i) => [i, 'Pat ' + (i + 1)]), c.track.activePattern, (v) => { c.track.activePattern = +v; render(host); }));
@@ -55,9 +60,12 @@
     set.appendChild(selField('Direction', Q().DIRECTIONS.map((d) => [d, d]), c.pat.direction, (v) => { c.pat.direction = v; }));
     set.appendChild(numField('Start', c.pat.start, 0, 15, (v) => { c.pat.start = v; render(host); }));
     set.appendChild(numField('End', c.pat.end, 0, 15, (v) => { c.pat.end = v; render(host); }));
-    set.appendChild(el('button', { className: 'btn' }, 'Clear pattern')).addEventListener('click', () => { Q().clearPattern(c.pat); render(host); });
-    set.appendChild(el('button', { className: 'btn' }, 'Oct +')).addEventListener('click', () => { Q().transposePattern(c.pat, 12); render(host); });
-    set.appendChild(el('button', { className: 'btn' }, 'Oct -')).addEventListener('click', () => { Q().transposePattern(c.pat, -12); render(host); });
+    set.appendChild(el('button', { className: 'btn' }, 'Clear pattern')).addEventListener('click', () => { pushUndo(c.m); Q().clearPattern(c.pat); render(host); });
+    set.appendChild(el('button', { className: 'btn' }, 'Oct +')).addEventListener('click', () => { pushUndo(c.m); Q().transposePattern(c.pat, 12); render(host); });
+    set.appendChild(el('button', { className: 'btn' }, 'Oct -')).addEventListener('click', () => { pushUndo(c.m); Q().transposePattern(c.pat, -12); render(host); });
+    const qz = el('input', { type: 'checkbox', checked: c.m.sequencer.quantizeRecord !== false });
+    qz.addEventListener('change', () => { c.m.sequencer.quantizeRecord = qz.checked; });
+    set.appendChild(el('label', { className: 'seq-f' }, ['Quantize rec ', qz]));
     wrap.appendChild(set);
 
     // 16-step grid (2 rows of 8)
@@ -70,7 +78,7 @@
       cell.appendChild(el('span', { className: 'ss-note' }, has ? noteName(c.pat.steps[i].notes[0].note) + (c.pat.steps[i].notes.length > 1 ? '+' : '') : '·'));
       cell.addEventListener('click', (e) => {
         selStep = i;
-        if (e.shiftKey || e.metaKey) Q().toggleStepNote(c.pat, i, Q().DEFAULT_NOTE, 100, 6);
+        if (e.shiftKey || e.metaKey) { pushUndo(c.m); Q().toggleStepNote(c.pat, i, Q().DEFAULT_NOTE, 100, 6); }
         render(host);
       });
       grid.appendChild(cell);
@@ -90,7 +98,7 @@
     box.appendChild(el('div', { className: 'insp-title' }, 'Step ' + (selStep + 1)));
     const first = step.notes[0];
     const addBtn = el('button', { className: 'btn' }, step.notes.length ? 'Remove note' : 'Add note');
-    addBtn.addEventListener('click', () => { Q().toggleStepNote(pat, selStep, first ? first.note : Q().DEFAULT_NOTE, 100, 6); render(host); });
+    addBtn.addEventListener('click', () => { pushUndo(model()); Q().toggleStepNote(pat, selStep, first ? first.note : Q().DEFAULT_NOTE, 100, 6); render(host); });
     box.appendChild(addBtn);
     if (first) {
       box.appendChild(numField('Note', first.note, 0, 127, (v) => { first.note = v; render(host); }));
