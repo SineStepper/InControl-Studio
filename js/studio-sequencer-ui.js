@@ -53,6 +53,10 @@
     bar.appendChild(selField('Track', range(8).map((i) => [i, 'Track ' + (i + 1)]), c.ti, (v) => { if (RT()) RT().setGridTrack(+v); selStep = 0; render(host); }));
     bar.appendChild(selField('Pattern', range(8).map((i) => [i, 'Pat ' + (i + 1)]), c.track.activePattern, (v) => { c.track.activePattern = +v; render(host); }));
     bar.appendChild(selField('Channel', range(16).map((i) => [i + 1, 'Ch ' + (i + 1)]), c.track.channel, (v) => { c.track.channel = +v; }));
+    const col = el('input', { type: 'color', value: c.track.color || '#3bd0ff' });
+    col.addEventListener('input', () => { c.track.color = col.value; if (RT()) RT().refreshSurface(); render(host); });
+    bar.appendChild(el('label', { className: 'seq-f' }, ['Part colour ', col]));
+    bar.appendChild(selField('Swing', [['On', 'On'], ['Off', 'Off']], c.track.swing || 'On', (v) => { c.track.swing = v; }));
     wrap.appendChild(bar);
 
     // pattern settings

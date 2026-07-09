@@ -92,11 +92,13 @@
     const seq = {
       tempo: body[OFF.tempoLo] | (body[OFF.tempoHi] << 8),
       swing: body[OFF.swing], // raw hardware value (50 == straight/off)
+      swingSync: '1/16',
       tracks: [],
     };
     if (!seq.tempo) seq.tempo = 120;
+    const PART_COLORS = ['#ff2d2d', '#ff8c00', '#ffd000', '#38d430', '#00c8c8', '#2b7bff', '#8a4bff', '#ff3bce'];
     for (let t = 0; t < GRID.tracks; t++) {
-      const track = { channel: (body[OFF.chan + t * GRID.track] & 0x0f) + 1, activePattern: 0, patterns: [] };
+      const track = { channel: (body[OFF.chan + t * GRID.track] & 0x0f) + 1, activePattern: 0, color: PART_COLORS[t % 8], swing: 'On', chain: null, patterns: [] };
       for (let p = 0; p < GRID.patterns; p++) {
         const g = gridOffset(t, p);
         const steps = [];

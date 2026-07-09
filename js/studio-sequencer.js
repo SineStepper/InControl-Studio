@@ -23,13 +23,18 @@
   const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
   const STEPS = 16, TRACKS = 8, PATTERNS = 8;
 
+  // Default Part colours (one per track), echoing the SL MkIII's coloured Parts.
+  const PART_COLORS = ['#ff2d2d', '#ff8c00', '#ffd000', '#38d430', '#00c8c8', '#2b7bff', '#8a4bff', '#ff3bce'];
+
   function newStep() { return { notes: [], chance: 100 }; }
   function newPattern() {
     return { steps: Array.from({ length: STEPS }, newStep), start: 0, end: 15, direction: 'Forward', syncRate: '1/16', shift: 0 };
   }
-  function newTrack(i) { return { channel: i + 1, activePattern: 0, patterns: Array.from({ length: PATTERNS }, newPattern) }; }
+  function newTrack(i) {
+    return { channel: i + 1, activePattern: 0, color: PART_COLORS[i % 8], swing: 'On', chain: null, patterns: Array.from({ length: PATTERNS }, newPattern) };
+  }
   function newSequencer() {
-    return { tempo: 120, swing: 0, tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
+    return { tempo: 120, swing: 50, swingSync: '1/16', tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
   }
 
   // ---- playback runtime ----
@@ -131,7 +136,7 @@
 
   global.SLMK = global.SLMK || {};
   global.SLMK.sequencer = {
-    PPQN, SYNC, SYNC_ORDER, DIRECTIONS, STEPS, TRACKS, PATTERNS, DEFAULT_NOTE,
+    PPQN, SYNC, SYNC_ORDER, DIRECTIONS, STEPS, TRACKS, PATTERNS, DEFAULT_NOTE, PART_COLORS,
     newSequencer, newPattern, newTrack, makeSeqRuntime, stepIndexFor, gateTicks, onTick,
     start, stop, allNotesOff, toggleStepNote, stepHasNotes, clearStep, copyStep, clearPattern, copyPattern,
     setStepField, setStepChance, transposePattern,

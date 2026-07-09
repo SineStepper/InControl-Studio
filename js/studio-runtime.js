@@ -152,15 +152,25 @@
   }
   function refreshMuteSolo() {
     const bank = msBank();
-    for (let i = 0; i < 8; i++) { const a = bank[i]; if (a) ledHex(12 + i, st.mute.has(a.channel) ? a.led.pressed : a.led.idle); }      // Soft 9-16
-    for (let i = 0; i < 8; i++) { const a = bank[8 + i]; if (a) ledHex(20 + i, st.solo.has(a.channel) ? a.led.pressed : a.led.idle); }  // Soft 17-24
+    for (let i = 0; i < 8; i++) {
+      const a = bank[i]; if (!a) continue; // Soft 9-16 = Mute 1-8
+      const muted = st.mute.has(a.channel);
+      const silencedBySolo = !muted && st.solo.size && !st.solo.has(a.channel);
+      if (silencedBySolo) ledHex(12 + i, a.led.idle, 'pulse'); // pulse when silenced by another solo (manual p.12)
+      else ledHex(12 + i, muted ? a.led.pressed : a.led.idle);
+    }
+    for (let i = 0; i < 8; i++) { const a = bank[8 + i]; if (a) ledHex(20 + i, st.solo.has(a.channel) ? a.led.pressed : a.led.idle); } // Soft 17-24 = Solo
   }
   function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
   function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
 
-  // ---- Channel / instrument select (Soft 1-8 below the screens) ----
+  // ---- Channel / instrument select (Soft 1-8 below the screens), in Part colours ----
   function refreshChannelLeds() {
-    for (let i = 0; i < 8; i++) ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : '#0b1730'); // Soft 1-8 = LED 4-11
+    const m = model(); const tracks = (m && m.sequencer && m.sequencer.tracks) || [];
+    for (let i = 0; i < 8; i++) {
+      const color = (tracks[i] && tracks[i].color) || '#3bd0ff';
+      ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : opts().scaleColor(color, 0.4)); // active white, others dim part colour
+    }
   }
   function selectChannel(ch) {
     const padMode = st.rt ? st.rt.padMode : 'sequencer';
@@ -230,22 +240,38 @@
     }
   }
 
+  const partColor = () => { const t = curTrack(); return (t && t.color) || '#3bd0ff'; };
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
     if (st.padView === 'patterns') return refreshPatternPads();
     const p = gridPattern(); if (!p) return;
     const head = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1;
+    const color = partColor();
+    const lo = Math.min(p.start, p.end), hi = Math.max(p.start, p.end);
     for (let i = 0; i < 16; i++) {
-      let hex = '#0a0a0a';
-      if (SEQ().stepHasNotes(p, i)) hex = '#3bd0ff';
-      if (seqIsPlaying() && i === head) hex = '#ffffff';
+      const has = SEQ().stepHasNotes(p, i);
+      const inRange = i >= lo && i <= hi;
+      let hex;
+      if (has) hex = inRange ? color : '#ff0000';           // notes: part colour, or red if outside start/end (#14)
+      else hex = opts().scaleColor(color, 0.06);            // empty: very dim part colour
+      if (st.optionsMenu === 'pattern' && st.optionsMode && i === p.start) hex = '#ffd000'; // start step yellow (#14)
+      if (seqIsPlaying() && i === head) hex = '#ffffff';    // playhead white
       ledHex(38 + i, hex);
     }
   }
-  // Patterns view (#4/#7): the 16 pads show/select the 8 patterns.
+  // Patterns view (#4/#7): the 16 pads show/select the 8 patterns in the part colour.
   function refreshPatternPads() {
     const t = curTrack(); if (!t) return;
-    opts().patternPadLeds(t.activePattern, SEQ().PATTERNS).forEach((hex, i) => ledHex(38 + i, hex));
+    const color = t.color || '#3bd0ff';
+    const chain = t.chain;
+    for (let i = 0; i < SEQ().PATTERNS; i++) {
+      let hex;
+      if (i === t.activePattern) hex = '#ffffff';
+      else if (chain && i >= chain.from && i <= chain.to) hex = opts().lighten(color, 0.4); // chained patterns (#11)
+      else hex = opts().scaleColor(color, 0.35);
+      ledHex(38 + i, hex);
+    }
+    for (let i = SEQ().PATTERNS; i < 16; i++) ledHex(38 + i, '#000000');
   }
   // Pads Up/Down arrow LEDs reflect the position in the pattern list (#7).
   function refreshArrowLeds() {
@@ -284,6 +310,14 @@
     }
   }
   function restartClockIfRunning() { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } }
+  // Repaint the whole control surface (used after an on-screen change like a Part colour).
+  function refreshSurface() {
+    if (!st.running || !st.slOutId) return;
+    refreshLeds();
+    if (st.rt.padMode === 'sequencer') refreshGrid();
+    refreshChannelLeds(); refreshMuteSolo(); refreshTransport(); refreshSceneLeds(); refreshArrowLeds();
+    if (st.optionsMode) { refreshOptionLeds(); refreshOptionScreens(); } else refreshKnobScreens();
+  }
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
     if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
@@ -386,7 +420,7 @@
       if (c.group === 'button') {
         if (ev.value > 0) {
           const menu = opts().menuForButton(c.index);
-          if (menu) { st.optionsMenu = menu; refreshOptionLeds(); refreshOptionScreens(); log('menu: ' + menu); }
+          if (menu) { st.optionsMenu = menu; refreshOptionLeds(); refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); log('menu: ' + menu); }
           else if (opts().MICROSTEP_BUTTONS.indexOf(c.index) >= 0) { st.microstep = c.index; log('microstep ' + (c.index + 1)); }
         }
         return;
@@ -507,6 +541,7 @@
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
     setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
+    refreshSurface,
     state: () => st,
   };
 
