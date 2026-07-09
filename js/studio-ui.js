@@ -192,6 +192,14 @@
     $('#studio-import').addEventListener('change', (e) => { if (e.target.files[0]) importTemplate(e.target.files[0]); e.target.value = ''; });
     $('#studio-load').addEventListener('change', (e) => { if (e.target.files[0]) loadJson(e.target.files[0]); e.target.value = ''; });
     $('#studio-save').addEventListener('click', () => { model.name = $('#studio-name').value || 'Studio Setup'; download((model.name).replace(/[^\w -]/g, '') + '.json', S.toJSON(model)); setStatus('Saved setup JSON.', 'ok'); });
+    $('#studio-export-syx').addEventListener('click', () => {
+      model.name = $('#studio-name').value || 'Template';
+      const bytes = T.exportSysex(S.toTemplate(model));
+      const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'application/octet-stream' }));
+      const a = el('a', { href: url, download: (model.name).replace(/[^\w -]/g, '') + '.syx' }); document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus('Exported Components .syx template.', 'ok');
+    });
     $('#studio-name').addEventListener('change', () => { model.name = $('#studio-name').value; });
     // expose for the future engine
     global.SLMK.studioState = { getModel: () => model };

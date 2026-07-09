@@ -8,11 +8,6 @@ It's a single app with three tabs sharing one MIDI connection:
 
 - **Live Colours** — click a pad, pick a colour, watch it light up over the
   Web MIDI API using the documented InControl SysEx protocol.
-- **Template Editor** — a full Components-style editor for the `.syx` templates:
-  every control's MIDI mapping (message type, channel, CC/Note, min/max,
-  behaviour, velocity, knob resolution), plus a colour on the LED-bearing
-  controls. Bit-exact codec with recomputed checksum, so exports import cleanly
-  into Novation Components.
 - **InControl Studio** — a Components-style customizer that runs the SL MkIII in
   *InControl* mode with more than Components allows: unlimited knob/button banks,
   per-state LED colours, richer message types (14-bit, NRPN, combined continuous

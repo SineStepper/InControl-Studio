@@ -15,7 +15,6 @@
     </div>
     <nav class="tabs">
       <button class="tab" data-view="customizer">Live Colours</button>
-      <button class="tab" data-view="template">Template Editor</button>
       <button class="tab" data-view="studio">InControl Studio</button>
       <button class="tab" data-view="bridge">Bridge</button>
     </nav>
@@ -67,34 +66,6 @@
     </main>
   </section>
 
-  <!-- ========================== TEMPLATE EDITOR ========================== -->
-  <section id="view-template" class="view">
-    <div class="toolbar">
-      <button class="btn" id="te-new">New template</button>
-      <label class="btn file">Load .syx<input type="file" id="te-file" accept=".syx,application/octet-stream" hidden /></label>
-      <label class="te-namewrap">Name <input type="text" id="te-name" maxlength="16" placeholder="Template name" /></label>
-      <button class="btn primary" id="te-export">Export .syx</button>
-      <span id="te-status" class="status"></span>
-      <span class="spacer"></span>
-      <span class="fineprint">Mappings export to the template · colours flow to Live Colours &amp; Bridge</span>
-    </div>
-    <main class="single te-main">
-      <div id="te-controls" class="te-controls"></div>
-      <aside class="side">
-        <div class="panel"><div id="te-inspector"></div></div>
-        <div class="panel help">
-          <h2>Template + colour editor</h2>
-          <p class="fineprint">Create or load a Components template and edit every control's MIDI
-            mapping (type, channel, CC/Note, min/max, behaviour, velocity). Pads, faders and the 8×2
-            buttons also take a <strong>colour</strong> that's stored in <a href="#customizer">Live
-            Colours</a> and pushed live by the <a href="#bridge">Bridge</a> — the mappings live in the
-            <code>.syx</code>, the colours live in InControl. The template codec is bit-exact and
-            recomputes the file checksum, so exports import cleanly into Components.</p>
-        </div>
-      </aside>
-    </main>
-  </section>
-
   <!-- ========================== INCONTROL STUDIO ========================= -->
   <section id="view-studio" class="view">
     <div class="warnbar">
@@ -112,6 +83,7 @@
       <label class="btn file">Load .json<input type="file" id="studio-load" accept="application/json,.json" hidden /></label>
       <label class="te-namewrap">Name <input type="text" id="studio-name" maxlength="24" placeholder="Setup name" /></label>
       <button class="btn primary" id="studio-save">Save .json</button>
+      <button class="btn" id="studio-export-syx" title="Export the base mappings as a Novation Components .syx template">Export .syx</button>
       <span id="studio-status" class="status"></span>
     </div>
     <div class="toolbar se-bar">
@@ -197,7 +169,6 @@
   <script src="js/midi.js"></script>
   <script src="js/tabs.js"></script>
   <script src="js/app.js"></script>
-  <script src="js/template-editor.js"></script>
   <script src="js/studio-ui.js"></script>
   <script src="js/studio-sequencer-ui.js"></script>
   <script src="js/studio-runtime.js"></script>

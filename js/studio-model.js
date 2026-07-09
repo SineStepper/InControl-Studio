@@ -136,6 +136,34 @@
     return m.sequencer;
   }
 
+  // Serialize the studio model back to a Components .syx template. Lossy: only
+  // the first knob banks / first editable button bank / base assignments map to
+  // the 77-record template; extra banks, per-state colours and the sequencer
+  // don't exist in the template format.
+  function toTemplate(sm) {
+    const T = global.SLMK.sltemplate;
+    const tpl = T.newTemplate();
+    tpl.name = (sm.name || 'Studio').slice(0, 16);
+    const midx = (name) => { const i = T.MESSAGE_TYPES.indexOf(name); return i >= 0 ? i : 0; }; // unsupported -> CC
+    const beh = (b) => Math.max(0, BEHAVIORS.indexOf(b));
+    const vc = (c) => Math.max(0, VEL_CURVES.indexOf(c));
+    const faderRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), channel: a.channel, from_value: a.start | 0, to_value: a.end | 0, first_param: 0, second_param: a.cc | 0, lsb_index: 0 });
+    const knobRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), first_param: a.cc | 0, lsb_index: 0, relative: a.mode === 'Relative' ? 1 : 0, eight_bit: a.bit_depth === '14-bit' ? 1 : 0, pivot: a.pivot | 0, step: a.step || 1, resolution: a.resolution || 616, channel: a.channel, from_value: a.start | 0, to_value: a.end | 0 });
+    const btnRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), behavior: beh(a.behavior), action: 0, first_param: a.down_value | 0, second_param: a.up_value | 0, step: 0, wrap: false, pair: false, channel: a.channel, third_param: a.note | 0, fourth_param: a.cc | 0, lsb_index: 0 });
+    const padRec = (a) => Object.assign(btnRec(a), { max_velocity: a.vel_max | 0, min_velocity: a.vel_min | 0, range_method: vc(a.vel_curve) });
+    const pad16 = (arr) => { const o = arr.slice(0, 16); while (o.length < 16) o.push(make('knob')); return o; };
+    const bbank = sm.buttonBanks[1] || sm.buttonBanks[0];
+    tpl.sections.buttons = bbank.slice(0, 16).map(btnRec);
+    tpl.sections.knobs = pad16((sm.knobBanks[0] || []).concat(sm.knobBanks[1] || [])).map(knobRec);
+    tpl.sections.faders = sm.faders.slice(0, 8).map(faderRec);
+    tpl.sections.wheels = [faderRec(sm.wheels.pitch), faderRec(sm.wheels.mod)];
+    tpl.sections.pedals = [faderRec(sm.pedals.sustain), faderRec(sm.pedals.expression)];
+    tpl.sections.footswitches = [btnRec(sm.pedals.footswitch)];
+    tpl.sections.pad_hits = sm.pads.hits.slice(0, 16).map(padRec);
+    tpl.sections.pad_pressures = sm.pads.pressures.slice(0, 16).map(faderRec);
+    return tpl;
+  }
+
   const toJSON = (m) => JSON.stringify(m, null, 2);
   function fromJSON(str) {
     const m = typeof str === 'string' ? JSON.parse(str) : str;
@@ -146,7 +174,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studio = {
     MSG, BIT_DEPTHS, BEHAVIORS, VEL_CURVES, KNOB_MODES, COMBINED,
-    make, newBank, muteSendBank, newModel, addKnobBank, addButtonBank, fromTemplate, ensureSequencer, toJSON, fromJSON,
+    make, newBank, muteSendBank, newModel, addKnobBank, addButtonBank, fromTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studio;
 })(typeof window !== 'undefined' ? window : globalThis);
