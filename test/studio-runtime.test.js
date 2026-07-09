@@ -194,4 +194,16 @@ ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 54 + (60 -
 RT.handleControl([0x80, 0x60, 0]);
 RT.setKeyGuide(false);
 
+// --- automation: recording a control move stores its bytes in the pattern's lane ---
+const SEQ = global.SLMK.sequencer;
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.tick = 0; st.clock = 1; st.recording = true; st.optionsMode = false;
+mark = sent.length;
+RT.handleControl(CC(0x15, 4)); // Knob 1 turn -> emits a CC and records it
+const lane = model.sequencer.tracks[0].patterns[0].automation;
+ok(lane && Object.keys(lane).length === 1, 'automation lane created for the moved knob');
+const laneKey = Object.keys(lane)[0];
+ok(lane[laneKey][0] && lane[laneKey][0].length === 3, 'automation captured the CC bytes at tick 0');
+st.recording = false; st.clock = null;
+
 console.log('\n' + n + ' integration assertions passed');

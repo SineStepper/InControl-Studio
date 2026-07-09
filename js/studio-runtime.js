@@ -102,8 +102,29 @@
       sendMusic(st.destId, msg);
       if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
     });
+    playAutomation();
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
+  }
+
+  // ---- Automation (record/replay control moves per pattern, up to 8 lanes) ----
+  const autoKey = (group, index) => group + ':' + (group === 'knob' ? st.rt.knobBank : group === 'button' ? st.rt.buttonBank : 0) + ':' + index;
+  const patternTicks = (p) => (Math.abs((p.end || 0) - (p.start || 0)) + 1) * (SEQ().SYNC[p.syncRate] || 6);
+  function recordAutomation(group, index, bytes) {
+    if (!st.recording || !seqIsPlaying() || !bytes || !bytes.length || !st.seqRt) return;
+    const t = curTrack(); const p = t && t.patterns[t.activePattern]; if (!p) return;
+    p.automation = p.automation || {};
+    const key = autoKey(group, index);
+    if (!p.automation[key] && Object.keys(p.automation).length >= 8) { log('automation lanes full'); return; }
+    (p.automation[key] = p.automation[key] || {})[st.seqRt.tick % patternTicks(p)] = bytes.slice();
+  }
+  function playAutomation() {
+    const m = model(); if (!m || !m.sequencer || !st.seqRt) return;
+    m.sequencer.tracks.forEach((t) => {
+      const p = t.patterns[t.activePattern]; if (!p || !p.automation) return;
+      const at = st.seqRt.tick % patternTicks(p);
+      Object.keys(p.automation).forEach((key) => { const bytes = p.automation[key][at]; if (bytes) sendMusic(st.destId, bytes); });
+    });
   }
   function seqPlay() {
     const rt = ensureSeqRt(); if (!rt) return;
@@ -522,8 +543,17 @@
       return;
     }
 
+    // Hold Clear + move a control to clear that control's automation (User Guide p.11).
+    if (st.mod === 'clear' && ev.value > 0 && (c.group === 'knob' || c.group === 'fader' || c.group === 'button')) {
+      const t = curTrack(); const p = t && t.patterns[t.activePattern];
+      const key = autoKey(c.group, c.index);
+      if (p && p.automation && p.automation[key]) { delete p.automation[key]; notify(); log('cleared automation ' + key); }
+      return;
+    }
     const res = engine.handle(st.rt, { group: c.group, index: c.index, value: ev.value });
     res.out.forEach((mb) => sendMusic(st.destId, mb));
+    // Automation: while recording+playing, capture the emitted value for this control (#automation).
+    if (res.out.length && res.out[0]) recordAutomation(c.group, c.index, res.out[res.out.length - 1]);
     if (c.group === 'knob') sendKnobValue(c.index); // show adjustment on the SL screens
     if (c.group === 'fader') refreshFaderLed(c.index, ev.value); // LED brightness tracks value (#2)
     if (c.group === 'pad') pressFlash('pad', c.index, ev.value > 0); // press-to-lighten in instrument mode (#5)

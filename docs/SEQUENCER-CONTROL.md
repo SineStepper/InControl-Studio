@@ -66,6 +66,34 @@ row and light light-orange.
   9-16, and holding **Shift** makes Knob 1 edit **all** steps at once.
 - The screens update in real time as you turn the knobs.
 
+## Standalone-sequencer parity (implemented)
+
+Driven entirely from the SL MkIII hardware, matching the User Guide:
+
+- **Steps view** — pads are the 16 steps; playhead white, notes in the Part
+  colour, empty dim, notes outside start/end red, start step yellow (Pattern
+  menu). Hold pad + key (or key + pad) toggles notes; Clear+pad clears;
+  Duplicate+pad copies.
+- **Patterns view** — pads are the 8 patterns in the Part colour; **press two+
+  together to chain**; Clear+pad resets, Duplicate+pad copies.
+- **Micro-steps** — 6 per step; in options mode select a step (pad) then hold a
+  micro-step button (Soft 9-14) + play keys; playback offsets by micro/6 of a step.
+- **Options menus** — Velocity / Gate / Chance / Pattern; Velocity & Gate snap a
+  step's notes to one value (highest wins); Chance 0% mutes a step; Pattern sets
+  start / end / direction / sync / shift.
+- **Recording** — Record arms/toggles; **Shift+Record** toggles record quantise
+  (off → notes land on the nearest micro-step). Notes quantise to the sync rate.
+- **Swing** — global 20-80% at the swing sync rate, per-track On/Off.
+- **Automation** — while recording+playing, knob/fader/button moves record into
+  per-pattern lanes (up to 8) and replay each loop; Clear+move clears a lane.
+- **Mute/Solo** — Soft 9-16 Mute, Soft 17-24 Solo; a Part silenced by another's
+  Solo pulses.
+- **Per-Part instruments** — Soft 1-8 select the Part/channel and swap its
+  assigned template.
+
+See `docs/QUESTIONS-AND-IDEAS.md` for what still needs your input or a follow-up
+(momentary record, Arp/Scales, session persistence of the newer fields, etc.).
+
 ## Assumptions / limitations
 
 - **Soft-button layout:** Soft 1-8 = the row below the screens (menu select /
