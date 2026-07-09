@@ -75,4 +75,14 @@ for (let k = 0; k < Q.SYNC['1/16'] * 8; k++) Q.onTick(crt, rng0).filter((e) => e
 eq(played, [60, 72, 60, 72], 'chain 0-1 alternates patterns 0 and 1');
 eq(ct.activePattern, 1, 'chain leaves activePattern on the last-played pattern');
 
+// micro-steps: a note on micro-step 3 fires 3/6 of a step late
+const mseq = Q.newSequencer(); const mp = mseq.tracks[0].patterns[0];
+Q.toggleMicroNote(mp, 0, 0, 60, 100, 6); // step 0, micro 0 -> on beat
+Q.toggleMicroNote(mp, 0, 3, 72, 100, 6); // step 0, micro 3 -> half a step late
+eq(Q.microHasNotes(mp, 0, 3), true, 'micro 3 has a note');
+const mrt = Q.makeSeqRuntime(mseq); Q.start(mrt);
+const onAt = {};
+for (let k = 0; k < Q.SYNC['1/16']; k++) Q.onTick(mrt, rng0).filter((e) => e.type === 'on').forEach((e) => (onAt[e.note] = k));
+eq([onAt[60], onAt[72]], [0, 3], 'micro 0 fires at tick 0, micro 3 fires at tick 3');
+
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

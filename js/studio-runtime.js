@@ -21,7 +21,7 @@
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
-    heldPatterns: new Set() };
+    heldPatterns: new Set(), selStep: null, heldMicros: new Set() };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -287,11 +287,20 @@
     ledHex(3, st.padView === 'steps' ? '#3bd0ff' : '#001016');
   }
   // Options-mode soft-button LEDs + the Options button itself (#6).
+  // The six micro-step buttons (Soft 9-14) show note presence for the selected
+  // step when one is selected (bright = note, dim = empty), else light-orange.
   function refreshOptionLeds() {
     ledHex(65, st.optionsMode ? '#ffffff' : '#101010'); // Options button
     if (!st.optionsMode) return;
     const leds = opts().softLeds(st.optionsMenu);
     Object.keys(leds).forEach((k) => ledHex(4 + Number(k), leds[k]));
+    if (st.selStep != null) {
+      const t = curTrack(); const p = t && t.patterns[t.activePattern];
+      opts().MICROSTEP_BUTTONS.forEach((idx, micro) => {
+        const on = p && SEQ().microHasNotes(p, st.selStep, micro);
+        ledHex(4 + idx, on ? '#ffffff' : opts().scaleColor(opts().LIGHT_ORANGE, 0.25));
+      });
+    }
   }
   // Per-knob screen readout for the active options menu/page (#6): label above
   // the icon, the value on the graphic knob, and the reading below it. Assumes
@@ -322,7 +331,7 @@
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
     if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
-    else { refreshOptionLeds(); refreshLeds(); refreshKnobScreens(); log('options off'); }
+    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); refreshKnobScreens(); log('options off'); }
   }
   function setPadView(view) {
     st.padView = view;
@@ -353,6 +362,13 @@
     sendMusic(st.destId, bytes); // monitor through (respecting mute/solo)
     if (isOn) {
       st.heldKeys.set(note, vel);
+      // Micro-step entry: in options mode, hold a micro-step button + play keys to
+      // toggle that note onto the selected step's micro-step(s) (#12).
+      if (st.optionsMode && st.selStep != null && st.heldMicros.size) {
+        const t = curTrack(); const p = t && t.patterns[t.activePattern];
+        if (p) { st.heldMicros.forEach((micro) => SEQ().toggleMicroNote(p, st.selStep, micro, note, vel, 6)); refreshOptionLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); notify(); log('micro note ' + note); }
+        return;
+      }
       // Hold pad(s) + press key -> toggle that note on those steps.
       if (st.heldPads.size && st.rt && st.rt.padMode === 'sequencer') {
         const p = gridPattern(); if (p) { st.heldPads.forEach((step) => SEQ().toggleStepNote(p, step, note, vel, 6)); refreshGrid(); notify(); log('note ' + note + ' -> steps'); }
@@ -419,11 +435,20 @@
     // ---- Options mode intercepts knobs + soft buttons (#6) ----
     if (st.optionsMode && c) {
       if (c.group === 'button') {
+        const microPos = opts().MICROSTEP_BUTTONS.indexOf(c.index);
+        if (microPos >= 0) { // micro-step buttons: held while playing keys to enter notes (#12)
+          if (ev.value > 0) st.heldMicros.add(microPos); else st.heldMicros.delete(microPos);
+          return;
+        }
         if (ev.value > 0) {
           const menu = opts().menuForButton(c.index);
           if (menu) { st.optionsMenu = menu; refreshOptionLeds(); refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); log('menu: ' + menu); }
-          else if (opts().MICROSTEP_BUTTONS.indexOf(c.index) >= 0) { st.microstep = c.index; log('microstep ' + (c.index + 1)); }
         }
+        return;
+      }
+      // In options mode, pressing a pad selects that step for micro-step editing (#12).
+      if (c.group === 'pad' && st.padView === 'steps' && c.index < 16) {
+        if (ev.value > 0) { st.selStep = c.index; refreshOptionLeds(); notify(); log('step ' + (c.index + 1) + ' selected'); }
         return;
       }
       if (c.group === 'knob') {

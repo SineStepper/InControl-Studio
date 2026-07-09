@@ -44,7 +44,7 @@
       playing: false,
       recording: false,
       tick: 0,
-      pos: seq.tracks.map(() => ({ counter: -1, pad: 0, pending: [] })), // per-track
+      pos: seq.tracks.map(() => ({ counter: -1, pad: 0, pending: [], pendingOn: [] })), // per-track
     };
   }
 
@@ -80,6 +80,11 @@
       for (let i = pstate.pending.length - 1; i >= 0; i--) {
         if (pstate.pending[i].offTick <= rt.tick) { const n = pstate.pending[i]; events.push({ type: 'off', channel: n.ch, note: n.note, velocity: 0 }); pstate.pending.splice(i, 1); }
       }
+      // fire due micro-step note-ons (scheduled within a step)
+      for (let i = pstate.pendingOn.length - 1; i >= 0; i--) {
+        const o = pstate.pendingOn[i];
+        if (o.onTick <= rt.tick) { events.push({ type: 'on', channel: o.ch, note: o.note, velocity: o.velocity }); pstate.pending.push({ ch: o.ch, note: o.note, offTick: rt.tick + o.gateT }); pstate.pendingOn.splice(i, 1); }
+      }
       // step boundary
       if (rt.tick % stepTicks === 0) {
         pstate.counter++;
@@ -104,8 +109,14 @@
           if (roll < (step.chance == null ? 100 : step.chance)) {
             const ch = (track.channel - 1) & 0x0f;
             step.notes.forEach((nt) => {
-              events.push({ type: 'on', channel: ch, note: nt.note, velocity: nt.velocity || 100 });
-              pstate.pending.push({ ch, note: nt.note, offTick: rt.tick + gateTicks(nt.gate, stepTicks) });
+              const gateT = gateTicks(nt.gate, stepTicks);
+              const microOff = Math.round(((nt.micro || 0) / 6) * stepTicks); // offset within the step
+              if (microOff <= 0) {
+                events.push({ type: 'on', channel: ch, note: nt.note, velocity: nt.velocity || 100 });
+                pstate.pending.push({ ch, note: nt.note, offTick: rt.tick + gateT });
+              } else {
+                pstate.pendingOn.push({ onTick: rt.tick + microOff, ch, note: nt.note, velocity: nt.velocity || 100, gateT });
+              }
             });
           }
         }
@@ -121,7 +132,7 @@
     rt.pos.forEach((pstate) => { pstate.pending.forEach((n) => events.push({ type: 'off', channel: n.ch, note: n.note, velocity: 0 })); pstate.pending = []; });
     return events;
   }
-  function start(rt) { rt.playing = true; rt.tick = 0; rt.pos.forEach((p) => { p.counter = -1; p.pending = []; }); }
+  function start(rt) { rt.playing = true; rt.tick = 0; rt.pos.forEach((p) => { p.counter = -1; p.pending = []; p.pendingOn = []; }); }
   function stop(rt) { rt.playing = false; return allNotesOff(rt); }
 
   // ---- editing ----
@@ -133,6 +144,17 @@
     else step.notes.push({ note: note == null ? DEFAULT_NOTE : note, velocity: velocity || 100, gate: gate || 6 });
     return step.notes.length > 0;
   }
+  // Toggle a note on a specific micro-step (0-5) of a step. A note is identified
+  // by (note, micro) so the same pitch can exist on different micro-steps.
+  function toggleMicroNote(pattern, stepIdx, micro, note, velocity, gate) {
+    const step = pattern.steps[stepIdx];
+    const m = micro || 0;
+    const i = step.notes.findIndex((n) => n.note === note && (n.micro || 0) === m);
+    if (i >= 0) step.notes.splice(i, 1);
+    else step.notes.push({ note: note == null ? DEFAULT_NOTE : note, velocity: velocity || 100, gate: gate || 6, micro: m });
+    return step.notes.length > 0;
+  }
+  const microHasNotes = (pattern, stepIdx, micro) => pattern.steps[stepIdx].notes.some((n) => (n.micro || 0) === (micro || 0));
   const stepHasNotes = (pattern, i) => pattern.steps[i].notes.length > 0;
   function clearStep(pattern, i) { pattern.steps[i] = newStep(); }
   function copyStep(pattern, from, to) { pattern.steps[to] = JSON.parse(JSON.stringify(pattern.steps[from])); }
@@ -151,7 +173,7 @@
   global.SLMK.sequencer = {
     PPQN, SYNC, SYNC_ORDER, DIRECTIONS, STEPS, TRACKS, PATTERNS, DEFAULT_NOTE, PART_COLORS,
     newSequencer, newPattern, newTrack, makeSeqRuntime, stepIndexFor, gateTicks, onTick,
-    start, stop, allNotesOff, toggleStepNote, stepHasNotes, clearStep, copyStep, clearPattern, copyPattern,
+    start, stop, allNotesOff, toggleStepNote, toggleMicroNote, microHasNotes, stepHasNotes, clearStep, copyStep, clearPattern, copyPattern,
     setStepField, setStepChance, transposePattern,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.sequencer;
