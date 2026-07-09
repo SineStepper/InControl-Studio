@@ -176,8 +176,9 @@
     const h = (v) => Math.round(v * f).toString(16).padStart(2, '0');
     return '#' + h((n >> 16) & 0xff) + h((n >> 8) & 0xff) + h(n & 0xff);
   }
-  // Brightness for a value-mode LED: floor of 15% so a non-zero value is visible.
-  function valueColor(hex, value, max) { return scaleColor(hex, 0.15 + 0.85 * Math.max(0, Math.min(1, value / (max || 127)))); }
+  // Brightness for a value-mode LED (fader/wheel): near-linear, with a small floor
+  // so a fader at the bottom is dimly visible rather than looking dead.
+  function valueColor(hex, value, max) { return scaleColor(hex, 0.1 + 0.9 * Math.max(0, Math.min(1, value / (max || 127)))); }
 
   /** Mix an #RRGGBB colour toward white by `frac` (0..1) — used for engaged/pressed states. */
   function lighten(hex, frac) {

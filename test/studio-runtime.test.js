@@ -171,4 +171,27 @@ mark = sent.length;
 RT.handleControl(CC(0x15, 3));
 ok(sent.slice(mark).some((m) => m.id === 'dest' && m.bytes[1] === 0), '#7 channel without template uses base mapping (CC 0)');
 
+// --- #8 knob screen: turning a knob emits both the arc value (type 3) and the number (text type 1, object 2) ---
+// Put a knob on channel 1 (no options mode). st.optionsMode is false here.
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1
+mark = sent.length;
+RT.handleControl(CC(0x15, 4)); // Knob 1 turn
+const scr = sent.slice(mark).filter((m) => m.id === 'out' && m.bytes[7] === 0x02); // Set Screen Properties
+ok(scr.some((m) => m.bytes[9] === 0x03 && m.bytes[10] === 0), '#8 knob turn sets the graphic-knob value (type 3, value obj 0)');
+ok(scr.some((m) => m.bytes[9] === 0x01 && m.bytes[10] === 2), '#8 knob turn sets the value number below (text type 1, obj 2)');
+
+// --- #10 keybed light guide is OFF by default (would collide with fader/function LEDs) ---
+st.padView = 'steps'; st.rt.padMode = 'sequencer';
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a note)
+mark = sent.length;
+RT.handleControl([0x90, 0x60, 127]); // Pad 1 press -> auditions step 1 (stopped)
+RT.handleControl([0x80, 0x60, 0]);   // release
+ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] >= 54 && m.bytes[8] <= 114), '#10 key guide off: no key-LED (54-114) sysex emitted');
+RT.setKeyGuide(true);
+mark = sent.length;
+RT.handleControl([0x90, 0x60, 127]);
+ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 54 + (60 - 36)), '#10 key guide on: note 60 lights key LED id 78');
+RT.handleControl([0x80, 0x60, 0]);
+RT.setKeyGuide(false);
+
 console.log('\n' + n + ' integration assertions passed');

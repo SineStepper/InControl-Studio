@@ -39,11 +39,13 @@ logic in `js/studio-options.js`.
 - **Faders and wheels** have no idle/pressed state — the LED above each fader
   brightens/darkens with the control's value.
 - Pressing any pad or button briefly **lightens** it to near-white.
-- **Keybed light guide** (SysEx ids 54-114): in sequencer mode the keys light
-  as notes play, and light **red** while auditioning or holding a step pad. The
-  guide's key-LED ids overlap the fader/function ids in the programmer's guide,
-  so this needs on-hardware confirmation (base note is `LOW_NOTE` in
-  `studio-runtime.js`).
+- **Keybed light guide** (SysEx ids 54-114): **off by default.** The
+  Programmer's Guide gives the key LEDs the *same* SysEx ids as the Fader LEDs
+  (54-61) and function-button LEDs (62-67), so lighting keys clobbers those —
+  the SL MkIII can't drive the light guide independently over this API. The code
+  is present (keys light on playback, red while auditioning/holding a step);
+  enable it to experiment with `SLMK.studioRuntime.setKeyGuide(true)` (base note
+  is `LOW_NOTE` in `studio-runtime.js`).
 
 ## Options mode (#6)
 

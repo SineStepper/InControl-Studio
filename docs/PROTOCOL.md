@@ -80,12 +80,12 @@ colours; method 2 is documented here for completeness.
 ### A note on the keybed "Light Guide"
 
 The guide lists per-key LEDs (Key LEDs 1–61) with SysEx IDs **54–114**, which
-**overlaps** the fader and function IDs above. The Studio sequencer runtime
-(`js/studio-runtime.js`) drives these via the same RGB SysEx command to light
-the keys as the sequence plays (and red while auditioning/holding a step) — but
-because of the id overlap this needs on-hardware confirmation, and the base note
-(`LOW_NOTE`) may need adjusting per keyboard size. The colour editor still omits
-the keybed so it can never send an ambiguous id from the mapping UI.
+are the **same ids** as the Fader LEDs (54–61) and function-button LEDs (62–67).
+So the light guide cannot be driven independently of those LEDs over this API.
+The Studio sequencer runtime has the code to light keys during playback (red
+while auditioning/holding a step) but it is **off by default** for this reason;
+enable it with `SLMK.studioRuntime.setKeyGuide(true)` to experiment (base note
+`LOW_NOTE` in `studio-runtime.js`). The colour editor omits the keybed entirely.
 
 ## Device inquiry (identify the unit)
 

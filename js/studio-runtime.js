@@ -20,7 +20,7 @@
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
-    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {} };
+    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -56,25 +56,33 @@
   function refreshLeds() { engine.ledMessages(st.rt).forEach((mb) => midi.sendToOutput(st.slOutId, mb)); }
 
   const sysex = global.SLMK.sysex;
-  // Put the SL screens into knob layout and show the current bank's names + values.
+  // Knob Layout object indices (Programmer's Guide "Knob Layout"):
+  //   text:  0 = row above icon, 2 = row below icon
+  //   value: 0 = the knob value shown on the icon (0-127)
+  //   rgb:   1 = knob icon line colour
+  const send = (msg) => midi.sendToOutput(st.slOutId, msg);
+  // Put the SL screens into knob layout and show the current bank's names, graphic
+  // knobs (value arc), value numbers and per-knob colours.
   function refreshKnobScreens() {
     if (!st.slOutId || !sysex || !st.rt) return;
-    midi.sendToOutput(st.slOutId, sysex.screenLayout(1)); // Knob Layout: a graphic knob + value per column
+    send(sysex.screenLayout(1)); // Knob Layout
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
-      midi.sendToOutput(st.slOutId, sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : ''));
+      send(sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : '')); // name above the icon
       const hex = (a && a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : '#20c0ff';
       const { r, g, b } = sysex.hexTo7bit(hex);
-      midi.sendToOutput(st.slOutId, sysex.screenRgb(i, 0, r, g, b)); // colour the graphic knob
-      const v = engine.knobDisplay(st.rt, i);
-      if (v != null) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, v)); // drives the knob arc + value number
+      send(sysex.screenRgb(i, 1, r, g, b)); // knob icon line colour
+      sendKnobValue(i);
     }
   }
+  // Update one knob column's graphic-knob value + the number below it.
   function sendKnobValue(index) {
-    if (!st.slOutId || !sysex) return;
+    if (!st.slOutId || !sysex || index >= 8) return;
     const v = engine.knobDisplay(st.rt, index);
-    if (v != null && index < 8) midi.sendToOutput(st.slOutId, sysex.screenValue(index, 0, v));
+    if (v == null) return;
+    send(sysex.screenValue(index, 0, v));          // graphic knob arc
+    send(sysex.screenText(index, 2, String(v)));   // value number below the icon
   }
 
   // ---- sequencer clock / transport ----
@@ -190,8 +198,12 @@
   }
 
   // ---- Keybed light guide (SysEx ids 54-114; key index 0 = note LOW_NOTE) ----
+  // OFF by default: the Programmer's Guide assigns key LEDs the SAME SysEx ids as
+  // the Fader LEDs (54-61) and function LEDs (62-67), so lighting keys clobbers
+  // those. Opt in with SLMK.studioRuntime.setKeyGuide(true) to experiment.
   const LOW_NOTE = 36; // configurable base note for the 61-key light guide
   function keyLed(note, hex) {
+    if (!st.keyGuide) return;
     const idx = note - LOW_NOTE;
     if (idx < 0 || idx > 60) return; // outside the light guide range
     ledHex(54 + idx, hex);
@@ -254,25 +266,27 @@
     const leds = opts().softLeds(st.optionsMenu);
     Object.keys(leds).forEach((k) => ledHex(4 + Number(k), leds[k]));
   }
-  // Per-knob screen readout for the active options menu/page (#6).
+  // Per-knob screen readout for the active options menu/page (#6): label above
+  // the icon, the value on the graphic knob, and the reading below it. Assumes
+  // the screens are already in knob layout (set on entering options mode) so we
+  // don't re-send the layout on every knob turn (which would flicker).
   function refreshOptionScreens() {
     if (!st.slOutId || !sysex) return;
     const t = curTrack(); if (!t) return;
     const p = t.patterns[t.activePattern];
     const seq = model().sequencer;
-    midi.sendToOutput(st.slOutId, sysex.screenLayout(1));
     const cols = opts().columns(seq, p, st.optionsMenu, st.stepPage);
-    const menu = opts().MENUS[st.optionsMenu];
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
-      midi.sendToOutput(st.slOutId, sysex.screenText(i, 0, c ? (menu.perStep ? c.text : c.label + ' ' + c.text) : ''));
-      if (c) midi.sendToOutput(st.slOutId, sysex.screenValue(i, 0, c.value));
+      send(sysex.screenText(i, 0, c ? c.label : ''));       // label above the icon
+      send(sysex.screenValue(i, 0, c ? c.value : 0));       // value on the graphic knob
+      send(sysex.screenText(i, 2, c ? c.text : ''));        // reading below the icon
     }
   }
   function restartClockIfRunning() { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } }
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
-    if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); refreshOptionScreens(); log('options on'); }
+    if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
     else { refreshOptionLeds(); refreshLeds(); refreshKnobScreens(); log('options off'); }
   }
   function setPadView(view) {
@@ -452,6 +466,7 @@
     refreshTransport();
     refreshMuteSolo();
     refreshChannelLeds();
+    for (let i = 0; i < 8; i++) refreshFaderLed(i, 0); // faders start dim (value unknown until moved)
     st.rt.channel = st.activeChannel;
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
@@ -491,6 +506,7 @@
     restartClock: () => { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } },
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
+    setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
     state: () => st,
   };
 
