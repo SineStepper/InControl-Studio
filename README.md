@@ -13,6 +13,11 @@ It's a single app with three tabs sharing one MIDI connection:
   behaviour, velocity, knob resolution), plus a colour on the LED-bearing
   controls. Bit-exact codec with recomputed checksum, so exports import cleanly
   into Novation Components.
+- **InControl Studio** — a Components-style customizer that runs the SL MkIII in
+  *InControl* mode with more than Components allows: unlimited knob/button banks,
+  per-state LED colours, richer message types (14-bit, NRPN, combined continuous
+  bank-change), a live translation engine, and a built-in **step sequencer**.
+  Imports Components `.syx` templates.
 - **Bridge** — hold your colours on the unit **and** remap its InControl
   messages to another MIDI port, so you get colours + custom mappings live.
 
@@ -99,6 +104,35 @@ library — it round-trips both sample templates **bit-exact** and recomputes th
 CRC-32, so exports import cleanly into Novation Components.
 
 ![Template Editor: mappings + colour per control](assets/template-editor.png)
+
+## InControl Studio
+
+A full customizer + live engine for InControl mode, going beyond Components:
+
+- **7 editor tabs** (Rotary, Faders, Buttons, Pads, Wheels, Pedals, Keys) with
+  every parameter: message type (CC/NRPN/Note/PC/Bank/Sub-bank/Song Pos/Pitch
+  Bend/Aftertouch), channel, CC/Note #, start/end, **bit depth (7/8/14-bit)**,
+  button/pad behaviour, knob resolution/mode/pivot, pad velocity min/max + curve,
+  and **per-state LED colours** (idle / pressed / pressure).
+- **Unlimited knob & button banks** (Components is fixed); the first button bank
+  is Mute/Send for ch 1–8.
+- **Live engine**: turn a knob / hit a pad and it emits your assigned MIDI to a
+  destination port (endless-encoder knobs accumulate correctly; **combined
+  continuous bank-change** lets one knob sweep programs then roll the bank), while
+  per-state LED colours are pushed back to the SL. Nav buttons page banks / cycle
+  channel. Start it from the "Live engine" bar (SL in / SL out / destination).
+- **Step sequencer** (mirrors the SL's own): 8 tracks × 8 patterns × 16 steps,
+  per-step note/velocity/gate/chance, 4 directions, 8 sync rates, tempo, transport,
+  Undo/Redo. On-screen grid editor plus a hardware step-grid on the pads (Grid
+  button toggles playable pads ↔ steps; play head + notes shown via pad LEDs).
+
+![The InControl Studio sequencer](assets/studio-sequencer.png)
+
+Imports Components `.syx` templates as a starting point; saves/loads the whole
+setup (mappings + colours + sequence) as JSON. Modules: `js/studio-model.js`,
+`js/studio-ui.js`, `js/studio-engine.js` (+ `test/studio-engine.test.js`),
+`js/studio-runtime.js`, `js/studio-sequencer.js` (+ `test/studio-sequencer.test.js`),
+`js/studio-sequencer-ui.js`.
 
 ## Bridge — colours *and* your own mappings, live
 
