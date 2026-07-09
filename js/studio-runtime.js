@@ -17,7 +17,8 @@
   const studio = () => global.SLMK.studio;
 
   const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
-    seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, stepCbs: [] };
+    seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
+    heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map() };
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
 
@@ -105,22 +106,53 @@
     }
   }
 
-  // Keyboard input (SL regular port): monitor to the destination, and record
-  // into the sequencer while Record + Play are active.
+  const trackChan = () => { const m = model(); return m && m.sequencer ? (m.sequencer.tracks[st.gridTrack].channel - 1) & 0x0f : 0; };
+  function auditionStep(p, step, on) {
+    if (!st.destId) return;
+    const ch = trackChan();
+    p.steps[step].notes.forEach((n) => midi.sendToOutput(st.destId, on ? [0x90 | ch, n.note & 0x7f, n.velocity & 0x7f] : [0x80 | ch, n.note & 0x7f, 0]));
+  }
+  function transposeCurrent(semi) { const p = gridPattern(); if (p && SEQ().transposePattern(p, semi)) { refreshGrid(); notify(); log('transpose ' + (semi > 0 ? '+' : '') + semi); } }
+
+  // Keyboard input (SL regular port). Three roles, exactly like the built-in
+  // sequencer: assign notes to held steps, live-record, and monitor to output.
   function onKeys(bytes) {
     const status = bytes[0] & 0xf0;
-    // forward everything to the destination so you hear the keys through the rig
-    if (st.destId) midi.sendToOutput(st.destId, bytes);
-    if (!st.recording || !seqIsPlaying()) return;
-    if (status === 0x90 && bytes[2] > 0) recordNote(bytes[1], bytes[2]);
+    const note = bytes[1], vel = bytes[2];
+    const isOn = status === 0x90 && vel > 0;
+    const isOff = status === 0x80 || (status === 0x90 && vel === 0);
+    if (st.destId) midi.sendToOutput(st.destId, bytes); // monitor through
+    if (isOn) {
+      st.heldKeys.set(note, vel);
+      // Hold pad(s) + press key -> toggle that note on those steps.
+      if (st.heldPads.size && st.rt && st.rt.padMode === 'sequencer') {
+        const p = gridPattern(); if (p) { st.heldPads.forEach((step) => SEQ().toggleStepNote(p, step, note, vel, 6)); refreshGrid(); notify(); log('note ' + note + ' -> steps'); }
+        return;
+      }
+      if (st.recording && seqIsPlaying()) recordNoteOn(note, vel);
+    } else if (isOff) {
+      st.heldKeys.delete(note);
+      if (st.recording && seqIsPlaying()) recordNoteOff(note);
+    }
   }
-  function recordNote(note, velocity) {
+  function recordNoteOn(note, velocity) {
     const p = gridPattern(); if (!p) return;
     const step = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : 0; // quantise to the current step
     const s = p.steps[step];
-    if (!s.notes.some((n) => n.note === note)) s.notes.push({ note, velocity, gate: 6 });
+    let n = s.notes.find((x) => x.note === note);
+    if (!n) { n = { note, velocity, gate: 6 }; s.notes.push(n); }
+    st.recRef.set(note, { n, startTick: st.seqRt.tick });
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     notify(); log('● rec ' + note + ' @step ' + (step + 1));
+  }
+  function recordNoteOff(note) {
+    const ref = st.recRef.get(note); if (!ref) return;
+    st.recRef.delete(note);
+    const p = gridPattern(); if (!p) return;
+    const stepTicks = SEQ().SYNC[p.syncRate] || 6;
+    const held = Math.max(1, st.seqRt.tick - ref.startTick);
+    ref.n.gate = Math.max(1, Math.round((held / stepTicks) * 6)); // gate in sixths of a step
+    notify();
   }
   function toggleRecord() { st.recording = !st.recording; notify(); }
 
@@ -134,29 +166,43 @@
       else if (ev.control === 'Record') { st.recording = !st.recording; notify(); }
       log('⏵ ' + ev.control); return;
     }
+    // Shift modifier
+    if (ev.control === 'Shift') { st.shift = ev.value > 0; return; }
     // Grid toggles pad function between playable pads and the step grid
     if (ev.control === 'Grid') { if (ev.value > 0) { engine.nav(st.rt, 'grid'); if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshLeds(); log('grid: ' + st.rt.padMode); } return; }
-    // Pads Up/Down page the sequencer patterns for the current track
-    if (ev.control === 'Pads Up' || ev.control === 'Pads Down') { if (ev.value > 0) pagePattern(ev.control === 'Pads Down' ? 1 : -1); return; }
+    // Pads Up/Down: scroll patterns, or (with Shift) transpose the pattern an octave
+    if (ev.control === 'Pads Up' || ev.control === 'Pads Down') { if (ev.value > 0) { if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12); else pagePattern(ev.control === 'Pads Down' ? 1 : -1); } return; }
     // Clear / Duplicate held modifiers (for step editing)
-    if (ev.control === 'Clear') { st.mod = ev.value > 0 ? 'clear' : null; return; }
-    if (ev.control === 'Duplicate') { st.mod = ev.value > 0 ? 'dup' : null; return; }
+    if (ev.control === 'Clear') { st.mod = ev.value > 0 ? 'clear' : (st.mod === 'clear' ? null : st.mod); return; }
+    if (ev.control === 'Duplicate') { st.mod = ev.value > 0 ? 'dup' : (st.mod === 'dup' ? null : st.mod); if (ev.value === 0) st.dupFrom = null; return; }
+
+    const c = mapControl(ev.control);
+
+    // Soft buttons 1-8 select the track while in the step sequencer
+    if (c && c.group === 'button' && c.index < 8 && st.rt && st.rt.padMode === 'sequencer') {
+      if (ev.value > 0) { st.gridTrack = c.index; refreshGrid(); notify(); log('track ' + (c.index + 1)); }
+      return;
+    }
 
     const navAction = engine.NAV_MAP[ev.control];
     if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); refreshLeds(); log('⇄ ' + ev.control); } return; }
-
-    const c = mapControl(ev.control);
     if (!c) return;
 
-    // Pad in sequencer mode edits the step grid instead of playing
+    // Pad in the step sequencer: hold-pad + keys note entry, clear/duplicate, audition
     if (c.group === 'pad' && st.rt.padMode === 'sequencer') {
-      if (ev.value === 0) return; // act on press only
       const p = gridPattern(); if (!p) return;
-      if (st.mod === 'clear') SEQ().clearStep(p, c.index);
-      else if (st.mod === 'dup' && st.dupFrom != null) SEQ().copyStep(p, st.dupFrom, c.index);
-      else if (st.mod === 'dup') st.dupFrom = c.index;
-      else SEQ().toggleStepNote(p, c.index, SEQ().DEFAULT_NOTE, 100, 6);
-      refreshGrid(); notify(); return;
+      if (ev.value > 0) { // press
+        if (st.mod === 'clear') { SEQ().clearStep(p, c.index); refreshGrid(); notify(); return; }
+        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyStep(p, st.dupFrom, c.index); refreshGrid(); notify(); return; }
+        st.heldPads.add(c.index);
+        if (st.heldKeys.size) st.heldKeys.forEach((vel, note) => SEQ().toggleStepNote(p, c.index, note, vel, 6)); // reverse order: keys already held
+        else if (!seqIsPlaying()) auditionStep(p, c.index, true); // audition when stopped
+        refreshGrid(); notify();
+      } else { // release
+        st.heldPads.delete(c.index);
+        if (!seqIsPlaying()) auditionStep(p, c.index, false);
+      }
+      return;
     }
 
     const res = engine.handle(st.rt, { group: c.group, index: c.index, value: ev.value });
