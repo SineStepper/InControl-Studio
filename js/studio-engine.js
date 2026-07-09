@@ -48,6 +48,12 @@
 
   const chanOf = (a, rt) => ((a.channel === 'default' ? rt.channel : a.channel) - 1) & 0x0f;
 
+  // Stable per-control state key (includes the bank for banked controls).
+  function keyFor(rt, group, index) {
+    const bank = group === 'button' ? rt.buttonBank : group === 'knob' ? rt.knobBank : 0;
+    return group + ':' + bank + ':' + index;
+  }
+
   /**
    * Produce outgoing MIDI messages for a continuous control move (0-127 raw).
    * Returns an array of byte arrays.
@@ -103,7 +109,7 @@
   function handle(rt, ev) {
     const a = assignmentFor(rt, ev.group, ev.index);
     if (!a || !a.enabled) return { out: [] };
-    const key = ev.group + ':' + (ev.group === 'button' ? rt.buttonBank + ':' : ev.group === 'knob' ? rt.knobBank + ':' : '') + ev.index;
+    const key = keyFor(rt, ev.group, ev.index);
 
     if (ev.group === 'knob' || ev.group === 'fader') {
       return { out: continuousOut(a, ev.value, rt) };
@@ -177,15 +183,27 @@
     const out = [];
     const m = rt.model;
     const push = (ledId, a, key) => { const { r, g, b } = sysex.hexTo7bit(ledFor(a, key, rt)); out.push(sysex.ledRgb(ledId, r, g, b, 'solid')); };
-    m.pads.hits.forEach((a, i) => push(38 + i, a, 'pad::' + i));
-    (m.buttonBanks[rt.buttonBank] || []).forEach((a, i) => { if (i < 16) push(4 + i, a, 'button:' + rt.buttonBank + ':' + i); });
-    m.faders.forEach((a, i) => push(54 + i, a, 'fader::' + i));
+    m.pads.hits.forEach((a, i) => push(38 + i, a, keyFor(rt, 'pad', i)));
+    (m.buttonBanks[rt.buttonBank] || []).forEach((a, i) => { if (i < 16) push(4 + i, a, keyFor(rt, 'button', i)); });
+    m.faders.forEach((a, i) => push(54 + i, a, keyFor(rt, 'fader', i)));
     return out;
+  }
+
+  /** Single LED SysEx for one control (or null if it has no RGB LED). */
+  function ledOne(rt, group, index) {
+    if (!sysex) return null;
+    const m = rt.model; let id = null, a = null;
+    if (group === 'pad') { id = 38 + index; a = m.pads.hits[index]; }
+    else if (group === 'button' && index < 16) { id = 4 + index; a = (m.buttonBanks[rt.buttonBank] || [])[index]; }
+    else if (group === 'fader') { id = 54 + index; a = m.faders[index]; }
+    if (id == null || !a) return null;
+    const { r, g, b } = sysex.hexTo7bit(ledFor(a, keyFor(rt, group, index), rt));
+    return sysex.ledRgb(id, r, g, b, 'solid');
   }
 
   global.SLMK = global.SLMK || {};
   global.SLMK.engine = {
-    makeRuntime, scale, continuousOut, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages,
+    makeRuntime, scale, continuousOut, switchOut, padVelocity, handle, assignmentFor, nav, NAV_MAP, ledMessages, ledOne, keyFor,
     _msg: { CC, NOTE_ON, NOTE_OFF, PC, CHAN_PRESSURE, POLY_AT, PITCH, SONG_POS, NRPN },
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.engine;

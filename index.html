@@ -111,6 +111,15 @@
       <button class="btn primary" id="studio-save">Save .json</button>
       <span id="studio-status" class="status"></span>
     </div>
+    <div class="toolbar se-bar">
+      <span class="fineprint">Live engine:</span>
+      <label class="se-lbl">SL in <select id="se-in"></select></label>
+      <label class="se-lbl">SL out <select id="se-out"></select></label>
+      <label class="se-lbl">Destination <select id="se-dest"></select></label>
+      <button class="btn primary" id="se-start">Start engine</button>
+      <button class="btn" id="se-refresh" title="Re-send all LEDs">↻ LEDs</button>
+      <span id="se-log" class="fineprint"></span>
+    </div>
     <div id="studio-body" class="studio-body"></div>
   </section>
 
@@ -165,12 +174,14 @@
   <script src="js/controls.js"></script>
   <script src="js/sltemplate.js"></script>
   <script src="js/studio-model.js"></script>
+  <script src="js/studio-engine.js"></script>
   <script src="js/incontrol.js"></script>
   <script src="js/midi.js"></script>
   <script src="js/tabs.js"></script>
   <script src="js/app.js"></script>
   <script src="js/template-editor.js"></script>
   <script src="js/studio-ui.js"></script>
+  <script src="js/studio-runtime.js"></script>
   <script src="js/bridge-web.js"></script>
 </body>
 </html>
