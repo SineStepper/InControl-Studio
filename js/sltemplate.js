@@ -47,13 +47,12 @@
     let seven = 0, eight = 0;
     while (seven < n) {
       out[eight] = 0;
-      let char = 0;
       for (let incr = 0; incr < 7; incr++) {
         if (seven + incr < n) {
-          char = data[seven + incr];
+          const char = data[seven + incr];
           out[eight + incr + 1] = 127 & char;
+          out[eight] |= (128 & char) >> (7 - incr); // MSB bit only for real data bytes
         }
-        out[eight] |= (128 & char) >> (7 - incr);
       }
       eight += 8;
       seven += 7;
