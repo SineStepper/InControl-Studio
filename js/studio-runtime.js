@@ -105,7 +105,11 @@
     return st.seqRt;
   }
   function tickInterval() { const t = (st.seqRt && st.seqRt.seq.tempo) || 120; return Math.max(4, Math.round(60000 / t / SEQ().PPQN)); }
+  // MIDI real-time clock to the SL so its arp/tempo features sync (#26): FA start,
+  // FC stop, F8 timing clock at 24 PPQN (once per clockTick).
+  function sendClock(byte) { if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]); }
   function clockTick() {
+    sendClock(0xf8); // 24-PPQN timing clock
     const events = SEQ().onTick(st.seqRt);
     events.forEach((e) => {
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
@@ -139,6 +143,7 @@
   function seqPlay() {
     const rt = ensureSeqRt(); if (!rt) return;
     SEQ().start(rt);
+    sendClock(0xfa); // MIDI Start
     if (st.clock) clearInterval(st.clock);
     st.clock = setInterval(clockTick, tickInterval());
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
@@ -146,6 +151,7 @@
   }
   function seqStop() {
     if (st.clock) { clearInterval(st.clock); st.clock = null; }
+    sendClock(0xfc); // MIDI Stop
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();

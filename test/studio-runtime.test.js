@@ -272,4 +272,14 @@ const muteAfter = lastLed(12);
 ok(muteAfter && muteAfter.r > 0 && muteAfter.b === 0 && muteBefore.r === muteAfter.r, '#19 Mute LED unchanged (orange) after button-bank nav');
 st.running = false;
 
+// --- #26 sequencer sends MIDI clock (Start/Stop) to the SL out port ---
+st.running = true;
+mark = sent.length;
+RT.seqPlay();
+ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xfa), '#26 Play sends MIDI Start (FA) to the SL out');
+mark = sent.length;
+RT.seqStop();
+ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xfc), '#26 Stop sends MIDI Stop (FC) to the SL out');
+st.running = false;
+
 console.log('\n' + n + ' integration assertions passed');
