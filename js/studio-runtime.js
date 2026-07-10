@@ -331,19 +331,24 @@
     }
     for (let i = SEQ().PATTERNS; i < 16; i++) ledHex(38 + i, '#000000');
   }
-  // Up/down arrow LEDs, all consistent (lit when there's somewhere to go, else off) (#12).
-  //   Pads Up/Down (0/1) and Screen Up/Down (62/63) -> pattern list position.
+  // Up/down arrow LEDs, all consistent (lit when there's somewhere to go, else off) (#12/#24).
+  //   Pads Up/Down (0/1)      -> pattern list position.
+  //   Screen Up/Down (62/63)  -> knob-bank position.
   //   Right Soft Up/Down (28/29) -> button-bank position.
   function refreshArrowLeds() {
     const t = curTrack(); if (!t) return;
     const AR = '#00aaff';
     const a = opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
-    ledHex(0, a.up ? AR : '#000000'); ledHex(62, a.up ? AR : '#000000');
-    ledHex(1, a.down ? AR : '#000000'); ledHex(63, a.down ? AR : '#000000');
-    const banks = (st.rt && st.rt.model.buttonBanks && st.rt.model.buttonBanks.length) || 1;
+    ledHex(0, a.up ? AR : '#000000');
+    ledHex(1, a.down ? AR : '#000000');
+    const kbanks = (st.rt && st.rt.model.knobBanks && st.rt.model.knobBanks.length) || 1;
+    const kb = (st.rt && st.rt.knobBank) || 0;
+    ledHex(62, kb > 0 ? AR : '#000000');            // Screen Up
+    ledHex(63, kb < kbanks - 1 ? AR : '#000000');   // Screen Down
+    const bbanks = (st.rt && st.rt.model.buttonBanks && st.rt.model.buttonBanks.length) || 1;
     const bb = (st.rt && st.rt.buttonBank) || 0;
     ledHex(28, bb > 0 ? AR : '#000000');            // Right Soft Up
-    ledHex(29, bb < banks - 1 ? AR : '#000000');    // Right Soft Down
+    ledHex(29, bb < bbanks - 1 ? AR : '#000000');   // Right Soft Down
   }
   // Scene 1 (Top) = Patterns view, Scene 2 (Bottom) = Steps view (#4).
   function refreshSceneLeds() {
@@ -508,10 +513,14 @@
       if (ev.value > 0) { st.stepPage = ev.control === 'Screen Down' ? 1 : 0; refreshOptionScreens(); log('steps ' + (st.stepPage ? '9-16' : '1-8')); }
       return;
     }
-    // Pads Up/Down AND Screen Up/Down page patterns (or Shift-transpose) — same behaviour (#12).
-    if (ev.control === 'Pads Up' || ev.control === 'Pads Down' || ev.control === 'Screen Up' || ev.control === 'Screen Down') {
-      const up = ev.control === 'Pads Up' || ev.control === 'Screen Up';
-      if (ev.value > 0) { if (st.shift) transposeCurrent(up ? 12 : -12); else pagePattern(up ? -1 : 1); }
+    // Pads Up/Down page patterns (or Shift-transpose an octave).
+    if (ev.control === 'Pads Up' || ev.control === 'Pads Down') {
+      if (ev.value > 0) { if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12); else pagePattern(ev.control === 'Pads Down' ? 1 : -1); }
+      return;
+    }
+    // Screen Up/Down page the knob banks (#24) — options mode's step-paging is handled above.
+    if (ev.control === 'Screen Up' || ev.control === 'Screen Down') {
+      if (ev.value > 0) { engine.nav(st.rt, ev.control === 'Screen Up' ? 'knobBank-' : 'knobBank+'); refreshKnobScreens(); refreshArrowLeds(); log('knob bank ' + ((st.rt.knobBank || 0) + 1)); }
       return;
     }
     // Clear / Duplicate held modifiers (for step editing); white on press, dim resting (#12)

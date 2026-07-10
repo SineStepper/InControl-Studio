@@ -112,7 +112,7 @@ function createWindow() {
     width: 1180,
     height: 900,
     backgroundColor: '#0e0f13',
-    title: 'SL MkIII Customizer',
+    title: 'InControl Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

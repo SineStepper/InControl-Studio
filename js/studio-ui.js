@@ -121,10 +121,11 @@
     if (!a) { panel.appendChild(el('p', { className: 'hint' }, 'Select a control to edit it.')); return panel; }
     const rerender = () => render();
     const field = (lbl, node) => { const f = el('div', { className: 'field' }, [el('label', {}, lbl)]); f.appendChild(node); return f; };
-    const num = (k, min, max) => { const n = el('input', { type: 'number', min, max, value: a[k] }); n.addEventListener('change', () => { a[k] = Math.max(min, Math.min(max, parseInt(n.value, 10) || 0)); render(); }); return n; };
-    const txt = (k, ml) => { const n = el('input', { type: 'text', value: a[k], maxLength: ml }); n.addEventListener('change', () => { a[k] = n.value; render(); }); return n; };
-    const chk = (k) => { const n = el('input', { type: 'checkbox', checked: a[k] }); n.addEventListener('change', () => { a[k] = n.checked; render(); }); return n; };
-    const sel = (k, opts) => { const n = el('select', {}); opts.forEach((o) => n.appendChild(el('option', { value: o, selected: o === a[k] }, o))); n.addEventListener('change', () => { a[k] = n.value; render(); }); return n; };
+    // change handlers also push to the hardware so the SL screens update live (#25)
+    const num = (k, min, max) => { const n = el('input', { type: 'number', min, max, value: a[k] }); n.addEventListener('change', () => { a[k] = Math.max(min, Math.min(max, parseInt(n.value, 10) || 0)); render(); pushLeds(); }); return n; };
+    const txt = (k, ml) => { const n = el('input', { type: 'text', value: a[k], maxLength: ml }); n.addEventListener('change', () => { a[k] = n.value; render(); pushLeds(); }); return n; };
+    const chk = (k) => { const n = el('input', { type: 'checkbox', checked: a[k] }); n.addEventListener('change', () => { a[k] = n.checked; render(); pushLeds(); }); return n; };
+    const sel = (k, opts) => { const n = el('select', {}); opts.forEach((o) => n.appendChild(el('option', { value: o, selected: o === a[k] }, o))); n.addEventListener('change', () => { a[k] = n.value; render(); pushLeds(); }); return n; };
 
     panel.appendChild(el('div', { className: 'insp-title' }, (a.name || a.cls) + (a.fixed ? '  (fixed)' : '')));
 

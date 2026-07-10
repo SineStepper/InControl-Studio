@@ -231,4 +231,12 @@ const rec = lastLed(32);
 ok(rec && rec.r > 60 && rec.g === 0, '#12 Record bright red when recording');
 st.recording = false; st.running = false;
 
+// --- #24 Screen Up/Down page knob banks ---
+global.SLMK.studio.addKnobBank(model); // now 2 knob banks
+st.rt.knobBank = 0; st.optionsMode = false;
+RT.handleControl(CC(0x52, 127)); // Screen Down -> knob bank +
+ok(st.rt.knobBank === 1, '#24 Screen Down advances the knob bank');
+RT.handleControl(CC(0x51, 127)); // Screen Up -> knob bank -
+ok(st.rt.knobBank === 0, '#24 Screen Up goes back a knob bank');
+
 console.log('\n' + n + ' integration assertions passed');

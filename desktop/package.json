@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "com.slmkiii.customizer",
-    "productName": "SL MkIII Customizer",
+    "productName": "InControl Studio",
     "npmRebuild": false,
     "asarUnpack": [
       "**/*.node",

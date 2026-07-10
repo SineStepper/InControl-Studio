@@ -1,4 +1,4 @@
-# Novation SL MkIII — LED Colour Customizer
+# InControl Studio — Novation SL MkIII
 
 A browser-based tool to set **custom RGB colours** on the Novation SL MkIII's
 pads, buttons and fader LEDs — the thing **Novation Components doesn't let you
