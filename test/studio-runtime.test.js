@@ -206,19 +206,25 @@ const scr = sent.slice(mark).filter((m) => m.id === 'out' && m.bytes[7] === 0x02
 ok(scr.some((m) => m.bytes[9] === 0x03 && m.bytes[10] === 0), '#8 knob turn sets the graphic-knob value (type 3, value obj 0)');
 ok(scr.some((m) => m.bytes[9] === 0x01 && m.bytes[10] === 1), '#8 knob turn sets the value number above the glyph (text type 1, obj 1)');
 
-// --- #10 keybed light guide is OFF by default (would collide with fader/function LEDs) ---
-st.padView = 'steps'; st.rt.padMode = 'sequencer';
-RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a note)
+// --- #48-51 keybed light guide via the palette Note method (Note-On ch16 = 0x9f),
+//     which addresses keys by note and doesn't collide with LED SysEx ids ---
+st.padView = 'steps'; st.rt.padMode = 'sequencer'; st.clock = null; st.keyGuide = true;
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a note 60)
 mark = sent.length;
-RT.handleControl([0x90, 0x60, 127]); // Pad 1 press -> auditions step 1 (stopped)
-RT.handleControl([0x80, 0x60, 0]);   // release
-ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] >= 54 && m.bytes[8] <= 114), '#10 key guide off: no key-LED (54-114) sysex emitted');
-RT.setKeyGuide(true);
+RT.handleControl([0x90, 0x60, 127]); // Pad 1 press -> auditions step 1 (stopped) -> key red
+ok(sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 60 && m.bytes[2] === 5), '#49 auditioned key lights red (palette note)');
+RT.handleControl([0x80, 0x60, 0]);   // release -> reverts to Part colour
 mark = sent.length;
-RT.handleControl([0x90, 0x60, 127]);
-ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 54 + (60 - 36)), '#10 key guide on: note 60 lights key LED id 78');
-RT.handleControl([0x80, 0x60, 0]);
+RT.handleKeys([0x90, 64, 100]); // played key on the keybed -> white
+ok(sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 64 && m.bytes[2] === 3), '#50 pressed key lights white (palette note)');
+RT.handleKeys([0x80, 64, 0]);
+// guide off -> no palette colour for played keys
 RT.setKeyGuide(false);
+mark = sent.length;
+RT.handleKeys([0x90, 64, 100]);
+ok(!sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 64 && m.bytes[2] !== 0), '#51 guide off: no palette note for a played key');
+RT.handleKeys([0x80, 64, 0]);
+RT.setKeyGuide(true);
 
 // --- automation: recording a control move stores its bytes in the pattern's lane ---
 const SEQ = global.SLMK.sequencer;

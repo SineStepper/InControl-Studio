@@ -20,7 +20,7 @@
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(), recEcho: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
-    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
+    mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
     audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null };
   const opts = () => global.SLMK.studioOptions;
@@ -256,11 +256,17 @@
       }
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
       sendMusic(st.destId, msg); // realtime — MIDI is never delayed
-      if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
+      if (channelAudible(e.channel + 1)) keyPlay(e.note, e.type === 'on'); // playing keys of a part = green (#48)
     });
     playAutomation();
     metronomeFlash(beatTick); // grid LED flash on the actual beat (realtime, visual)
-    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    // Only repaint the pad grid when the play-head STEP actually changes, not every
+    // tick — repainting 16 pads 24×/beat floods the SL, lagging the knob screens
+    // (#55) and glitching the step LED at high swing (#56).
+    if (st.rt && st.rt.padMode === 'sequencer') {
+      const head = st.seqRt.pos[st.gridTrack] ? st.seqRt.pos[st.gridTrack].pad : -1;
+      if (head !== st.lastGridHead) { st.lastGridHead = head; refreshGrid(); }
+    }
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
 
@@ -423,7 +429,7 @@
     st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
     refreshChannelLeds();
     if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
-    refreshArrowLeds(); refreshKnobScreens();
+    refreshArrowLeds(); refreshKnobScreens(); refreshKeyGuide(); // key guide follows the Part colour (#51)
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('channel ' + ch);
   }
@@ -464,19 +470,26 @@
     ledHex(54 + index, opts().valueColor((a.led && a.led.idle) || '#20c0ff', value, 127));
   }
 
-  // ---- Keybed light guide (SysEx ids 54-114; key index 0 = note LOW_NOTE) ----
-  // OFF by default: the Programmer's Guide assigns key LEDs the SAME SysEx ids as
-  // the Fader LEDs (54-61) and function LEDs (62-67), so lighting keys clobbers
-  // those. Opt in with SLMK.studioRuntime.setKeyGuide(true) to experiment.
-  const LOW_NOTE = 36; // configurable base note for the 61-key light guide
-  function keyLed(note, hex) {
-    if (!st.keyGuide) return;
-    const idx = note - LOW_NOTE;
-    if (idx < 0 || idx > 60) return; // outside the light guide range
-    ledHex(54 + idx, hex);
-    if (hex === '#000000') st.litKeys.delete(note); else st.litKeys.add(note);
+  // ---- Keybed light guide (palette-Note method) ----
+  // The RGB LED-SysEx ids for keys overlap the fader/function LEDs, so we light
+  // keys with the palette Note method instead (Note-On ch16 = Solid; data1 = key
+  // note, data2 = palette colour). That addresses keys by note number and doesn't
+  // collide with any LED SysEx id. Idle = the current Part's colour (#51); playing
+  // = green (#48), auditioned/held = red (#49), pressed = white (#50).
+  // Palette indices are best-effort for the SL MkIII colour table (tunable here).
+  const KEY_PAL = { off: 0, white: 3, green: 21, red: 5 };
+  const PART_PAL = [5, 9, 13, 21, 37, 45, 49, 53]; // per Part index (tunable)
+  const KEY_LO = 36, KEY_HI = 96;                   // light-guide note range
+  const partPalette = () => PART_PAL[(st.gridTrack || 0) % 8];
+  function lightKey(note, palette) {
+    if (!st.keyGuide || !st.slOutId || note < KEY_LO || note > KEY_HI) return;
+    midi.sendToOutput(st.slOutId, [0x9f, note & 0x7f, palette & 0x7f]); // ch16 Note-On = Solid palette
   }
-  const KEY_PLAY = '#3bd0ff', KEY_AUDITION = '#ff0000';
+  // Paint the whole light guide in the current Part's colour (idle state, #51).
+  function refreshKeyGuide() { for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, partPalette()); }
+  const keyPlay = (note, on) => lightKey(note, on ? KEY_PAL.green : partPalette());     // #48
+  const keyAudition = (note, on) => lightKey(note, on ? KEY_PAL.red : partPalette());   // #49
+  const keyPressed = (note, on) => lightKey(note, on ? KEY_PAL.white : partPalette());  // #50
 
   // ---- Press feedback (#5/#12): note pads show part colour (dim/bright), other buttons flash white ----
   function pressFlash(group, index, pressed) {
@@ -672,7 +685,7 @@
     const ch = trackChan();
     p.steps[step].notes.forEach((n) => {
       sendMusic(st.destId, on ? [0x90 | ch, n.note & 0x7f, n.velocity & 0x7f] : [0x80 | ch, n.note & 0x7f, 0]);
-      keyLed(n.note, on ? KEY_AUDITION : '#000000'); // red while auditioning/holding a step (#10)
+      keyAudition(n.note, on); // red while auditioning / holding a step (#49)
     });
   }
   function transposeCurrent(semi) { const p = gridPattern(); if (p && SEQ().transposePattern(p, semi)) { refreshGrid(); contentChanged(); log('transpose ' + (semi > 0 ? '+' : '') + semi); } }
@@ -685,6 +698,7 @@
     const isOn = status === 0x90 && vel > 0;
     const isOff = status === 0x80 || (status === 0x90 && vel === 0);
     sendMusic(st.destId, rechannel(bytes, trackChan())); // monitor through on the selected Part's channel (#15)
+    if (isOn || isOff) keyPressed(note, isOn); // pressed keys light white, revert to Part colour on release (#50)
     if (isOn) {
       st.heldKeys.set(note, vel);
       // Micro-step entry: in options mode, hold a micro-step button + play keys to
@@ -725,20 +739,21 @@
       if (microRaw >= 6) { step = nextStep(); micro = 0; } else micro = microRaw;
     } else if (st.seqRt) {
       // Plain nearest-step quantise: round symmetrically to the closer step
-      // boundary, so timing is predictable and never biased ahead or behind.
-      if (sub * 2 >= stepTicks) step = nextStep();
+      // boundary — but don't round a note played near the END of the pattern
+      // FORWARD across the loop, or it lands on step 1 as a phantom note (#44).
+      const hi = Math.max(p.start, p.end == null ? 15 : p.end);
+      if (sub * 2 >= stepTicks && pos.pad !== hi) step = nextStep();
     }
     const s = p.steps[step];
     let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
     if (!n) { n = { note, velocity, gate: 6, micro }; s.notes.push(n); }
     st.recRef.set(note, { n, startTick: st.seqRt.tick });
-    // We already monitored this key live through the Part's channel. Suppress the
-    // sequencer from echoing the just-recorded note again before the pattern loops
-    // (which would sound as the same note a second time, slightly delayed).
+    // We already monitored this key live. Suppress ONLY the immediate re-trigger
+    // (within ~1 step) so we don't hear the same hit twice back-to-back; a note
+    // recorded onto a step further ahead still plays this cycle when the head
+    // reaches it — no waiting a whole loop to hear the edit (#43).
     const t = curTrack(); const ch = t ? (t.channel - 1) & 0x0f : 0;
-    const pt = patternTicks(p);
-    const until = st.seqRt.tick - (st.seqRt.tick % pt) + pt; // end of the current pattern cycle
-    st.recEcho.set(ch + ':' + note, until);
+    st.recEcho.set(ch + ':' + note, st.seqRt.tick + stepTicks);
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     contentChanged(); log('● rec ' + note + ' @step ' + (step + 1));
   }
@@ -953,6 +968,7 @@
     refreshTransport();
     refreshButtonArea();
     refreshChannelLeds();
+    refreshKeyGuide(); // light the keybed in the current Part's colour (#51)
     for (let i = 0; i < 8; i++) refreshFaderLed(i, 0); // faders start dim (value unknown until moved)
     st.rt.channel = st.activeChannel;
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
@@ -1051,7 +1067,7 @@
         return devs.filter((d) => d.kind === 'audiooutput').map((d) => ({ id: d.deviceId, name: d.label || 'Output' }));
       } catch (e) { return []; }
     },
-    setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
+    setKeyGuide: (on) => { const was = st.keyGuide; st.keyGuide = !!on; if (on && !was) refreshKeyGuide(); else if (!on && st.slOutId) { for (let nt = KEY_LO; nt <= KEY_HI; nt++) midi.sendToOutput(st.slOutId, [0x9f, nt & 0x7f, KEY_PAL.off]); } },
     refreshSurface,
     state: () => st,
   };
