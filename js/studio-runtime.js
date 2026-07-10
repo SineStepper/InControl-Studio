@@ -16,7 +16,7 @@
   const SEQ = () => global.SLMK.sequencer;
   const studio = () => global.SLMK.studio;
 
-  const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
+  const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, keysOutId: null, log: [],
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(), recEcho: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
@@ -133,7 +133,13 @@
   }
   // MIDI real-time clock to the SL so its arp/tempo features sync (#26): FA start,
   // FC stop, F8 timing clock at 24 PPQN (once per clockTick).
-  function sendClock(byte) { if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]); }
+  // Send MIDI real-time clock to every SL port that could be driving a tempo-synced
+  // feature: the InControl out AND the SL's main port (whose keyboard arp follows
+  // external clock). The SL must have its Clock Source set to receive external clock.
+  function sendClock(byte) {
+    if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]);
+    if (st.keysOutId && st.keysOutId !== st.slOutId) midi.sendToOutput(st.keysOutId, [byte]);
+  }
   // ---- Metronome (#14): Ping/Tick/Pop click on each 1/4 + a green Grid flash ----
   function metronomeTick(tick) {
     const m = model(); const met = m && m.sequencer && m.sequencer.metronome;
@@ -220,8 +226,14 @@
       refreshFaderLed(index, val);
     }
   }
+  // All-Notes-Off (CC123) to every channel on the destination — flushes anything
+  // left hanging. Bypasses the mute gate.
+  function panicAllChannels() { if (!st.destId) return; for (let ch = 0; ch < 16; ch++) midi.sendToOutput(st.destId, [0xb0 | ch, 123, 0]); }
   function seqPlay() {
     const rt = ensureSeqRt(); if (!rt) return;
+    // Clear any hung notes on all 16 channels BEFORE the clock starts, so this
+    // never lands on top of (and cuts off) the sequencer's first note (#29).
+    panicAllChannels();
     SEQ().start(rt);
     sendClock(0xfa); // MIDI Start
     stopClock();
@@ -515,6 +527,23 @@
     if (screenTimer != null) return;
     screenTimer = setTimeout(() => { screenTimer = null; refreshOptionScreens(); }, 16);
   }
+  // Coalesce control-surface feedback (fader-LED brightness, knob-glyph values) so
+  // moving several faders/knobs at once can't flood the SL with SysEx and starve
+  // the clock — only the latest value per control is sent, ~once per frame (#22).
+  let surfaceTimer = null;
+  const pendingFaderLed = new Map(); // fader index -> latest value
+  const pendingKnobVal = new Set();  // knob indices needing a value redraw
+  const raf = (cb) => (global.requestAnimationFrame ? global.requestAnimationFrame(cb) : setTimeout(cb, 16));
+  function flushSurface() {
+    surfaceTimer = null;
+    pendingFaderLed.forEach((val, idx) => refreshFaderLed(idx, val)); pendingFaderLed.clear();
+    pendingKnobVal.forEach((idx) => sendKnobValue(idx)); pendingKnobVal.clear();
+  }
+  function scheduleSurface() { if (surfaceTimer == null) surfaceTimer = raf(flushSurface); }
+  // Coalesce only where a frame clock exists (browser/Electron); send straight
+  // through otherwise (Node tests) so behaviour stays synchronous and testable.
+  function queueFaderLed(index, value) { if (!global.requestAnimationFrame) return refreshFaderLed(index, value); pendingFaderLed.set(index, value); scheduleSurface(); }
+  function queueKnobValue(index) { if (!global.requestAnimationFrame) return sendKnobValue(index); pendingKnobVal.add(index); scheduleSurface(); }
   // Repaint the whole control surface (used after an on-screen change like a Part colour).
   function refreshSurface() {
     if (!st.running || !st.slOutId) return;
@@ -773,8 +802,8 @@
     res.out.forEach((mb) => sendMusic(st.destId, mb));
     // Automation: while recording+playing, capture the emitted value for this control (#automation).
     if (res.out.length && res.out[0]) recordAutomation(c.group, c.index, res.out[res.out.length - 1]);
-    if (c.group === 'knob') sendKnobValue(c.index); // show adjustment on the SL screens
-    if (c.group === 'fader') refreshFaderLed(c.index, ev.value); // LED brightness tracks value (#2)
+    if (c.group === 'knob') queueKnobValue(c.index); // show adjustment on the SL screens (coalesced #22)
+    if (c.group === 'fader') queueFaderLed(c.index, ev.value); // LED brightness tracks value (#2), coalesced (#22)
     if (c.group === 'pad') pressFlash('pad', c.index, ev.value > 0); // press-to-lighten in instrument mode (#5)
     else if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }
     if (res.out.length) log('▶ ' + ev.control);
@@ -837,6 +866,7 @@
     if (!st.slInId) st.slInId = midi.guessDefaultInputId();
     if (!st.slOutId) st.slOutId = midi.guessDefaultOutputId();
     if (!st.keysInId) st.keysInId = midi.guessDefaultKeysInputId();
+    if (!st.keysOutId && midi.guessDefaultKeysOutputId) st.keysOutId = midi.guessDefaultKeysOutputId();
     if (st.slInId && midi.snapshot().connected) start();
   }
   // Settings drawer (cog top-right) + theme toggle (#8, #10).

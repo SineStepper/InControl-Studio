@@ -32,6 +32,9 @@
   const isInControlInput = (n) => looksLikeSLMkIII(n) && (looksLikeInControl(n) || /midiin\s*2/i.test(n));
   const isInControlOutput = (n) => looksLikeSLMkIII(n) && (looksLikeInControl(n) || /midiout\s*2/i.test(n));
   const isKeysInput = (n) => looksLikeSLMkIII(n) && !looksLikeInControl(n) && !/midi(in|out)\s*[23]/i.test(n);
+  // The SL's *main* (non-InControl) output — the port its own keyboard arp and
+  // tempo-driven features follow for external MIDI clock (#26).
+  const isKeysOutput = (n) => looksLikeSLMkIII(n) && !looksLikeInControl(n) && !/midi(in|out)\s*[23]/i.test(n);
 
   function listOutputs() {
     if (!state.access) return [];
@@ -145,12 +148,19 @@
     const o = pickDefault();
     return o ? o.id : null;
   }
+  // The SL's main (non-InControl) output — send MIDI clock here so the keyboard
+  // arp syncs (#26). Null if the port isn't exposed separately.
+  function guessDefaultKeysOutputId() {
+    const outs = listOutputs();
+    const pick = outs.find((o) => isKeysOutput(o.name)) || outs.find((o) => looksLikeSLMkIII(o.name) && !looksLikeInControl(o.name));
+    return pick ? pick.id : null;
+  }
 
   global.SLMK = global.SLMK || {};
   global.SLMK.midi = {
     connect, selectOutputById, send, snapshot, onChange,
     outputPorts, inputPorts, sendToOutput, subscribeInput,
-    guessDefaultInputId, guessDefaultOutputId, guessDefaultKeysInputId,
+    guessDefaultInputId, guessDefaultOutputId, guessDefaultKeysInputId, guessDefaultKeysOutputId,
   };
 
   // ---------------------------------------------------------------------------
@@ -188,6 +198,7 @@
     const guessOut = () => { const o = st.outputs.find((x) => icOut(x.name)) || st.outputs.find((x) => inControl(x.name)) || st.outputs[0]; return o ? o.id : null; };
     const guessIn = () => { const i = st.inputs.find((x) => icIn(x.name)) || st.inputs.find((x) => inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
     const guessKeys = () => { const i = st.inputs.find((x) => keys(x.name)) || st.inputs.find((x) => isSL(x.name) && !inControl(x.name)) || st.inputs.find((x) => !inControl(x.name)) || st.inputs[0]; return i ? i.id : null; };
+    const guessKeysOut = () => { const o = st.outputs.find((x) => keys(x.name)) || st.outputs.find((x) => isSL(x.name) && !inControl(x.name)); return o ? o.id : null; };
 
     g.SLMK = g.SLMK || {};
     g.SLMK.midi = {
@@ -211,6 +222,7 @@
       guessDefaultInputId: guessIn,
       guessDefaultOutputId: guessOut,
       guessDefaultKeysInputId: guessKeys,
+      guessDefaultKeysOutputId: guessKeysOut,
     };
   }
 })(window);
