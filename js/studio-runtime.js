@@ -21,7 +21,8 @@
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(), recEcho: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
-    heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0 };
+    heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
+    audioLatencyMs: 0, metroSyncMs: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -158,11 +159,29 @@
     playMetronomeSound(met.sound || 'Ping', accent);
     if (st.slOutId) { ledHex(64, '#00ff00'); clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90); }
   }
+  // Create (and keep warm) the metronome's AudioContext at low latency, and cache
+  // its output latency so we can align the sequencer's MIDI notes to the click.
+  function ensureAudio() {
+    try {
+      const AC = global.AudioContext || global.webkitAudioContext; if (!AC) return null;
+      if (!st.audioCtx) { try { st.audioCtx = new AC({ latencyHint: 'interactive' }); } catch (e) { st.audioCtx = new AC(); } }
+      const ac = st.audioCtx;
+      if (ac.state === 'suspended' && ac.resume) ac.resume();
+      st.audioLatencyMs = Math.round(((ac.baseLatency || 0) + (ac.outputLatency || 0)) * 1000);
+      return ac;
+    } catch (e) { return null; }
+  }
+  const metroOn = () => { const m = model(); return !!(m && m.sequencer && m.sequencer.metronome && m.sequencer.metronome.on); };
+  // How much to delay the sequencer's note output so it lands together with the
+  // Web-Audio metronome click (which is delayed by the audio output latency). Only
+  // while the metronome is on — otherwise notes go out immediately (lowest latency).
+  // A manual override (metroSyncMs) wins when set.
+  function outputDelayMs() { if (st.metroSyncMs != null) return st.metroSyncMs; return metroOn() ? (st.audioLatencyMs || 0) : 0; }
+  function noteWhen() { const d = outputDelayMs(); return (d > 0 && global.performance && global.performance.now) ? global.performance.now() + d : undefined; }
   function playMetronomeSound(sound, accent) {
     try {
-      const AC = global.AudioContext || global.webkitAudioContext; if (!AC) return;
-      if (!st.audioCtx) st.audioCtx = new AC();
-      const ac = st.audioCtx, t = ac.currentTime, gain = ac.createGain(); gain.connect(ac.destination);
+      const ac = ensureAudio(); if (!ac) return;
+      const t = ac.currentTime, gain = ac.createGain(); gain.connect(ac.destination);
       const osc = ac.createOscillator(); osc.connect(gain);
       if (sound === 'Tick') { osc.type = 'square'; osc.frequency.value = accent ? 2200 : 1600; gain.gain.setValueAtTime(accent ? 0.4 : 0.25, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); }
       else if (sound === 'Pop') { osc.type = 'sine'; osc.frequency.value = accent ? 520 : 380; gain.gain.setValueAtTime(accent ? 0.6 : 0.4, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11); }
@@ -174,6 +193,7 @@
   function clockTick() {
     sendClock(0xf8); // 24-PPQN timing clock
     const beatTick = st.seqRt.tick;
+    const when = noteWhen(); // schedule notes to land with the metronome click (latency-aligned)
     const events = SEQ().onTick(st.seqRt);
     events.forEach((e) => {
       // Drop the sequencer's own echo of a note we just recorded + monitored live
@@ -184,7 +204,7 @@
         st.recEcho.delete(ek);                   // window elapsed — play normally from now on
       }
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
-      sendMusic(st.destId, msg);
+      sendMusic(st.destId, msg, when);
       if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
     });
     playAutomation();
@@ -234,6 +254,7 @@
     // Clear any hung notes on all 16 channels BEFORE the clock starts, so this
     // never lands on top of (and cuts off) the sequencer's first note (#29).
     panicAllChannels();
+    if (metroOn()) ensureAudio(); // warm the click's audio + measure latency before step 1
     SEQ().start(rt);
     sendClock(0xfa); // MIDI Start
     stopClock();
@@ -288,7 +309,8 @@
     return true;
   }
   // Send a channel-voice message only if its channel isn't muted/soloed out.
-  function sendMusic(id, msg) {
+  // `when` (optional) schedules delivery for metronome latency-alignment.
+  function sendMusic(id, msg, when) {
     if (!id) return;
     const s = msg[0] & 0xf0;
     if (s >= 0x80 && s <= 0xef) {
@@ -297,7 +319,7 @@
       const isNoteOff = s === 0x80 || (s === 0x90 && msg[2] === 0);
       if (!isNoteOff && !channelAudible((msg[0] & 0x0f) + 1)) return;
     }
-    midi.sendToOutput(id, msg);
+    midi.sendToOutput(id, msg, when);
   }
   // Send All-Notes-Off (CC 123) to a channel — bypasses the mute gate.
   function allNotesOff(ch0) { if (st.destId) midi.sendToOutput(st.destId, [0xb0 | (ch0 & 0x0f), 123, 0]); }
@@ -920,6 +942,10 @@
     handleControl: (bytes) => onMsg(bytes),
     handleKeys: (bytes) => onKeys(bytes),
     tick: () => clockTick(), // drive one 24-PPQN tick (tests)
+    // Metronome/audio sync: null = auto (measured audio latency); a number forces
+    // that many ms of sequencer-output delay so notes line up with the click.
+    setSyncOffset: (ms) => { st.metroSyncMs = ms == null || ms === '' ? null : Math.max(0, +ms || 0); },
+    syncOffset: () => (st.metroSyncMs != null ? st.metroSyncMs : st.audioLatencyMs || 0),
     setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
     refreshSurface,
     state: () => st,

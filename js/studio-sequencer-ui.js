@@ -85,6 +85,13 @@
     mOn.addEventListener('change', () => { met.on = mOn.checked; });
     set.appendChild(el('label', { className: 'seq-f' }, ['Metronome ', mOn]));
     set.appendChild(selField('Sound', [['Ping', 'Ping'], ['Tick', 'Tick'], ['Pop', 'Pop']], met.sound || 'Ping', (v) => { met.sound = v; }));
+    // Click sync (#): delay the sequencer's note output so it lines up with the
+    // metronome click. Blank = auto (measured audio latency); raise it if the
+    // sequencer still sounds ahead of the click on your setup.
+    const syncInp = el('input', { type: 'number', min: 0, max: 200, value: met.syncMs == null ? '' : met.syncMs, placeholder: 'auto' });
+    syncInp.addEventListener('change', () => { const v = syncInp.value === '' ? null : Math.max(0, Math.min(200, parseInt(syncInp.value, 10) || 0)); met.syncMs = v; if (RT() && RT().setSyncOffset) RT().setSyncOffset(v); });
+    set.appendChild(el('label', { className: 'seq-f', title: 'Delay notes to line up with the metronome click. Blank = automatic.' }, ['Click sync ms ', syncInp]));
+    if (RT() && RT().setSyncOffset && met.syncMs != null) RT().setSyncOffset(met.syncMs); // apply stored override on render
     wrap.appendChild(set);
 
     // 16-step grid (2 rows of 8)

@@ -31,8 +31,9 @@ global.SLMK.midi = {
   guessDefaultInputId: () => 'in', guessDefaultOutputId: () => 'out', guessDefaultKeysInputId: () => 'keys',
   snapshot: () => ({ connected: true }),
   subscribeInput: () => () => {}, onChange: () => {},
-  sendToOutput: (id, bytes) => sent.push({ id, bytes }),
+  sendToOutput: (id, bytes, when) => sent.push({ id, bytes, when }),
 };
+global.performance = { now: () => 1000 };
 
 // a model with a sequencer
 const model = global.SLMK.studio.newModel();
@@ -346,5 +347,26 @@ RT.seqPlay();
 const panicChans = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0xb0 && m.bytes[1] === 123).map((m) => m.bytes[0] & 0x0f));
 ok(panicChans.size === 16, '#29 Play panics all 16 channels (got ' + panicChans.size + ')');
 RT.seqStop();
+
+// --- metronome latency alignment: with a sync offset, sequencer notes are
+//     scheduled (timestamped) so they land with the click; note-offs too ---
+st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false;
+model.sequencer.tracks[0].patterns[0] = SEQ.newPattern();
+model.sequencer.tracks[0].patterns[0].steps[0].notes = [{ note: 60, velocity: 100, gate: 6 }];
+model.sequencer.metronome = { on: true, sound: 'Ping' };
+RT.setSyncOffset(40); // force 40 ms of output delay
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1; st.gridTrack = 0;
+mark = sent.length;
+RT.tick(); // process tick 0 -> step 1 note-on
+const on0 = sent.slice(mark).find((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 60);
+ok(on0 && on0.when === 1040, 'note is scheduled 40ms ahead to align with the metronome (when=1040)');
+// with the offset cleared and metronome off, notes go out immediately (no timestamp)
+RT.setSyncOffset(0); model.sequencer.metronome.on = false;
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+mark = sent.length;
+RT.tick();
+const on1 = sent.slice(mark).find((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 60);
+ok(on1 && on1.when === undefined, 'note goes out immediately when the metronome/offset is off');
+st.clock = null; st.seqRt.playing = false; RT.setSyncOffset(null);
 
 console.log('\n' + n + ' integration assertions passed');

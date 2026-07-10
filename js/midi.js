@@ -110,10 +110,12 @@
   function outputPorts() { return portList(listOutputs()); }
   function inputPorts() { return portList(listInputs()); }
 
-  /** Send bytes to a specific output by id (for the bridge's colour + remap paths). */
-  function sendToOutput(id, bytes) {
+  /** Send bytes to a specific output by id (for the bridge's colour + remap paths).
+   *  `when` (optional) is a DOMHighResTimeStamp for scheduled delivery (Web MIDI
+   *  honours it natively) — used to latency-align the sequencer with the metronome. */
+  function sendToOutput(id, bytes, when) {
     const o = listOutputs().find((p) => p.id === id);
-    if (o) o.send(bytes);
+    if (o) (when != null ? o.send(bytes, when) : o.send(bytes));
   }
 
   /** Subscribe to a specific input's messages. Returns an unsubscribe fn. */
@@ -207,7 +209,11 @@
       onChange: (cb) => st.listeners.push(cb),
       selectOutputById: (id) => { st.selectedId = id; return { id, name: id }; },
       send: (bytes) => { if (st.selectedId) E.send(st.selectedId, bytes); },
-      sendToOutput: (id, bytes) => { if (id) E.send(id, bytes); },
+      sendToOutput: (id, bytes, when) => {
+        if (!id) return;
+        const delay = (when != null && g.performance) ? when - g.performance.now() : 0;
+        if (delay > 1) setTimeout(() => E.send(id, bytes), delay); else E.send(id, bytes);
+      },
       outputPorts: () => st.outputs.slice(),
       inputPorts: () => st.inputs.slice(),
       subscribeInput: (id, handler) => {
