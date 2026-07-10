@@ -15,7 +15,7 @@
   const T = global.SLMK.sltemplate;
 
   let model = S.newModel();
-  const ui = { view: 'editor', tab: 'rotary', knobBank: 0, buttonBank: 1, padMode: 'hits', sel: null };
+  const ui = { view: 'editor', tab: 'rotary', knobBank: 0, buttonBank: 1, padMode: 'hits', sel: null, templateSort: 'recent', sessionSort: 'recent' };
   let pack = null, packSlot = -1, packSessionSlot = -1;
   let clipboard = null;               // Edit ▸ Copy/Cut/Paste: a cloned control assignment
   const undoStack = [], redoStack = [];
@@ -35,7 +35,11 @@
   function snapshot() { undoStack.push(S.toJSON(model)); if (undoStack.length > 80) undoStack.shift(); redoStack.length = 0; }
   function undo() { if (!undoStack.length) return; redoStack.push(S.toJSON(model)); model = S.fromJSON(undoStack.pop()); afterModelSwap(); setStatus('Undo.', 'ok'); }
   function redo() { if (!redoStack.length) return; undoStack.push(S.toJSON(model)); model = S.fromJSON(redoStack.pop()); afterModelSwap(); setStatus('Redo.', 'ok'); }
-  function afterModelSwap() { ui.sel = null; clampBanks(); syncName(); render(); pushLeds(); }
+  // After a JSON round-trip (undo/redo/load) the active template's sections are
+  // no longer the SAME objects as model.knobBanks/… — re-point them so editing
+  // continues to write through to the template library (#32).
+  function relinkTemplate() { S.ensureTemplates(model); if (model.activeTemplate) S.selectTemplate(model, model.activeTemplate); }
+  function afterModelSwap() { relinkTemplate(); ui.sel = null; clampBanks(); syncName(); render(); pushLeds(); }
   function clampBanks() {
     ui.knobBank = Math.min(ui.knobBank, model.knobBanks.length - 1);
     ui.buttonBank = Math.min(ui.buttonBank, model.buttonBanks.length - 1);
@@ -100,6 +104,11 @@
     }
     const host = $('#editor-body'); if (!host) return;
     host.innerHTML = '';
+    S.ensureTemplates(model);
+
+    // Two columns: the template library (left) + the Components-style editor (right).
+    const twoCol = el('div', { className: 'editor-2col' });
+    twoCol.appendChild(templateColumn());
 
     const controls = currentControls();
     if (ui.sel == null && controls.length) ui.sel = 0;
@@ -125,7 +134,57 @@
     cols.appendChild(inspector(controls[ui.sel] ? controls[ui.sel].ref : null)); // wide left column
     cols.appendChild(bankList());                                               // thin scrollable bank list (right)
     layout.appendChild(cols);
-    host.appendChild(layout);
+    twoCol.appendChild(layout);
+    host.appendChild(twoCol);
+  }
+
+  // Left column (#32): the template library. New Template + sorting at the top,
+  // then the list of templates — click to edit, dots 1-8 map it to a Part.
+  const PART_COLORS = ['#ff2d2d', '#ff8c00', '#ffd000', '#38d430', '#00c8c8', '#2b7bff', '#8a4bff', '#ff3bce'];
+  function templateColumn() {
+    const aside = el('aside', { className: 'lib-col panel' });
+    const head = el('div', { className: 'lib-head' });
+    head.appendChild(el('div', { className: 'lib-title' }, 'Templates'));
+    const nu = el('button', { className: 'btn primary lib-new' }, '+ New'); nu.addEventListener('click', () => { snapshot(); S.addTemplate(model); ui.sel = null; syncName(); render(); pushLeds(); }); head.appendChild(nu);
+    aside.appendChild(head);
+    // sorting
+    const sortSel = el('select', { className: 'lib-sort' });
+    [['recent', 'Sort: Recent'], ['name', 'Sort: Name']].forEach(([v, t]) => sortSel.appendChild(el('option', { value: v, selected: v === ui.templateSort }, t)));
+    sortSel.addEventListener('change', () => { ui.templateSort = sortSel.value; render(); });
+    aside.appendChild(sortSel);
+
+    model.partTemplates = model.partTemplates || new Array(8).fill(null);
+    const list = el('div', { className: 'lib-scroll' });
+    templatesSorted().forEach((t) => {
+      const row = el('div', { className: 'lib-item' + (t.id === model.activeTemplate ? ' active' : '') });
+      const nm = el('button', { className: 'lib-name', title: 'Edit this template' }, t.name);
+      nm.addEventListener('click', () => { snapshot(); S.selectTemplate(model, t.id); ui.knobBank = 0; ui.buttonBank = 1; ui.sel = null; syncName(); render(); pushLeds(); });
+      row.appendChild(nm);
+      const tools = el('div', { className: 'lib-tools' });
+      const ren = el('button', { className: 'lib-mini', title: 'Rename' }, '✎'); ren.addEventListener('click', () => { const n = prompt('Template name', t.name); if (n) { snapshot(); S.renameTemplate(model, t.id, n.slice(0, 24)); syncName(); render(); } });
+      const del = el('button', { className: 'lib-mini', title: 'Delete' }, '🗑'); del.addEventListener('click', () => { if (model.templates.length > 1) { snapshot(); S.removeTemplate(model, t.id); ui.sel = null; syncName(); render(); pushLeds(); } });
+      tools.append(ren, del); row.appendChild(tools);
+      // part-map dots 1-8
+      const dots = el('div', { className: 'lib-parts' });
+      for (let p = 0; p < 8; p++) {
+        const mapped = model.partTemplates[p] === t.id;
+        const d = el('button', { className: 'lib-dot' + (mapped ? ' on' : ''), title: 'Map to Part ' + (p + 1) }, String(p + 1));
+        d.style.setProperty('--pc', PART_COLORS[p]);
+        d.addEventListener('click', () => { snapshot(); if (mapped) S.unmapPart(model, p); else S.mapTemplateToPart(model, t.id, p); render(); pushLeds(); });
+        dots.appendChild(d);
+      }
+      row.appendChild(dots);
+      list.appendChild(row);
+    });
+    aside.appendChild(list);
+    aside.appendChild(el('p', { className: 'fineprint lib-hint' }, 'Click a template to edit it; numbers 1-8 map it to a Part.'));
+    return aside;
+  }
+  function templatesSorted() {
+    const arr = (model.templates || []).slice();
+    if (ui.templateSort === 'name') arr.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    else arr.sort((a, b) => (b.order || 0) - (a.order || 0));
+    return arr;
   }
 
   // Thin scrollable list of banks / modes for the current tab (replaces the old
@@ -269,12 +328,12 @@
   // assignments and extra banks are preserved.
   function importTemplate(file) {
     const r = new FileReader();
-    r.onload = () => { try { snapshot(); S.mergeTemplate(model, T.parse(Array.from(new Uint8Array(r.result)))); clampBanks(); ui.sel = null; syncName(); render(); pushLeds(); setStatus('Merged template "' + model.name + '" into the setup ✓', 'ok'); } catch (e) { setStatus(e.message, 'warn'); } };
+    r.onload = () => { try { snapshot(); const tpl = T.parse(Array.from(new Uint8Array(r.result))); const t = S.addTemplate(model, { from: S.fromTemplate(tpl), name: tpl.name || 'Imported' }); clampBanks(); ui.sel = null; syncName(); render(); pushLeds(); setStatus('Imported template "' + t.name + '" into the library ✓', 'ok'); } catch (e) { setStatus(e.message, 'warn'); } };
     r.readAsArrayBuffer(file);
   }
   function loadJson(file) {
     const r = new FileReader();
-    r.onload = () => { try { snapshot(); model = S.fromJSON(r.result); ui.knobBank = 0; ui.buttonBank = Math.min(1, model.buttonBanks.length - 1); ui.sel = null; syncName(); render(); pushLeds(); setStatus('Loaded setup ✓', 'ok'); } catch (e) { setStatus(e.message, 'warn'); } };
+    r.onload = () => { try { snapshot(); model = S.fromJSON(r.result); relinkTemplate(); ui.knobBank = 0; ui.buttonBank = Math.min(1, model.buttonBanks.length - 1); ui.sel = null; syncName(); render(); pushLeds(); setStatus('Loaded setup ✓', 'ok'); } catch (e) { setStatus(e.message, 'warn'); } };
     r.readAsText(file);
   }
   function download(name, text, type) { const url = URL.createObjectURL(new Blob([text], { type: type || 'application/json' })); const a = el('a', { href: url, download: name }); document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
@@ -400,8 +459,12 @@
         const sessions = global.SLMK.session.decodeSyx(new Uint8Array(r.result));
         if (!pack) pack = { name: 'Sessions', product: 'sl-mkiii', version: '2.0', color: '', templates: [], sessions: [] };
         pack.sessions = sessions.map((s) => ({ name: s.name, bytes: s.body }));
-        packSessionSlot = -1; showPackBar();
-        setStatus('Imported ' + sessions.length + ' sessions from .syx.', 'ok');
+        // Add each imported Components session to the library so it appears in the
+        // Sequencer's Sessions column and can be played back (#33).
+        S.ensureSessions(model);
+        sessions.forEach((s) => { try { S.addImportedSession(model, s.name || 'Imported', s.body); } catch (e) {} });
+        packSessionSlot = -1; showPackBar(); render();
+        setStatus('Imported ' + sessions.length + ' Components sessions into the library.', 'ok');
       } catch (e) { setStatus(e.message, 'warn'); }
     };
     r.readAsArrayBuffer(file);
@@ -423,9 +486,9 @@
     if (!pack) return;
     const i = +$('#pack-templates').value;
     const t = pack.templates[i]; if (!t) return;
-    snapshot(); S.mergeTemplate(model, T.parse(Array.from(t.bytes)));
+    snapshot(); const tpl = T.parse(Array.from(t.bytes)); const added = S.addTemplate(model, { from: S.fromTemplate(tpl), name: tpl.name || t.name || 'Imported' });
     packSlot = i; clampBanks(); ui.sel = null; syncName(); render(); pushLeds();
-    setStatus('Merged "' + (t.name || model.name) + '" from pack into the setup.', 'ok');
+    setStatus('Added "' + added.name + '" from pack to the template library.', 'ok');
   }
   function loadPackSession() {
     if (!pack) return;

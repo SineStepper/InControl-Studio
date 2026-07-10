@@ -326,6 +326,34 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .bl-add { margin-top: 8px; width: 100%; background: none; color: var(--accent); border: 1px dashed var(--line); border-radius: 7px; padding: 7px; font: inherit; font-size: 12px; cursor: pointer; }
 .bl-add:hover { border-color: var(--accent); }
 
+/* ===================== Library columns (#32 / #33) ==================== */
+.editor-2col { display: grid; grid-template-columns: 240px 1fr; gap: 16px; padding: 14px 18px 22px; align-items: start; }
+.seq-2col { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
+.seq-main { min-width: 0; }
+@media (max-width: 900px) { .editor-2col, .seq-2col { grid-template-columns: 1fr; } }
+/* the editor's inner comp-layout shouldn't re-pad now that the column wraps it */
+.editor-2col .comp-layout { padding: 0; }
+
+.lib-col { padding: 12px; position: sticky; top: 12px; }
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.lib-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.lib-new { padding: 5px 9px; font-size: 12px; }
+.lib-sort { width: 100%; margin-bottom: 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; font-size: 12px; }
+.lib-scroll { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.lib-item { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 7px 8px; display: flex; flex-direction: column; gap: 5px; }
+.lib-item.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.lib-item > .lib-name { text-align: left; background: none; border: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+.lib-item > .lib-name:hover { color: var(--accent); }
+.lib-tools { display: flex; gap: 4px; }
+.lib-mini { background: none; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 11px; padding: 2px 6px; cursor: pointer; }
+.lib-mini:hover { color: var(--text); border-color: var(--accent); }
+.lib-parts { display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+.lib-dot { font-size: 10px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 0; cursor: pointer; }
+.lib-dot:hover { border-color: var(--pc, var(--accent)); color: var(--text); }
+.lib-dot.on { background: var(--pc, var(--accent)); color: #06070a; border-color: transparent; font-weight: 700; }
+.lib-sub { margin: 0; }
+.lib-hint { margin: 8px 0 0; }
+
 /* ---- Toast ---- */
 .toast {
   position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px);

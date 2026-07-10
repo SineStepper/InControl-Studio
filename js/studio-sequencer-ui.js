@@ -46,6 +46,12 @@
     if (prev) prev.remove();
     const c = ctx();
     const wrap = el('div', { className: 'seq-wrap' });
+    // Two columns: the session library (left) + the sequencer (right).
+    const twoCol = el('div', { className: 'seq-2col' });
+    const main = el('div', { className: 'seq-main' });
+    twoCol.appendChild(sessionColumn(host));
+    twoCol.appendChild(main);
+    wrap.appendChild(twoCol);
 
     // transport + global
     const bar = el('div', { className: 'seq-bar' });
@@ -64,7 +70,7 @@
     col.addEventListener('input', () => { c.track.color = col.value; if (RT()) RT().refreshSurface(); render(host); });
     bar.appendChild(el('label', { className: 'seq-f' }, ['Part colour ', col]));
     bar.appendChild(selField('Swing', [['On', 'On'], ['Off', 'Off']], c.track.swing || 'On', (v) => { c.track.swing = v; }));
-    wrap.appendChild(bar);
+    main.appendChild(bar);
 
     // pattern settings
     const set = el('div', { className: 'seq-bar' });
@@ -102,7 +108,7 @@
     });
     if (RT() && met.latencyHint && RT().setAudioLatencyHint) RT().setAudioLatencyHint(met.latencyHint);
     if (RT() && met.audioSink && RT().setAudioSink) RT().setAudioSink(met.audioSink);
-    wrap.appendChild(set);
+    main.appendChild(set);
 
     // 16-step grid (2 rows of 8)
     const grid = el('div', { className: 'seq-grid' });
@@ -119,13 +125,54 @@
       });
       grid.appendChild(cell);
     }
-    wrap.appendChild(grid);
-    wrap.appendChild(el('p', { className: 'fineprint' }, 'Click a step to select it; Shift/⌘-click toggles a note. Edit the selected step below.'));
+    main.appendChild(grid);
+    main.appendChild(el('p', { className: 'fineprint' }, 'Click a step to select it; Shift/⌘-click toggles a note. Edit the selected step below.'));
 
     // selected-step editor
-    wrap.appendChild(stepEditor(c.pat, host));
+    main.appendChild(stepEditor(c.pat, host));
     host.appendChild(wrap);
     paintHeads();
+  }
+
+  // Left column (#33): the session library. A session holds the full sequencer
+  // state + which template maps to each Part. New/snapshot at top, sorting, then
+  // the list — click to load & play back. Imported Components sessions land here.
+  let sessionSort = 'recent';
+  function sessionColumn(host) {
+    const m = model(); S().ensureSessions(m);
+    const aside = el('aside', { className: 'lib-col panel' });
+    const head = el('div', { className: 'lib-head' });
+    head.appendChild(el('div', { className: 'lib-title' }, 'Sessions'));
+    const nu = el('button', { className: 'btn primary lib-new', title: 'Save the current sequencer + Part mapping as a session' }, '+ Save');
+    nu.addEventListener('click', () => { const s = S().snapshotSession(m); const n = prompt('Session name', s.name); if (n) S().renameSession(m, s.id, n.slice(0, 24)); render(host); });
+    head.appendChild(nu);
+    aside.appendChild(head);
+    const sortSel = el('select', { className: 'lib-sort' });
+    [['recent', 'Sort: Recent'], ['name', 'Sort: Name']].forEach(([v, t]) => sortSel.appendChild(el('option', { value: v, selected: v === sessionSort }, t)));
+    sortSel.addEventListener('change', () => { sessionSort = sortSel.value; render(host); });
+    aside.appendChild(sortSel);
+
+    const list = el('div', { className: 'lib-scroll' });
+    const sessions = (m.sessions || []).slice();
+    if (sessionSort === 'name') sessions.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    else sessions.sort((a, b) => (b.order || 0) - (a.order || 0));
+    if (!sessions.length) list.appendChild(el('p', { className: 'fineprint' }, 'No sessions yet. Save one, or import a Components session from File ▸ Import sessions.'));
+    sessions.forEach((s) => {
+      const row = el('div', { className: 'lib-item' });
+      const nm = el('button', { className: 'lib-name', title: 'Load & play this session' }, s.name + (s.imported ? ' ♪' : ''));
+      nm.addEventListener('click', () => { S().loadSession(m, s.id); if (RT()) RT().refreshSurface(); selStep = 0; render(host); });
+      row.appendChild(nm);
+      const tools = el('div', { className: 'lib-tools' });
+      const ren = el('button', { className: 'lib-mini', title: 'Rename' }, '✎'); ren.addEventListener('click', () => { const n = prompt('Session name', s.name); if (n) { S().renameSession(m, s.id, n.slice(0, 24)); render(host); } });
+      const del = el('button', { className: 'lib-mini', title: 'Delete' }, '🗑'); del.addEventListener('click', () => { S().removeSession(m, s.id); render(host); });
+      tools.append(ren, del); row.appendChild(tools);
+      // part->template mapping summary
+      const parts = (s.partTemplates || []).map((tid, i) => tid ? (i + 1) : null).filter((x) => x);
+      row.appendChild(el('div', { className: 'lib-sub fineprint' }, parts.length ? 'Parts: ' + parts.join(',') : 'no part map'));
+      list.appendChild(row);
+    });
+    aside.appendChild(list);
+    return aside;
   }
 
   function stepEditor(pat, host) {

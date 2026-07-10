@@ -139,6 +139,109 @@
     return m;
   }
 
+  // ---- Template library (#32) ----------------------------------------------
+  // A template is a named control mapping. The editor edits the *active* template;
+  // the model's live control sections (knobBanks/faders/…) ARE the active
+  // template's sections (same references), so editing mutates it in place.
+  const SECTIONS = ['knobBanks', 'faders', 'buttonBanks', 'pads', 'wheels', 'pedals', 'keys'];
+  function uid(arr, prefix) { let i = 1; const has = (x) => arr.some((e) => e.id === x); while (has(prefix + i)) i++; return prefix + i; }
+  function templateFromSections(m, name, order) {
+    const t = { id: '', name: name || 'Template', order: order || 0 };
+    SECTIONS.forEach((k) => (t[k] = m[k]));
+    return t;
+  }
+  // Ensure the library exists; seed it with the current sections as "Template 1".
+  function ensureTemplates(m) {
+    if (!m.templates || !m.templates.length) {
+      const t = templateFromSections(m, m.name || 'Template 1', 1);
+      t.id = 't1';
+      m.templates = [t];
+      m.activeTemplate = t.id;
+    }
+    // keep the active template's sections pointed at the live model sections
+    if (!m.templates.some((t) => t.id === m.activeTemplate)) m.activeTemplate = m.templates[0].id;
+    return m.templates;
+  }
+  const activeTemplate = (m) => (m.templates || []).find((t) => t.id === m.activeTemplate) || (m.templates || [])[0];
+  // Point the model's live sections at a template so the editor edits it.
+  function selectTemplate(m, id) {
+    ensureTemplates(m);
+    const t = m.templates.find((x) => x.id === id); if (!t) return;
+    SECTIONS.forEach((k) => (m[k] = t[k]));
+    m.activeTemplate = id; m.name = t.name;
+  }
+  const nextOrder = (arr) => (arr.length ? Math.max.apply(null, arr.map((x) => x.order || 0)) : 0) + 1;
+  // Create a new template and select it. opts.from = a model whose sections to
+  // adopt (e.g. an imported .syx); opts.clone = duplicate the active template;
+  // otherwise a blank default. opts.name sets the name.
+  function addTemplate(m, opts) {
+    ensureTemplates(m);
+    const cur = activeTemplate(m); if (cur) SECTIONS.forEach((k) => (cur[k] = m[k])); // save current edits first
+    let src;
+    if (opts && opts.from) src = opts.from;
+    else if (opts && opts.clone) src = JSON.parse(JSON.stringify(cur));
+    else src = newModel();
+    const t = { id: uid(m.templates, 't'), name: (opts && opts.name) || 'Template ' + (m.templates.length + 1), order: nextOrder(m.templates) };
+    SECTIONS.forEach((k) => (t[k] = src[k]));
+    m.templates.push(t);
+    selectTemplate(m, t.id);
+    return t;
+  }
+  function removeTemplate(m, id) {
+    ensureTemplates(m);
+    if (m.templates.length <= 1) return; // keep at least one
+    const wasActive = m.activeTemplate === id;
+    m.templates = m.templates.filter((t) => t.id !== id);
+    // clear any part mapping that referenced it
+    (m.partTemplates || []).forEach((tid, i) => { if (tid === id) m.partTemplates[i] = null; });
+    if (wasActive) selectTemplate(m, m.templates[0].id);
+  }
+  function renameTemplate(m, id, name) { const t = (m.templates || []).find((x) => x.id === id); if (t) { t.name = name; if (m.activeTemplate === id) m.name = name; } }
+  // Map a template to one of the 8 parts (channels). The runtime uses this to give
+  // each part its own instrument mapping (#32).
+  function mapTemplateToPart(m, id, partIdx) {
+    ensureTemplates(m);
+    m.partTemplates = m.partTemplates || new Array(8).fill(null);
+    m.partTemplates[partIdx] = id;
+    // materialise a snapshot the live engine reads (kept in sync with channelTemplates)
+    const t = m.templates.find((x) => x.id === id);
+    m.channelTemplates = m.channelTemplates || new Array(8).fill(null);
+    m.channelTemplates[partIdx] = t ? JSON.parse(JSON.stringify({ name: t.name, knobBanks: t.knobBanks, faders: t.faders, pads: t.pads, buttonBanks: t.buttonBanks })) : null;
+  }
+  function unmapPart(m, partIdx) { if (m.partTemplates) m.partTemplates[partIdx] = null; if (m.channelTemplates) m.channelTemplates[partIdx] = null; }
+
+  // ---- Session library (#33) -----------------------------------------------
+  // A session bundles the full sequencer state + which template maps to each part.
+  function ensureSessions(m) { if (!m.sessions) m.sessions = []; return m.sessions; }
+  function snapshotSession(m, name) {
+    ensureSequencer(m); ensureSessions(m); ensureTemplates(m);
+    const s = {
+      id: uid(m.sessions, 's'), name: name || 'Session ' + (m.sessions.length + 1),
+      order: (m.sessions.length ? Math.max.apply(null, m.sessions.map((x) => x.order || 0)) : 0) + 1,
+      sequencer: JSON.parse(JSON.stringify(m.sequencer)),
+      partTemplates: (m.partTemplates || new Array(8).fill(null)).slice(),
+    };
+    m.sessions.push(s);
+    return s;
+  }
+  function loadSession(m, id) {
+    ensureSessions(m);
+    const s = m.sessions.find((x) => x.id === id); if (!s) return;
+    m.sequencer = JSON.parse(JSON.stringify(s.sequencer));
+    if (s.partTemplates) { m.partTemplates = s.partTemplates.slice(); s.partTemplates.forEach((tid, i) => { if (tid) mapTemplateToPart(m, tid, i); else unmapPart(m, i); }); }
+  }
+  function removeSession(m, id) { if (m.sessions) m.sessions = m.sessions.filter((s) => s.id !== id); }
+  function renameSession(m, id, name) { const s = (m.sessions || []).find((x) => x.id === id); if (s) s.name = name; }
+  // Add an imported (Novation Components) session: decode its sequence into a
+  // full session entry that can be played back (#33).
+  function addImportedSession(m, name, bytes) {
+    ensureSessions(m);
+    const seq = global.SLMK.session ? global.SLMK.session.readSequence(bytes) : null;
+    const s = { id: uid(m.sessions, 's'), name: name || 'Imported', order: (m.sessions.length ? Math.max.apply(null, m.sessions.map((x) => x.order || 0)) : 0) + 1, sequencer: seq, partTemplates: new Array(8).fill(null), imported: true };
+    m.sessions.push(s);
+    return s;
+  }
+
   // Attach a sequencer to a model if it doesn't have one yet (kept out of
   // newModel so modules that don't load the sequencer still work).
   function ensureSequencer(m) {
@@ -206,6 +309,8 @@
   global.SLMK.studio = {
     MSG, BIT_DEPTHS, BEHAVIORS, VEL_CURVES, KNOB_MODES, COMBINED,
     make, newBank, muteSendBank, muteSoloBank, newModel, addKnobBank, addButtonBank, fromTemplate, mergeTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
+    ensureTemplates, activeTemplate, selectTemplate, addTemplate, removeTemplate, renameTemplate, mapTemplateToPart, unmapPart,
+    ensureSessions, snapshotSession, loadSession, removeSession, renameSession, addImportedSession,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studio;
 })(typeof window !== 'undefined' ? window : globalThis);
