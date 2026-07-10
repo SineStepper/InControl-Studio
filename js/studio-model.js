@@ -99,15 +99,20 @@
   // ---- import from a Components template (js/sltemplate.js model) ----
   function fromTemplate(tpl) {
     const m = newModel();
+    // The parsed template stores message_type as a NUMERIC index into
+    // sltemplate.MESSAGE_TYPES (e.g. 3 = Program Change). Resolve it to the name
+    // so Program Change / NRPN / Note etc. survive import instead of falling back
+    // to CC (#35). Strings are still accepted for forward-compat.
+    const SLTYPES = (global.SLMK.sltemplate && global.SLMK.sltemplate.MESSAGE_TYPES) || ['CC', 'NRPN', 'Note', 'Program Change', 'Song Position', 'Channel Pressure', 'Poly Aftertouch'];
     const mapCommon = (dst, src, ccKey) => {
       dst.enabled = !!src.enabled;
       if (src.name) dst.name = src.name;
       dst.channel = src.channel;
       dst.start = src.from_value != null ? src.from_value : dst.start;
       dst.end = src.to_value != null ? src.to_value : dst.end;
-      if (MSG[dst.cls].includes(SL_MSG[src.message_type])) dst.message_type = SL_MSG[src.message_type];
+      const name = typeof src.message_type === 'number' ? SLTYPES[src.message_type] : src.message_type;
+      if (name && MSG[dst.cls].includes(name)) dst.message_type = name;
     };
-    const SL_MSG = { 'CC': 'CC', 'NRPN': 'NRPN', 'Note': 'Note', 'Program Change': 'Program Change', 'Song Position': 'Song Position', 'Channel Pressure': 'Channel Pressure', 'Poly Aftertouch': 'Poly Aftertouch' };
     const T = tpl.sections;
     // knobs -> banks of 8
     m.knobBanks = [];

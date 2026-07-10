@@ -69,6 +69,10 @@
   // pushes the off-beat of the swing sync-rate pair later (positive swing) or the
   // on-beat later (negative swing). Per-track On/Off; global 20-80%, 50 = none.
   function swingDelay(rt, track) {
+    // When the runtime clock itself is swinging the whole timeline (hardware
+    // playback, so the SL arp swings too — #39), don't also offset the note here
+    // or swing would double up.
+    if (rt.clockSwing) return 0;
     const s = rt.seq.swing;
     if (track.swing === 'Off' || s == null || s === 50) return 0;
     const swingStepTicks = SYNC[rt.seq.swingSync] || 6;

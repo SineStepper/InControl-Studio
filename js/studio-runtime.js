@@ -105,31 +105,60 @@
     if (!st.seqRt || st.seqRt.seq !== m.sequencer) st.seqRt = SEQ().makeSeqRuntime(m.sequencer);
     return st.seqRt;
   }
-  function tickInterval() { const t = (st.seqRt && st.seqRt.seq.tempo) || 120; return Math.max(4, Math.round(60000 / t / SEQ().PPQN)); }
+  function tickInterval() { const t = (st.seqRt && st.seqRt.seq.tempo) || 120; return Math.max(4, 60000 / t / SEQ().PPQN); }
+  // Clock config sent to the worker: base ms/tick + swing so the timer can vary
+  // each tick's interval (swings the whole timeline, incl. the outgoing MIDI clock
+  // so the SL's arp swings too — #39). swing 50 = straight.
+  function clockConfig() {
+    const seq = st.seqRt && st.seqRt.seq;
+    const swing = (seq && seq.swing != null) ? seq.swing : 50;
+    const syncTicks = (SEQ().SYNC[(seq && seq.swingSync)] || 6);
+    return { base: tickInterval(), swing, syncTicks };
+  }
 
-  // Clock timer. A Web Worker's timer keeps ticking when the window is unfocused
-  // (main-thread setInterval gets throttled to ~1 Hz) — fixes #18, and keeps the
-  // clock off the main thread so heavy LED/screen sends don't stall it (#22).
-  // Falls back to setInterval where Worker isn't available (Node tests).
+  // Clock timer. A Web Worker keeps ticking when the window is unfocused (#18) and
+  // off the main thread (#22). It SELF-SCHEDULES with a per-tick interval so tempo
+  // changes retune smoothly (no stop/start starve — #36/#38) and swing bends the
+  // intervals (#39). Falls back to a fixed setInterval where Worker is absent
+  // (Node tests) — swing there stays in the sequencer's own swingDelay.
   let workerTimer = null, workerTried = false;
   function makeWorkerTimer() {
     if (workerTried) return workerTimer; workerTried = true;
     try {
-      const src = 'var id=null;onmessage=function(e){var d=e.data;if(d.cmd==="start"){if(id)clearInterval(id);id=setInterval(function(){postMessage(0)},d.ms);}else{if(id)clearInterval(id);id=null;}};';
+      const src = [
+        'var id=null,tick=0,cfg={base:20,swing:50,syncTicks:6};',
+        'function next(){var b=cfg.base,d=b;',
+        ' if(cfg.swing!==50&&cfg.syncTicks){var f=Math.max(0,Math.min(0.9,Math.abs(cfg.swing-50)/50));',
+        '  var firstHalf=Math.floor(tick/cfg.syncTicks)%2===0;var sign=cfg.swing>50?1:-1;',
+        '  d=b*(1+sign*(firstHalf?f:-f));}',
+        ' id=setTimeout(function(){tick++;postMessage(0);next();},Math.max(2,d));}',
+        'onmessage=function(e){var m=e.data;',
+        ' if(m.cmd==="start"){cfg=m;if(m.reset){tick=0;}if(id)clearTimeout(id);next();}',
+        ' else if(m.cmd==="config"){cfg=m;}',
+        ' else{if(id)clearTimeout(id);id=null;}};',
+      ].join('');
       workerTimer = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
       workerTimer.onmessage = () => clockTick();
     } catch (e) { workerTimer = null; }
     return workerTimer;
   }
   function startClock() {
-    const ms = tickInterval();
     const w = makeWorkerTimer();
-    if (w) { w.postMessage({ cmd: 'start', ms }); st.clock = w; }
-    else st.clock = setInterval(clockTick, ms);
+    if (w) { w.postMessage(Object.assign({ cmd: 'start', reset: true }, clockConfig())); st.clock = w; if (st.seqRt) st.seqRt.clockSwing = true; }
+    else st.clock = setInterval(clockTick, tickInterval());
+  }
+  // Update tempo/swing WITHOUT restarting the timer (avoids the interval-reset
+  // starve that dramatically slowed the sequencer while dragging tempo — #36 —
+  // and the clock gap that made the SL lose sync — #38).
+  function retuneClock() {
+    if (!st.clock) return;
+    if (st.clock === workerTimer) workerTimer.postMessage(Object.assign({ cmd: 'config' }, clockConfig()));
+    else { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); }
   }
   function stopClock() {
     if (st.clock && st.clock === workerTimer) workerTimer.postMessage({ cmd: 'stop' });
     else if (st.clock) clearInterval(st.clock);
+    if (st.seqRt) st.seqRt.clockSwing = false;
     st.clock = null;
   }
   // MIDI real-time clock to the SL so its arp/tempo features sync (#26): FA start,
@@ -279,7 +308,10 @@
     st.metro = null;              // re-anchor the metronome scheduler to the new start
     if (metroOn()) ensureAudio(); // warm the click's audio + measure latency before step 1
     SEQ().start(rt);
-    sendClock(0xfa); // MIDI Start
+    // NOTE: we deliberately do NOT send MIDI Start (FA) to the SL. FA launches the
+    // SL's own internal sequencer, which then plays its loaded session's notes
+    // (a phantom C at each pattern start) and lights the keybed (#34). The arp
+    // only needs the F8 timing clock (sent every tick) to lock tempo — no transport.
     stopClock();
     startClock();
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
@@ -288,7 +320,7 @@
   function seqStop() {
     stopClock();
     st.recEcho.clear();
-    sendClock(0xfc); // MIDI Stop
+    // No MIDI Stop (FC) to the SL either — see seqPlay (#34).
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();
@@ -565,11 +597,15 @@
     const p = t.patterns[t.activePattern];
     const seq = model().sequencer;
     const cols = opts().columns(seq, p, st.optionsMenu, st.stepPage);
+    // Gate uses a text-only layout (just the hashtags + number, no knob glyph);
+    // every other menu uses the knob layout (#37). Only re-send when it changes.
+    const wantLayout = st.optionsMenu === 'gate' ? 0 : 1;
+    if (st.optScreenLayout !== wantLayout) { send(sysex.screenLayout(wantLayout)); st.optScreenLayout = wantLayout; }
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
       send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name
       if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph reflecting the value
-      else send(sysex.screenValue(i, 0, 0));                       // no glyph (gate uses boxes; list values)
+      else if (wantLayout === 1) send(sysex.screenValue(i, 0, 0)); // clear a stale knob on an empty step (knob layout only)
       send(sysex.screenText(i, 1, c && c.mid != null ? c.mid : '')); // gate: whole number of steps
       send(sysex.screenText(i, 2, c ? (c.bottom || '') : ''));     // reading below: number / % / gate boxes
     }
@@ -578,7 +614,9 @@
     send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
     send(sysex.screenText(8, 2, menu ? menu.label : ''));
   }
-  function restartClockIfRunning() { if (st.clock) { stopClock(); startClock(); } }
+  // Tempo / swing / sync changed while playing → retune the running clock in place
+  // (no stop/start), so it never starves or drops sync (#36/#38).
+  function restartClockIfRunning() { retuneClock(); }
   // Coalesce the (heavy) option-screen redraw so spinning a knob doesn't flood the
   // SL with SysEx and bog things down (#22).
   let screenTimer = null;
@@ -613,8 +651,8 @@
   }
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
-    if (st.optionsMode) { st.stepPage = 0; refreshOptionLeds(); send(sysex.screenLayout(1)); refreshOptionScreens(); log('options on'); }
-    else { st.selStep = null; st.heldMicros.clear(); refreshOptionLeds(); refreshSurface(); log('options off'); }
+    if (st.optionsMode) { st.stepPage = 0; st.optScreenLayout = null; refreshOptionLeds(); refreshOptionScreens(); log('options on'); }
+    else { st.selStep = null; st.heldMicros.clear(); st.optScreenLayout = null; refreshOptionLeds(); refreshSurface(); log('options off'); }
   }
   function setPadView(view) {
     st.padView = view;
@@ -983,7 +1021,7 @@
     playhead: () => (st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1),
     setGridTrack: (i) => { st.gridTrack = i; if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); notify(); },
     gridTrack: () => st.gridTrack,
-    restartClock: () => { if (st.clock) { stopClock(); startClock(); } },
+    restartClock: () => retuneClock(),
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
     handleKeys: (bytes) => onKeys(bytes),

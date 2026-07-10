@@ -110,4 +110,11 @@ for (let k = 0; k < Q.SYNC['1/16'] * 2; k++) Q.onTick(srt, rng0).filter((e) => e
 eq(at[60], 0, 'on-beat note fires on the step boundary');
 ok(at[62] > 6, 'off-beat note is swung later than its step boundary (tick 6), got ' + at[62]);
 
+// #39: when the runtime clock is swinging the timeline, the note is NOT also
+// offset here (no double swing) — the off-beat fires on its plain boundary.
+const swrt = Q.makeSeqRuntime(sseq); Q.start(swrt); swrt.clockSwing = true;
+const cat = {};
+for (let k = 0; k < Q.SYNC['1/16'] * 2; k++) Q.onTick(swrt, rng0).filter((e) => e.type === 'on').forEach((e) => (cat[e.note] = k));
+eq(cat[62], 6, '#39 with clockSwing, the off-beat note fires on its plain boundary (clock swings instead)');
+
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

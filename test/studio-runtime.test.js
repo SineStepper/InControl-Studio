@@ -91,6 +91,16 @@ ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
 ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
 ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
 
+// #37 gate menu uses a text-only screen layout (no knob glyph)
+mark = sent.length;
+RT.handleControl(CC(0x33 + 1, 127)); // Soft 2 -> Gate
+const gscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 || m.bytes[7] === 0x01);
+ok(gscr.some((m) => m.bytes[7] === 0x01 && m.bytes[8] === 0), '#37 gate sets the empty (text-only) screen layout 0');
+ok(!gscr.some((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x03), '#37 gate sends no knob-glyph value (type 3)');
+RT.handleControl(CC(0x33 + 0, 127)); // back to Velocity
+const vscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x01 && m.bytes[8] === 1);
+ok(vscr.length > 0, '#37 velocity restores the knob layout 1');
+
 // tempo menu, knob1 changes tempo
 RT.handleControl(CC(0x33 + 3, 127)); // Soft 4 -> index 3 -> tempo
 const t0 = model.sequencer.tempo;
@@ -292,10 +302,13 @@ st.rt.buttonBank = 0; st.running = false;
 st.running = true;
 mark = sent.length;
 RT.seqPlay();
-ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xfa), '#26 Play sends MIDI Start (FA) to the SL out');
+RT.tick();
+ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xf8), '#26 sends F8 timing clock to the SL out');
+// #34: transport Start/Stop are NOT sent to the SL (they launch its internal sequencer -> phantom C)
+ok(!sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && (m.bytes[0] === 0xfa || m.bytes[0] === 0xfc)), '#34 no MIDI Start/Stop sent to the SL');
 mark = sent.length;
 RT.seqStop();
-ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xfc), '#26 Stop sends MIDI Stop (FC) to the SL out');
+ok(!sent.slice(mark).some((m) => m.bytes.length === 1 && m.bytes[0] === 0xfc), '#34 Stop does not send FC to the SL');
 st.running = false;
 
 // --- #17 Patterns view pages the Parts with Pads Up/Down ---

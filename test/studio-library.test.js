@@ -79,4 +79,14 @@ if (enc && enc.newSequenceBody) {
   ok(imp.imported && imp.sequencer, 'addImportedSession decodes a playable session');
 }
 
+// ---- #35 template import resolves numeric message types (not everything -> CC) ----
+const knob0 = { enabled: true, message_type: 3, first_param: 5, channel: 1, from_value: 0, to_value: 127, name: 'PC' }; // 3 = Program Change
+const blankKnob = { enabled: false, message_type: 0, first_param: 0, channel: 'default', from_value: 0, to_value: 127, name: '' };
+const tpl = { name: 'T', sections: {
+  knobs: [knob0].concat(Array.from({ length: 7 }, () => Object.assign({}, blankKnob))),
+  faders: [], buttons: [], pad_hits: [], pad_pressures: [], wheels: [], pedals: [], footswitches: [],
+} };
+const imp2 = S.fromTemplate(tpl);
+eq(imp2.knobBanks[0][0].message_type, 'Program Change', '#35 numeric Program Change survives import (not CC)');
+
 console.log('\n' + n + ' library assertions passed');
