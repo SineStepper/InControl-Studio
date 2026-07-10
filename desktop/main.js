@@ -111,12 +111,13 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1180,
     height: 900,
-    backgroundColor: '#0e0f13',
+    backgroundColor: '#060708',
     title: 'InControl Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      backgroundThrottling: false, // keep the sequencer timer running when unfocused (#18)
     },
   });
   win.setMenuBarVisibility(false);

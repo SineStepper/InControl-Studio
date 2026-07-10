@@ -105,6 +105,32 @@
     return st.seqRt;
   }
   function tickInterval() { const t = (st.seqRt && st.seqRt.seq.tempo) || 120; return Math.max(4, Math.round(60000 / t / SEQ().PPQN)); }
+
+  // Clock timer. A Web Worker's timer keeps ticking when the window is unfocused
+  // (main-thread setInterval gets throttled to ~1 Hz) — fixes #18, and keeps the
+  // clock off the main thread so heavy LED/screen sends don't stall it (#22).
+  // Falls back to setInterval where Worker isn't available (Node tests).
+  let workerTimer = null, workerTried = false;
+  function makeWorkerTimer() {
+    if (workerTried) return workerTimer; workerTried = true;
+    try {
+      const src = 'var id=null;onmessage=function(e){var d=e.data;if(d.cmd==="start"){if(id)clearInterval(id);id=setInterval(function(){postMessage(0)},d.ms);}else{if(id)clearInterval(id);id=null;}};';
+      workerTimer = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+      workerTimer.onmessage = () => clockTick();
+    } catch (e) { workerTimer = null; }
+    return workerTimer;
+  }
+  function startClock() {
+    const ms = tickInterval();
+    const w = makeWorkerTimer();
+    if (w) { w.postMessage({ cmd: 'start', ms }); st.clock = w; }
+    else st.clock = setInterval(clockTick, ms);
+  }
+  function stopClock() {
+    if (st.clock && st.clock === workerTimer) workerTimer.postMessage({ cmd: 'stop' });
+    else if (st.clock) clearInterval(st.clock);
+    st.clock = null;
+  }
   // MIDI real-time clock to the SL so its arp/tempo features sync (#26): FA start,
   // FC stop, F8 timing clock at 24 PPQN (once per clockTick).
   function sendClock(byte) { if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]); }
@@ -144,13 +170,13 @@
     const rt = ensureSeqRt(); if (!rt) return;
     SEQ().start(rt);
     sendClock(0xfa); // MIDI Start
-    if (st.clock) clearInterval(st.clock);
-    st.clock = setInterval(clockTick, tickInterval());
+    stopClock();
+    startClock();
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();
   }
   function seqStop() {
-    if (st.clock) { clearInterval(st.clock); st.clock = null; }
+    stopClock();
     sendClock(0xfc); // MIDI Stop
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
@@ -412,7 +438,14 @@
     send(sysex.screenText(8, 0, menu ? menu.label : ''));
     if (menu && menu.perStep) send(sysex.screenText(8, 1, 'Steps ' + (st.stepPage ? '9-16' : '1-8')));
   }
-  function restartClockIfRunning() { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } }
+  function restartClockIfRunning() { if (st.clock) { stopClock(); startClock(); } }
+  // Coalesce the (heavy) option-screen redraw so spinning a knob doesn't flood the
+  // SL with SysEx and bog things down (#22).
+  let screenTimer = null;
+  function scheduleOptionScreens() {
+    if (screenTimer != null) return;
+    screenTimer = setTimeout(() => { screenTimer = null; refreshOptionScreens(); }, 16);
+  }
   // Repaint the whole control surface (used after an on-screen change like a Part colour).
   function refreshSurface() {
     if (!st.running || !st.slOutId) return;
@@ -584,7 +617,7 @@
           const seq = model().sequencer;
           const delta = engine.knobDelta(ev.value);
           const desc = opts().applyKnob(seq, t.patterns[t.activePattern], st.optionsMenu, c.index, delta, st.stepPage, st.shift);
-          if (desc) { refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
+          if (desc) { scheduleOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
         }
         return;
       }
@@ -754,7 +787,7 @@
     playhead: () => (st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1),
     setGridTrack: (i) => { st.gridTrack = i; if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); notify(); },
     gridTrack: () => st.gridTrack,
-    restartClock: () => { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } },
+    restartClock: () => { if (st.clock) { stopClock(); startClock(); } },
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
     handleKeys: (bytes) => onKeys(bytes),
