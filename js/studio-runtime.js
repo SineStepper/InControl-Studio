@@ -840,7 +840,10 @@
           const seq = model().sequencer;
           const delta = engine.knobDelta(ev.value);
           const desc = opts().applyKnob(seq, t.patterns[t.activePattern], st.optionsMenu, c.index, delta, st.stepPage, st.shift);
-          if (desc) { scheduleOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
+          // Tempo, swing, and swing-sync all change the clock's per-tick timing —
+          // retune the running clock for any of them, not just tempo, so swing
+          // updates immediately without needing a tempo nudge.
+          if (desc) { scheduleOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo|swing/.test(desc)) restartClockIfRunning(); log(desc); }
         }
         return;
       }
