@@ -185,9 +185,18 @@
   function sendMusic(id, msg) {
     if (!id) return;
     const s = msg[0] & 0xf0;
-    if (s >= 0x80 && s <= 0xef && !channelAudible((msg[0] & 0x0f) + 1)) return;
+    if (s >= 0x80 && s <= 0xef) {
+      // Always let note-offs through so nothing hangs (#21); gate everything else
+      // (note-ons, CC, etc.) on a muted / soloed-out channel.
+      const isNoteOff = s === 0x80 || (s === 0x90 && msg[2] === 0);
+      if (!isNoteOff && !channelAudible((msg[0] & 0x0f) + 1)) return;
+    }
     midi.sendToOutput(id, msg);
   }
+  // Send All-Notes-Off (CC 123) to a channel — bypasses the mute gate.
+  function allNotesOff(ch0) { if (st.destId) midi.sendToOutput(st.destId, [0xb0 | (ch0 & 0x0f), 123, 0]); }
+  // Silence any channel that just became inaudible so sustained notes don't hang (#21).
+  function silenceInaudible() { for (let ch = 1; ch <= 16; ch++) if (!channelAudible(ch)) allNotesOff(ch - 1); }
   function refreshMuteSolo() {
     const bank = msBank();
     for (let i = 0; i < 8; i++) {
@@ -199,8 +208,8 @@
     }
     for (let i = 0; i < 8; i++) { const a = bank[8 + i]; if (a) ledHex(20 + i, st.solo.has(a.channel) ? a.led.pressed : a.led.idle); } // Soft 17-24 = Solo
   }
-  function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
-  function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
+  function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
+  function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
 
   // ---- Channel / instrument select (Soft 1-8 below the screens), in Part colours ----
   function refreshChannelLeds() {
