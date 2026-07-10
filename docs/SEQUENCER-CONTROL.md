@@ -111,6 +111,17 @@ Driven entirely from the SL MkIII hardware, matching the User Guide:
 See `docs/QUESTIONS-AND-IDEAS.md` for what still needs your input or a follow-up
 (momentary record, Arp/Scales, session persistence of the newer fields, etc.).
 
+## MIDI clock / arp sync (#26)
+
+On play the sequencer emits MIDI real-time clock — **Start (FA)**, **timing
+clock (F8) at 24 PPQN**, **Stop (FC)** — to both the SL's **InControl output**
+and its **main (non-InControl) output** port, because the keyboard arpeggiator
+follows external clock on the *main* port, not the InControl one. For the arp
+(or any tempo-driven feature) to actually lock to the sequencer, the SL MkIII
+must have its **Clock Source set to receive external clock** (Settings ▸ Clock
+Source = *External* or *Auto*). With it on *Internal* the unit ignores incoming
+clock and the arp runs at its own tempo.
+
 ## Assumptions / limitations
 
 - **Soft-button layout:** Soft 1-8 = the row below the screens (menu select /
