@@ -311,4 +311,24 @@ const nextOns = sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 
 ok(nextOns >= 1, 'recorded note plays from the sequencer on the next cycle');
 st.recording = false; st.clock = null; st.seqRt.playing = false; st.recEcho.clear();
 
+// --- record quantization: a note played on the beat lands on that step, and one
+//     played just past halfway lands on the next step (symmetric nearest-step) ---
+st.mute.clear(); st.solo.clear(); st.optionsMode = false;
+RT.handleControl(CC(0x33 + 0, 127));
+function recAt(tick, note) {
+  model.sequencer.tracks[0].patterns[0] = SEQ.newPattern();
+  st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+  st.recEcho.clear(); st.recRef.clear(); st.recording = true;
+  for (let i = 0; i <= tick; i++) RT.tick(); // process ticks 0..tick; playhead "now" = tick
+  RT.handleKeys([0x90, note, 100]);
+  RT.handleKeys([0x80, note, 0]);
+  st.recording = false; st.clock = null; st.seqRt.playing = false;
+  return model.sequencer.tracks[0].patterns[0].steps.findIndex((s) => s.notes.some((x) => x.note === note));
+}
+ok(recAt(6, 80) === 1, 'note on the step-2 boundary (tick 6) records to step 2');       // exactly on beat
+ok(recAt(7, 81) === 1, 'note a tick after the boundary stays on that step');            // just after
+ok(recAt(2, 82) === 0, 'note before the halfway point records to the current step');    // rounds back
+ok(recAt(4, 83) === 1, 'note past the halfway point records to the next step');         // rounds forward
+st.recEcho.clear();
+
 console.log('\n' + n + ' integration assertions passed');

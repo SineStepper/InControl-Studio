@@ -575,8 +575,6 @@
       if (st.recording && seqIsPlaying()) recordNoteOff(note);
     }
   }
-  // A tick is a "strong" position if it lands on a 1/4 (24 PPQN) or 1/8 (12) beat.
-  const isStrong = (tick) => tick % 24 === 0 || tick % 12 === 0;
   function recordNoteOn(note, velocity) {
     const p = gridPattern(); if (!p) return;
     const pos = st.seqRt ? st.seqRt.pos[st.gridTrack] : { pad: 0, counter: 0 };
@@ -584,17 +582,21 @@
     let step = pos.pad; // current play-head step (correct for any direction/length)
     let micro = 0;
     const m = model();
+    // st.seqRt.tick points at the *next* tick to be processed; the tick that just
+    // sounded — what the player hears as "now" — is one behind it. Quantise against
+    // that so a note played on the beat lands on the beat, not a tick late.
+    const now = st.seqRt ? Math.max(0, st.seqRt.tick - 1) : 0;
+    const sub = ((now % stepTicks) + stepTicks) % stepTicks; // 0..stepTicks-1 into the current step
+    const nextStep = () => SEQ().stepIndexFor(pos.counter + 1, p.start, p.end, p.direction, p.shift, Math.random);
     if (m && m.sequencer && m.sequencer.quantizeRecord === false && st.seqRt) {
-      // Non-quantised: place the note on the nearest micro-step within the step.
-      micro = Math.round(((st.seqRt.tick % stepTicks) / stepTicks) * 6) % 6;
+      // Non-quantised: place the note on the nearest micro-step; rounding past the
+      // end of the step advances to micro 0 of the next step (not back to this one).
+      const microRaw = Math.round((sub / stepTicks) * 6);
+      if (microRaw >= 6) { step = nextStep(); micro = 0; } else micro = microRaw;
     } else if (st.seqRt) {
-      // Weighted quantise to the NEAREST step, biased toward strong beats (#20):
-      // a step landing on a 1/4/1/8 gets a wider capture window than an off-beat.
-      const sub = st.seqRt.tick % stepTicks;                 // 0..stepTicks-1 into the current step
-      const boundary = st.seqRt.tick - sub;                  // tick at the start of the current step
-      const curStrong = isStrong(boundary), nextStrong = isStrong(boundary + stepTicks);
-      const mid = curStrong ? stepTicks * 0.62 : nextStrong ? stepTicks * 0.38 : stepTicks * 0.5;
-      if (sub >= mid) step = SEQ().stepIndexFor(pos.counter + 1, p.start, p.end, p.direction, p.shift, Math.random);
+      // Plain nearest-step quantise: round symmetrically to the closer step
+      // boundary, so timing is predictable and never biased ahead or behind.
+      if (sub * 2 >= stepTicks) step = nextStep();
     }
     const s = p.steps[step];
     let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
