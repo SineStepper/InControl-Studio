@@ -290,4 +290,25 @@ RT.handleControl(CC(0x55, 127)); // Pads Up
 ok(st.partTop === 0, '#17 Pads Up pages Parts back');
 st.padView = 'steps';
 
+// --- double-key on record: the sequencer must not echo a just-recorded note
+//     within the same pattern cycle (it was already monitored live once) ---
+st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false;
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0, Part channel 1
+model.sequencer.tracks[0].patterns[model.sequencer.tracks[0].activePattern] = SEQ.newPattern();
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+st.recEcho.clear(); st.recRef.clear();
+for (let i = 0; i < 4; i++) RT.tick(); // playhead now mid-step 0 (tick 4 of 1/16 = 6 ticks/step)
+st.recording = true;
+mark = sent.length;
+RT.handleKeys([0x90, 72, 110]); // record C5 -> lands on the next step, monitored live once
+for (let i = 0; i < 88; i++) RT.tick(); // run out the rest of the 96-tick cycle
+const echoOns = sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 72 && m.bytes[2] > 0).length;
+ok(echoOns === 1, 'recorded note sounds once this cycle (live monitor only, no sequencer echo)');
+// after the cycle elapses, the note plays normally from the sequencer
+mark = sent.length;
+for (let i = 0; i < 96; i++) RT.tick();
+const nextOns = sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 72 && m.bytes[2] > 0).length;
+ok(nextOns >= 1, 'recorded note plays from the sequencer on the next cycle');
+st.recording = false; st.clock = null; st.seqRt.playing = false; st.recEcho.clear();
+
 console.log('\n' + n + ' integration assertions passed');

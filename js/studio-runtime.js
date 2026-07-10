@@ -18,7 +18,7 @@
 
   const st = { running: false, rt: null, unsub: null, keysUnsub: null, slInId: null, slOutId: null, destId: null, keysInId: null, log: [],
     seqRt: null, clock: null, recording: false, gridTrack: 0, mod: null, dupFrom: null, stepCbs: [],
-    heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
+    heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(), recEcho: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0 };
@@ -137,8 +137,18 @@
   // ---- Metronome (#14): Ping/Tick/Pop click on each 1/4 + a green Grid flash ----
   function metronomeTick(tick) {
     const m = model(); const met = m && m.sequencer && m.sequencer.metronome;
-    if (!met || !met.on || tick % 24 !== 0) return; // quarter notes
-    const accent = tick % 96 === 0; // bar downbeat
+    if (!met || !met.on || !st.seqRt) return;
+    // Anchor the click to the grid track's pattern rather than absolute ticks, so
+    // the beat stays aligned with the step grid the user sees (accent on step 1),
+    // regardless of pattern length or sync rate.
+    const p = gridPattern(); if (!p) return;
+    const stepTicks = SEQ().SYNC[p.syncRate] || 6;
+    if (tick % stepTicks !== 0) return;                 // only on a grid-step boundary
+    const pos = st.seqRt.pos[st.gridTrack]; if (!pos) return;
+    const len = Math.abs((p.end || 0) - (p.start || 0)) + 1;
+    const stepInBar = ((pos.counter % len) + len) % len; // step position within the pattern
+    if ((stepInBar * stepTicks) % 24 !== 0) return;      // click on quarter-note beats
+    const accent = stepInBar === 0;                       // downbeat = first step of the pattern
     playMetronomeSound(met.sound || 'Ping', accent);
     if (st.slOutId) { ledHex(64, '#00ff00'); clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90); }
   }
@@ -160,6 +170,13 @@
     const beatTick = st.seqRt.tick;
     const events = SEQ().onTick(st.seqRt);
     events.forEach((e) => {
+      // Drop the sequencer's own echo of a note we just recorded + monitored live
+      // this cycle, so the fresh note isn't heard twice (bug: double key on record).
+      const ek = e.channel + ':' + e.note, until = st.recEcho.get(ek);
+      if (until != null) {
+        if (st.seqRt.tick < until) return;      // still within the cycle it was recorded in
+        st.recEcho.delete(ek);                   // window elapsed — play normally from now on
+      }
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
       sendMusic(st.destId, msg);
       if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
@@ -214,6 +231,7 @@
   }
   function seqStop() {
     stopClock();
+    st.recEcho.clear();
     sendClock(0xfc); // MIDI Stop
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
@@ -582,6 +600,13 @@
     let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
     if (!n) { n = { note, velocity, gate: 6, micro }; s.notes.push(n); }
     st.recRef.set(note, { n, startTick: st.seqRt.tick });
+    // We already monitored this key live through the Part's channel. Suppress the
+    // sequencer from echoing the just-recorded note again before the pattern loops
+    // (which would sound as the same note a second time, slightly delayed).
+    const t = curTrack(); const ch = t ? (t.channel - 1) & 0x0f : 0;
+    const pt = patternTicks(p);
+    const until = st.seqRt.tick - (st.seqRt.tick % pt) + pt; // end of the current pattern cycle
+    st.recEcho.set(ch + ':' + note, until);
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     contentChanged(); log('● rec ' + note + ' @step ' + (step + 1));
   }
@@ -848,6 +873,7 @@
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
     handleKeys: (bytes) => onKeys(bytes),
+    tick: () => clockTick(), // drive one 24-PPQN tick (tests)
     setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
     refreshSurface,
     state: () => st,
