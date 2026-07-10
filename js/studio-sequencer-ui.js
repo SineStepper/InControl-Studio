@@ -34,7 +34,13 @@
   }
 
   function render(host) {
-    if (!hooked && RT()) { RT().onStep(() => paintHeads()); hooked = true; }
+    if (!hooked && RT()) {
+      RT().onStep(() => paintHeads());
+      // Re-render when the sequence content changes from the hardware (#16), but
+      // only while the Sequencer sub-tab is on screen.
+      RT().onChange(() => { const h = document.querySelector('#studio-body'); if (h && h.querySelector('.seq-wrap')) render(h); });
+      hooked = true;
+    }
     const prev = host.querySelector('.seq-wrap'); // replace our own content, keep the sub-tab bar
     if (prev) prev.remove();
     const c = ctx();

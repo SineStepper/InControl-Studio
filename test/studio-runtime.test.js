@@ -239,4 +239,17 @@ ok(st.rt.knobBank === 1, '#24 Screen Down advances the knob bank');
 RT.handleControl(CC(0x51, 127)); // Screen Up -> knob bank -
 ok(st.rt.knobBank === 0, '#24 Screen Up goes back a knob bank');
 
+// --- #15 keyboard notes are re-channeled to the selected Part ---
+RT.handleControl(CC(0x33 + 2, 127)); // select channel 3 -> Part channel 3
+mark = sent.length;
+RT.handleKeys([0x90, 60, 100]); // key note-on arriving on channel 1 (0x90)
+ok(sent.slice(mark).some((m) => m.id === 'dest' && m.bytes[0] === (0x90 | 2)), '#15 keybed note re-channeled to selected Part (ch3)');
+
+// --- #16 content change fires the onChange callback ---
+let changed = 0; RT.onChange(() => changed++);
+st.heldPads.add(0); st.rt.padMode = 'sequencer';
+RT.handleKeys([0x90, 64, 90]); // hold-pad + key -> toggles a note, should fire onChange
+ok(changed > 0, '#16 keyboard-driven note edit fires onChange for the UI');
+st.heldPads.clear();
+
 console.log('\n' + n + ' integration assertions passed');

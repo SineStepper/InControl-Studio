@@ -21,7 +21,7 @@
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
-    heldPatterns: new Set(), selStep: null, heldMicros: new Set() };
+    heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [] };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -152,6 +152,11 @@
   }
   const seqIsPlaying = () => !!st.clock;
   function notify() { st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} }); }
+  // Fired when the sequence *content* changes (a note added/removed/edited) so the
+  // on-screen UI can re-render, not just repaint play-heads (#16).
+  function contentChanged() { notify(); st.changeCbs.forEach((cb) => { try { cb(); } catch (e) {} }); }
+  // Re-channel a channel-voice message to a given MIDI channel (0-15).
+  function rechannel(bytes, ch) { const s = bytes[0] & 0xf0; return (s >= 0x80 && s <= 0xe0) ? [s | (ch & 0x0f)].concat(Array.prototype.slice.call(bytes, 1)) : bytes; }
 
   // ---- pad grid (step editing + play head) in sequencer mode ----
   function gridPattern() { const m = model(); if (!m || !m.sequencer) return null; const t = m.sequencer.tracks[st.gridTrack]; return t.patterns[t.activePattern]; }
@@ -423,7 +428,7 @@
       keyLed(n.note, on ? KEY_AUDITION : '#000000'); // red while auditioning/holding a step (#10)
     });
   }
-  function transposeCurrent(semi) { const p = gridPattern(); if (p && SEQ().transposePattern(p, semi)) { refreshGrid(); notify(); log('transpose ' + (semi > 0 ? '+' : '') + semi); } }
+  function transposeCurrent(semi) { const p = gridPattern(); if (p && SEQ().transposePattern(p, semi)) { refreshGrid(); contentChanged(); log('transpose ' + (semi > 0 ? '+' : '') + semi); } }
 
   // Keyboard input (SL regular port). Three roles, exactly like the built-in
   // sequencer: assign notes to held steps, live-record, and monitor to output.
@@ -432,19 +437,19 @@
     const note = bytes[1], vel = bytes[2];
     const isOn = status === 0x90 && vel > 0;
     const isOff = status === 0x80 || (status === 0x90 && vel === 0);
-    sendMusic(st.destId, bytes); // monitor through (respecting mute/solo)
+    sendMusic(st.destId, rechannel(bytes, trackChan())); // monitor through on the selected Part's channel (#15)
     if (isOn) {
       st.heldKeys.set(note, vel);
       // Micro-step entry: in options mode, hold a micro-step button + play keys to
       // toggle that note onto the selected step's micro-step(s) (#12).
       if (st.optionsMode && st.selStep != null && st.heldMicros.size) {
         const t = curTrack(); const p = t && t.patterns[t.activePattern];
-        if (p) { st.heldMicros.forEach((micro) => SEQ().toggleMicroNote(p, st.selStep, micro, note, vel, 6)); refreshOptionLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); notify(); log('micro note ' + note); }
+        if (p) { st.heldMicros.forEach((micro) => SEQ().toggleMicroNote(p, st.selStep, micro, note, vel, 6)); refreshOptionLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); log('micro note ' + note); }
         return;
       }
       // Hold pad(s) + press key -> toggle that note on those steps.
       if (st.heldPads.size && st.rt && st.rt.padMode === 'sequencer') {
-        const p = gridPattern(); if (p) { st.heldPads.forEach((step) => SEQ().toggleStepNote(p, step, note, vel, 6)); refreshGrid(); notify(); log('note ' + note + ' -> steps'); }
+        const p = gridPattern(); if (p) { st.heldPads.forEach((step) => SEQ().toggleStepNote(p, step, note, vel, 6)); refreshGrid(); contentChanged(); log('note ' + note + ' -> steps'); }
         return;
       }
       if (st.recording && seqIsPlaying()) recordNoteOn(note, vel);
@@ -468,7 +473,7 @@
     if (!n) { n = { note, velocity, gate: 6, micro }; s.notes.push(n); }
     st.recRef.set(note, { n, startTick: st.seqRt.tick });
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
-    notify(); log('● rec ' + note + ' @step ' + (step + 1));
+    contentChanged(); log('● rec ' + note + ' @step ' + (step + 1));
   }
   function recordNoteOff(note) {
     const ref = st.recRef.get(note); if (!ref) return;
@@ -553,7 +558,7 @@
           const seq = model().sequencer;
           const delta = engine.knobDelta(ev.value);
           const desc = opts().applyKnob(seq, t.patterns[t.activePattern], st.optionsMenu, c.index, delta, st.stepPage, st.shift);
-          if (desc) { refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); notify(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
+          if (desc) { refreshOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo/.test(desc)) restartClockIfRunning(); log(desc); }
         }
         return;
       }
@@ -563,8 +568,8 @@
     if (c && c.group === 'pad' && st.padView === 'patterns' && st.rt && st.rt.padMode === 'sequencer') {
       const t = curTrack();
       if (ev.value > 0 && c.index < SEQ().PATTERNS && t) {
-        if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[c.index]); refreshPatternPads(); notify(); return; }
-        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyPattern(t, st.dupFrom, c.index); refreshPatternPads(); notify(); return; }
+        if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[c.index]); refreshPatternPads(); contentChanged(); return; }
+        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyPattern(t, st.dupFrom, c.index); refreshPatternPads(); contentChanged(); return; }
         st.heldPatterns.add(c.index);
         // Deferred switch: while playing, queue the change to the next pattern
         // boundary; instantly when stopped or with Shift held (#3).
@@ -600,8 +605,8 @@
     if (c.group === 'pad' && st.rt.padMode === 'sequencer') {
       const p = gridPattern(); if (!p) return;
       if (ev.value > 0) { // press
-        if (st.mod === 'clear') { SEQ().clearStep(p, c.index); refreshGrid(); notify(); return; }
-        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyStep(p, st.dupFrom, c.index); refreshGrid(); notify(); return; }
+        if (st.mod === 'clear') { SEQ().clearStep(p, c.index); refreshGrid(); contentChanged(); return; }
+        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyStep(p, st.dupFrom, c.index); refreshGrid(); contentChanged(); return; }
         st.heldPads.add(c.index);
         if (st.heldKeys.size) st.heldKeys.forEach((vel, note) => SEQ().toggleStepNote(p, c.index, note, vel, 6)); // reverse order: keys already held
         else if (!seqIsPlaying()) auditionStep(p, c.index, true); // audition when stopped
@@ -719,12 +724,14 @@
   global.SLMK.studioRuntime = {
     seqPlay, seqStop, seqIsPlaying, recording: () => st.recording, toggleRecord,
     onStep: (cb) => st.stepCbs.push(cb),
+    onChange: (cb) => st.changeCbs.push(cb),
     playhead: () => (st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1),
     setGridTrack: (i) => { st.gridTrack = i; if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); notify(); },
     gridTrack: () => st.gridTrack,
     restartClock: () => { if (st.clock) { clearInterval(st.clock); st.clock = setInterval(clockTick, tickInterval()); } },
     // Inject a resolved-control MIDI message (used by tests and future on-screen control).
     handleControl: (bytes) => onMsg(bytes),
+    handleKeys: (bytes) => onKeys(bytes),
     setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
     refreshSurface,
     state: () => st,
