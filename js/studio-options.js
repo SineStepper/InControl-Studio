@@ -47,6 +47,8 @@
 
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const menuForButton = (index) => MENU_BUTTONS[index] || null;
+  // Label of the menu a soft button (0-7) selects, for the screen row above it (#57).
+  const menuLabelForButton = (index) => { const k = MENU_BUTTONS[index]; return k ? MENUS[k].label : ''; };
 
   // Notes carrying the edited field for one step (chord-aware).
   function stepNotes(pattern, stepIdx) {
@@ -91,9 +93,13 @@
     }
 
     if (menuKey === 'tempo') {
+      const met = (seq.metronome = seq.metronome || { on: false, sound: 'Ping' });
       if (knobIndex === 0) { seq.tempo = clamp((seq.tempo || 120) + delta, 40, 240); return 'tempo ' + seq.tempo; }
       if (knobIndex === 1) { seq.swing = clamp((seq.swing == null ? 50 : seq.swing) + delta, 10, 80); return 'swing ' + seq.swing; }
       if (knobIndex === 2) { seq.swingSync = cycleIndex(SYNC_DISPLAY, seq.swingSync, delta); return 'swing sync ' + seq.swingSync; }
+      if (knobIndex === 3) { met.on = delta > 0; return 'metronome ' + (met.on ? 'on' : 'off'); }        // #46 on/off
+      if (knobIndex === 4) { met.sound = cycleIndex(['Ping', 'Tick', 'Pop'], met.sound || 'Ping', delta); return 'metro sound ' + met.sound; } // #47
+      if (knobIndex === 5) { met.silent = delta > 0; return 'metro ' + (met.silent ? 'blink only' : 'click'); } // #45 blink-only (no sound)
       return null;
     }
 
@@ -145,17 +151,21 @@
           const notes = stepNotes(pattern, stepIdx);
           const g = notes.length ? Math.max.apply(null, notes.map((n) => (n.gate == null ? 6 : n.gate))) : null;
           if (g == null) cols.push({ top, glyph: false, bottom: '-' });
-          else cols.push({ top, glyph: false, mid: String(Math.floor(g / 6)), bottom: boxes(g % 6) });
+          else cols.push({ top, glyph: false, bottom: Math.floor(g / 6) + ' ' + boxes(g % 6) }); // whole steps + # boxes
         }
       }
       return cols;
     }
     if (menuKey === 'tempo') {
       const t = seq.tempo || 120, sw = seq.swing == null ? 50 : seq.swing;
+      const met = seq.metronome || { on: false, sound: 'Ping' };
       return [
         { top: 'Tempo', glyph: true, glyphValue: scale(t, 40, 240), bottom: String(t) },
         { top: 'Swing', glyph: true, glyphValue: scale(sw, 10, 80), bottom: sw + '%' },
         { top: 'Swing Sync Rate', glyph: false, bottom: seq.swingSync || '1/16' },
+        { top: 'Metronome', glyph: false, bottom: met.on ? 'On' : 'Off' },   // #46
+        { top: 'Click Sound', glyph: false, bottom: met.sound || 'Ping' },   // #47
+        { top: 'Blink Only', glyph: false, bottom: met.silent ? 'Yes' : 'No' }, // #45
       ];
     }
     if (menuKey === 'pattern') {
@@ -233,7 +243,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studioOptions = {
     MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
-    menuForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim, scaleColor, valueColor, lighten,
+    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim, scaleColor, valueColor, lighten,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
 })(typeof window !== 'undefined' ? window : globalThis);

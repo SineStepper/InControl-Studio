@@ -83,9 +83,14 @@ eq([cols[0].glyph, cols[1].glyph], [true, false], 'velocity draws a white knob g
 // gate shows whole steps + 0-5 boxes (never a raw 0-192 number)
 const gp = freshPattern(); gp.steps[0].notes[0].gate = 15; // 2 whole steps + 3/6
 const gcols = O.columns(seq(), gp, 'gate', 0);
-eq(gcols[0].mid, '2', 'gate shows whole number of steps');
-eq(gcols[0].bottom, '###', 'gate shows 0-5 boxes for the 1/6 remainder');
+eq(gcols[0].bottom, '2 ###', 'gate shows whole steps + 0-5 boxes for the 1/6 remainder');
 eq(gcols[0].glyph, false, 'gate uses boxes, not a knob glyph');
+// #57 menu labels for the option buttons
+eq([O.menuLabelForButton(0), O.menuLabelForButton(1), O.menuLabelForButton(3), O.menuLabelForButton(7)], ['Velocity', 'Gate', 'Tempo', 'Pattern'], '#57 menu labels for buttons 1/2/4/8');
+// metronome controls on the tempo page (#46/#47/#45)
+const ms = seq(); O.applyKnob(ms, freshPattern(), 'tempo', 3, +1, 0, false); eq(ms.metronome.on, true, '#46 knob 4 toggles metronome on');
+O.applyKnob(ms, freshPattern(), 'tempo', 4, +1, 0, false); eq(ms.metronome.sound, 'Tick', '#47 knob 5 cycles the click sound');
+O.applyKnob(ms, freshPattern(), 'tempo', 5, +1, 0, false); eq(ms.metronome.silent, true, '#45 knob 6 sets blink-only (no sound)');
 // chance / swing render as percentages
 eq(O.columns(seq(), freshPattern(), 'chance', 0)[0].bottom, '100%', 'chance shows a percentage');
 eq(O.columns(seq(), freshPattern(), 'tempo', 0)[1].bottom, '50%', 'swing shows a percentage');

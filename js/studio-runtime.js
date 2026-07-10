@@ -76,8 +76,17 @@
       const { r, g, b } = sysex.hexTo7bit(hex);
       send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
       sendKnobValue(i);
+      send(sysex.screenText(i, 2, partLabel(i))); // bottom row, above Part button i+1 = its mapped template (#58)
     }
     refreshCentreScreen();
+  }
+  // Label above Part button i+1: the template mapped to that Part, else its name (#58).
+  function partLabel(i) {
+    const m = model(); if (!m) return '';
+    const pt = m.partTemplates && m.partTemplates[i];
+    if (pt && m.templates) { const t = m.templates.find((x) => x.id === pt); if (t) return String(t.name || '').slice(0, 9); }
+    const tr = m.sequencer && m.sequencer.tracks && m.sequencer.tracks[i];
+    return (tr && tr.name) ? tr.name : 'Part ' + (i + 1);
   }
   // Update one knob column: the graphic knob (glyph) + its value shown above it.
   function sendKnobValue(index) {
@@ -203,8 +212,9 @@
   // currentTick) mapping so it tracks tempo changes automatically.
   function scheduleMetronome(curTick) {
     if (!metroOn() || !st.seqRt) return;
-    const ac = ensureAudio(); if (!ac) return;
     const m = model(); const met = m.sequencer.metronome;
+    if (met.silent) return; // "blink only": keep the grid flash, skip the audio click (#45)
+    const ac = ensureAudio(); if (!ac) return;
     const p = gridPattern(); if (!p) return;
     const tempo = m.sequencer.tempo || 120;
     const secPerTick = 60 / tempo / 24;
@@ -623,10 +633,10 @@
       const c = cols[i];
       send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name (blank if unused)
       if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob ONLY where there's a real value
-      send(sysex.screenText(i, 1, c && c.mid != null ? c.mid : '')); // gate: whole number of steps
-      send(sysex.screenText(i, 2, c ? (c.bottom || '') : ''));     // reading below: number / % / gate boxes
+      send(sysex.screenText(i, 1, c ? (c.bottom || '') : ''));    // reading above the icon: number / % / gate "N ###"
+      send(sysex.screenText(i, 2, opts().menuLabelForButton(i))); // bottom row, above each button = the menu it selects (#57)
     }
-    // Centre screen: menu name at the BOTTOM ("Velocity", "Gate", …), step page at the top (#6).
+    // Centre screen: step page at the top (#6).
     const menu = opts().MENUS[st.optionsMenu];
     send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
     send(sysex.screenText(8, 2, menu ? menu.label : ''));
