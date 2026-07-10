@@ -331,4 +331,20 @@ ok(recAt(2, 82) === 0, 'note before the halfway point records to the current ste
 ok(recAt(4, 83) === 1, 'note past the halfway point records to the next step');         // rounds forward
 st.recEcho.clear();
 
+// --- #12 per-pad pressure drives pad LED brightness (instrument mode) ---
+st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false; st.running = true;
+st.rt.padMode = 'pads';
+mark = sent.length;
+RT.handleControl([0xa0, 0x60, 100]); // Pad 1 pressure (poly aftertouch)
+ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 38), '#12 pad pressure repaints pad 1 LED (id 38)');
+st.rt.padMode = 'sequencer'; st.running = false;
+
+// --- #29 Play sends All-Notes-Off (CC123) to all 16 channels on the dest ---
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.tick = 0; st.clock = null;
+mark = sent.length;
+RT.seqPlay();
+const panicChans = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0xb0 && m.bytes[1] === 123).map((m) => m.bytes[0] & 0x0f));
+ok(panicChans.size === 16, '#29 Play panics all 16 channels (got ' + panicChans.size + ')');
+RT.seqStop();
+
 console.log('\n' + n + ' integration assertions passed');

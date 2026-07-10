@@ -174,6 +174,27 @@
     return tpl;
   }
 
+  // #27: templates and setups are one and the same. Merge a Components template's
+  // parameters INTO an existing setup instead of replacing it — the sequencer,
+  // per-channel assignments and the fixed Mute/Solo bank are preserved; the
+  // template's knobs/faders/buttons/pads/wheels/pedals overlay the setup, and any
+  // extra banks it carries are appended.
+  function mergeTemplate(m, tpl) {
+    const t = fromTemplate(tpl);
+    m.knobBanks = t.knobBanks.length ? t.knobBanks : m.knobBanks;
+    m.faders = t.faders;
+    // keep buttonBanks[0] (fixed Mute/Solo); overlay the editable banks from the template
+    const fixed = m.buttonBanks[0] || muteSoloBank();
+    m.buttonBanks = [fixed].concat(t.buttonBanks.slice(1));
+    if (m.buttonBanks.length < 2) m.buttonBanks.push(newBank('button', 16, (i) => 'Button ' + (i + 1)));
+    m.pads = t.pads;
+    m.wheels = t.wheels;
+    m.pedals = t.pedals;
+    m.keys = t.keys;
+    if (tpl.name) m.name = tpl.name;
+    return m;
+  }
+
   const toJSON = (m) => JSON.stringify(m, null, 2);
   function fromJSON(str) {
     const m = typeof str === 'string' ? JSON.parse(str) : str;
@@ -184,7 +205,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studio = {
     MSG, BIT_DEPTHS, BEHAVIORS, VEL_CURVES, KNOB_MODES, COMBINED,
-    make, newBank, muteSendBank, muteSoloBank, newModel, addKnobBank, addButtonBank, fromTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
+    make, newBank, muteSendBank, muteSoloBank, newModel, addKnobBank, addButtonBank, fromTemplate, mergeTemplate, toTemplate, ensureSequencer, toJSON, fromJSON,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studio;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -40,6 +40,12 @@
       if (!name) return null;
       return { control: name, value: status === 0x80 ? 0 : d2, kind: 'note' };
     }
+    // Per-pad pressure (polyphonic aftertouch) — drives pad LED brightness (#12).
+    if (status === 0xa0) {
+      const name = PAD_NOTES[d1];
+      if (!name) return null;
+      return { control: name, value: d2, kind: 'pressure' };
+    }
     if (status === 0xb0) {
       const name = CC_CONTROLS[d1];
       if (!name) return null;

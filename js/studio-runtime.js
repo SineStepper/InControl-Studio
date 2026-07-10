@@ -655,6 +655,20 @@
   function onMsg(bytes) {
     const ev = incontrol.resolve(bytes);
     if (!ev) return;
+    // Per-pad pressure → pad LED brightness (lighter/darker with pressure, #12),
+    // and forward the mapped pad-pressure message if one is assigned.
+    if (ev.kind === 'pressure') {
+      const cp = mapControl(ev.control);
+      if (cp && cp.group === 'pad') {
+        if (st.rt && st.rt.padMode !== 'sequencer') ledHex(38 + cp.index, opts().valueColor(partColor(), ev.value, 127));
+        const pa = model() && model().pads && model().pads.pressures[cp.index];
+        if (pa && pa.enabled && st.destId) {
+          const ch = ((pa.channel === 'default' ? (st.rt && st.rt.channel) || 1 : pa.channel) - 1) & 0x0f;
+          sendMusic(st.destId, pa.message_type === 'Channel Pressure' ? [0xd0 | ch, ev.value & 0x7f] : [0xa0 | ch, (pa.note || 0) & 0x7f, ev.value & 0x7f]);
+        }
+      }
+      return;
+    }
     // Transport controls the sequencer
     if (ev.value > 0 && (ev.control === 'Play' || ev.control === 'Stop' || ev.control === 'Record')) {
       if (ev.control === 'Play') seqPlay();

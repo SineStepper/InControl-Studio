@@ -36,9 +36,10 @@
   function render(host) {
     if (!hooked && RT()) {
       RT().onStep(() => paintHeads());
-      // Re-render when the sequence content changes from the hardware (#16), but
-      // only while the Sequencer sub-tab is on screen.
-      RT().onChange(() => { const h = document.querySelector('#studio-body'); if (h && h.querySelector('.seq-wrap')) render(h); });
+      // Re-render live when the sequence content changes from the hardware — e.g.
+      // steps recorded on the SL while it plays (#16) — as long as the Sequencer
+      // tab is on screen. No stop/start needed to see recorded steps.
+      RT().onChange(() => { const v = document.querySelector('#view-sequencer'); const h = document.querySelector('#sequencer-body'); if (v && v.classList.contains('active') && h) render(h); });
       hooked = true;
     }
     const prev = host.querySelector('.seq-wrap'); // replace our own content, keep the sub-tab bar

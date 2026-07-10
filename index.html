@@ -8,16 +8,70 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="dot"></span>
-      <h1>SL MkIII <em>InControl Studio</em></h1>
+  <section id="view-studio" class="view active">
+  <!-- ============================== MENU BAR ============================= -->
+  <header class="menubar">
+    <div class="mb-left">
+      <div class="menu" id="menu-file">
+        <button class="menu-btn" type="button">File</button>
+        <div class="menu-pop">
+          <button type="button" data-act="new">New setup</button>
+          <label class="menu-item file">Import .syx<input type="file" id="studio-import" accept=".syx,application/octet-stream" hidden /></label>
+          <label class="menu-item file">Load .json<input type="file" id="studio-load" accept="application/json,.json" hidden /></label>
+          <button type="button" data-act="save">Save .json</button>
+          <button type="button" data-act="export">Export .syx</button>
+          <div class="menu-sep"></div>
+          <label class="menu-item file">Import pack<input type="file" id="studio-pack-in" accept=".slmkiiipack,application/zip" hidden /></label>
+          <label class="menu-item file">Import sessions<input type="file" id="studio-sessions-in" accept=".syx,application/octet-stream" hidden /></label>
+        </div>
+      </div>
+      <div class="menu" id="menu-edit">
+        <button class="menu-btn" type="button">Edit</button>
+        <div class="menu-pop">
+          <button type="button" data-act="undo">Undo</button>
+          <button type="button" data-act="redo">Redo</button>
+          <div class="menu-sep"></div>
+          <button type="button" data-act="copy">Copy</button>
+          <button type="button" data-act="cut">Cut</button>
+          <button type="button" data-act="paste">Paste</button>
+        </div>
+      </div>
+      <span class="brand-mini"><span class="dot"></span>InControl Studio</span>
     </div>
-    <div class="topbar-right">
-      <span id="se-log" class="fineprint"></span>
+
+    <div class="mb-center" id="studio-chan-bar">
+      <span class="fineprint">Per-channel instrument</span>
+      <select id="chan-sel" title="Assign a control template to each MIDI channel / Part"></select>
+      <button class="btn" id="chan-assign" title="Assign the current editor setup to this channel">Assign</button>
+      <button class="btn" id="chan-clear" title="Remove this channel's assigned template">Clear</button>
+      <span class="fineprint" id="chan-status"></span>
+    </div>
+
+    <div class="mb-right">
+      <button class="btn primary" id="se-start">Start engine</button>
+      <label class="se-lbl">Destination <select id="se-dest" title="A virtual / loopback port your DAW or synth listens to (IAC on macOS, loopMIDI on Windows). Your mapped MIDI and the sequencer's notes go here — NOT the SL."></select></label>
       <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
     </div>
   </header>
+
+  <div class="status-bar">
+    <span id="studio-status" class="status"></span>
+    <span class="spacer"></span>
+    <span id="se-log" class="fineprint"></span>
+  </div>
+
+  <!-- pack controls appear once a pack / sessions file is imported -->
+  <div class="toolbar pack-bar" id="studio-pack-bar" style="display:none">
+    <span class="fineprint" id="pack-name">Pack</span>
+    <label class="se-lbl">Template <select id="pack-templates"></select></label>
+    <button class="btn" id="pack-load">Load into editor</button>
+    <label class="se-lbl" id="pack-sessions-lbl" style="display:none">Session <select id="pack-sessions-sel"></select></label>
+    <button class="btn" id="pack-load-session" style="display:none">Load into sequencer</button>
+    <span class="fineprint" id="pack-sessions"></span>
+    <span class="spacer"></span>
+    <button class="btn" id="pack-export-sessions">Export sessions .syx</button>
+    <button class="btn" id="pack-export">Export pack</button>
+  </div>
 
   <!-- ============================== SETTINGS ============================= -->
   <div id="settings-panel" class="settings-panel" hidden>
@@ -31,54 +85,26 @@
       <div class="field"><label title="SL MkIII InControl input — receives your control moves">SL in</label><select id="se-in"></select></div>
       <div class="field"><label title="SL MkIII InControl output — sends LED colours to the unit">SL out</label><select id="se-out"></select></div>
       <div class="field"><label title="SL MkIII keybed (regular port) — for sequencer live-record">Keys in</label><select id="se-keys"></select></div>
+      <div class="field"><label>Name</label><input type="text" id="studio-name" maxlength="24" placeholder="Setup name" /></div>
       <div class="field"><button class="btn" id="settings-close">Close</button></div>
     </div>
   </div>
 
-  <!-- ========================== INCONTROL STUDIO ========================= -->
-  <section id="view-studio" class="view active">
-    <div class="toolbar">
-      <button class="btn" id="studio-new">New setup</button>
-      <label class="btn file">Import .syx<input type="file" id="studio-import" accept=".syx,application/octet-stream" hidden /></label>
-      <label class="btn file">Load .json<input type="file" id="studio-load" accept="application/json,.json" hidden /></label>
-      <label class="te-namewrap">Name <input type="text" id="studio-name" maxlength="24" placeholder="Setup name" /></label>
-      <button class="btn primary" id="studio-save">Save .json</button>
-      <button class="btn" id="studio-export-syx" title="Export the base mappings as a Novation Components .syx template">Export .syx</button>
-      <label class="btn file">Import pack<input type="file" id="studio-pack-in" accept=".slmkiiipack,application/zip" hidden /></label>
-      <label class="btn file">Import sessions<input type="file" id="studio-sessions-in" accept=".syx,application/octet-stream" hidden /></label>
-      <span id="studio-status" class="status"></span>
-    </div>
-    <div class="toolbar pack-bar" id="studio-pack-bar" style="display:none">
-      <span class="fineprint" id="pack-name">Pack</span>
-      <label class="se-lbl">Template <select id="pack-templates"></select></label>
-      <button class="btn" id="pack-load">Load into editor</button>
-      <label class="se-lbl" id="pack-sessions-lbl" style="display:none">Session <select id="pack-sessions-sel"></select></label>
-      <button class="btn" id="pack-load-session" style="display:none">Load into sequencer</button>
-      <span class="fineprint" id="pack-sessions"></span>
-      <span class="spacer"></span>
-      <button class="btn" id="pack-export-sessions">Export sessions .syx</button>
-      <button class="btn" id="pack-export">Export pack</button>
-    </div>
-    <div class="toolbar" id="studio-chan-bar">
-      <span class="fineprint">Per-channel instruments</span>
-      <label class="se-lbl">Channel <select id="chan-sel"></select></label>
-      <button class="btn" id="chan-assign" title="Assign the current editor setup to this channel/button">Assign current setup</button>
-      <button class="btn" id="chan-clear" title="Remove this channel's assigned template">Clear</button>
-      <span class="fineprint" id="chan-status"></span>
-    </div>
-    <div class="toolbar se-bar">
-      <div class="se-port">
-        <label class="se-lbl">Destination <select id="se-dest" title="A virtual / loopback port your DAW or synth listens to (IAC on macOS, loopMIDI on Windows). Your mapped MIDI and the sequencer's notes go here — NOT the SL."></select></label>
-        <span class="se-desc">Virtual port your DAW/synth listens to (IAC / loopMIDI)</span>
-      </div>
-      <div class="se-port">
-        <button class="btn primary" id="se-start">Start engine</button>
-      </div>
-    </div>
-    <div id="studio-body" class="studio-body"></div>
+  <!-- ========================= TOP-LEVEL TABS =========================== -->
+  <nav class="main-tabs" id="main-tabs">
+    <button class="mtab active" type="button" data-view="editor">Editor</button>
+    <button class="mtab" type="button" data-view="sequencer">Sequencer</button>
+  </nav>
+
+  <section id="view-editor" class="mview active">
+    <nav id="editor-subtabs" class="editor-subtabs"></nav>
+    <div id="editor-body" class="studio-body"></div>
   </section>
 
-
+  <section id="view-sequencer" class="mview">
+    <div id="sequencer-body" class="studio-body"></div>
+  </section>
+  </section>
 
   <script src="js/sysex.js"></script>
   <script src="js/controls.js"></script>
