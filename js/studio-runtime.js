@@ -473,15 +473,26 @@
       if (st.recording && seqIsPlaying()) recordNoteOff(note);
     }
   }
+  // A tick is a "strong" position if it lands on a 1/4 (24 PPQN) or 1/8 (12) beat.
+  const isStrong = (tick) => tick % 24 === 0 || tick % 12 === 0;
   function recordNoteOn(note, velocity) {
     const p = gridPattern(); if (!p) return;
-    const step = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : 0; // quantise note-on to the current step
-    // Non-quantised record: place the note on the nearest micro-step within the step.
+    const pos = st.seqRt ? st.seqRt.pos[st.gridTrack] : { pad: 0, counter: 0 };
+    const stepTicks = SEQ().SYNC[p.syncRate] || 6;
+    let step = pos.pad; // current play-head step (correct for any direction/length)
     let micro = 0;
     const m = model();
     if (m && m.sequencer && m.sequencer.quantizeRecord === false && st.seqRt) {
-      const stepTicks = SEQ().SYNC[p.syncRate] || 6;
+      // Non-quantised: place the note on the nearest micro-step within the step.
       micro = Math.round(((st.seqRt.tick % stepTicks) / stepTicks) * 6) % 6;
+    } else if (st.seqRt) {
+      // Weighted quantise to the NEAREST step, biased toward strong beats (#20):
+      // a step landing on a 1/4/1/8 gets a wider capture window than an off-beat.
+      const sub = st.seqRt.tick % stepTicks;                 // 0..stepTicks-1 into the current step
+      const boundary = st.seqRt.tick - sub;                  // tick at the start of the current step
+      const curStrong = isStrong(boundary), nextStrong = isStrong(boundary + stepTicks);
+      const mid = curStrong ? stepTicks * 0.62 : nextStrong ? stepTicks * 0.38 : stepTicks * 0.5;
+      if (sub >= mid) step = SEQ().stepIndexFor(pos.counter + 1, p.start, p.end, p.direction, p.shift, Math.random);
     }
     const s = p.steps[step];
     let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
