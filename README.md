@@ -1,204 +1,192 @@
 # InControl Studio — Novation SL MkIII
 
-A browser-based tool to set **custom RGB colours** on the Novation SL MkIII's
-pads, buttons and fader LEDs — the thing **Novation Components doesn't let you
-do**, even though the hardware fully supports it.
+Run the Novation SL MkIII in **InControl** mode as a full, standalone-style
+instrument + step sequencer — controlled entirely from the hardware — with
+**custom RGB LED colours** on every pad, button and fader, the thing **Novation
+Components doesn't let you do** even though the hardware supports it.
 
-It's a single-view app — **InControl Studio** — that drives the SL MkIII in
-*InControl* mode and does everything the old Live Colours and Bridge tabs did:
+It's a single web/Electron app — **InControl Studio** — with two top-level tabs:
 
-- **Custom RGB LED colours** on every pad/button/fader — the thing **Novation
-  Components doesn't let you do** — pushed live as you edit (no refresh button).
-- A Components-style **customizer** with more than Components allows: unlimited
-  knob/button banks, per-state LED colours, richer message types (14-bit, NRPN,
-  combined continuous bank-change), and per-Part instrument templates. Imports
-  Components `.syx` templates and `.slmkiiipack` packs.
-- A **live translation engine** that remaps InControl controls to any MIDI
-  destination (what Bridge did), plus a full **step sequencer** modelled on the
-  SL MkIII's own — driven entirely from the hardware.
+- **Editor** — a Components-style customizer with *more* than Components allows:
+  a **template library** you map to the 8 Parts, unlimited knob/button banks,
+  per-state LED colours, and richer message types (14-bit, NRPN, combined
+  continuous bank-change). Imports Components `.syx` templates and
+  `.slmkiiipack` packs.
+- **Sequencer** — a step sequencer modelled on the SL MkIII's own (8 tracks ×
+  8 patterns × 16 steps), with a **session library**, on-screen grid, transport,
+  and a look-ahead metronome. Plays back imported Components sessions.
 
-MIDI ports auto-detect and the engine auto-starts; a **⚙ settings** drawer
-(top-right) holds the port overrides and a **light/dark theme** toggle.
+The whole surface — pads, soft buttons, knobs, screens, transport, Options mode —
+is driven live from the SL so you can work without looking at the computer. MIDI
+ports **auto-detect** and the engine **auto-starts**; a **File / Edit** menu bar
+sits top-left, **Per-channel instrument** top-middle, **Start engine +
+Destination** top-right, and a **⚙ settings** drawer holds port overrides and a
+**light/dark theme** toggle.
 
-![The customizer editing SL MkIII LEDs live](assets/screenshot.png)
+![The InControl Studio editor](assets/studio-editor.png)
 
-## What's possible (short answer)
+## Build & run locally
 
-Yes — you can set **arbitrary colours**. The SL MkIII accepts a SysEx "Set LED"
-command carrying a 7-bit-per-channel RGB value for every pad, soft button,
-transport button and fader LED. Each LED can be **solid**, **flashing**, or
-**pulsing**. Components only offers a fixed template workflow and hides this;
-the [Programmer's Reference Guide](docs/PROTOCOL.md) documents the raw messages,
-and this app implements them.
+No GitHub Actions needed — everything builds on your machine.
 
-The one thing that's *not* cleanly addressable is the keybed "light guide" —
-its LED IDs overlap other controls in the official spec, so it's intentionally
-left out. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
+### Web app (fastest, no install)
 
-## Quick start
+Serve the repo root and open it in a Chromium browser (Chrome / Edge / Opera —
+they have the **Web MIDI API with SysEx**):
+
+```bash
+python3 -m http.server 8000
+# then open http://localhost:8000
+```
+
+Any static server works (`npx serve`, VS Code Live Server, …). Put the SL MkIII
+in **InControl** mode and approve the MIDI/SysEx prompt. A browser can't create a
+virtual MIDI port, so pick an existing one as the **Destination** (an **IAC** bus
+on macOS, a **loopMIDI** port on Windows).
+
+### Desktop app (Electron, native MIDI)
+
+Needs **Node.js**. Native MIDI runs in Electron's main process via
+[`@julusian/midi`](https://www.npmjs.com/package/@julusian/midi), and on
+macOS/Linux the app **creates its own virtual port** (`SL MkIII Bridge`), so no
+IAC/loopMIDI setup is required.
+
+```bash
+cd desktop
+npm install      # electron + @julusian/midi (prebuilt binaries)
+npm start        # dev run — the full native-MIDI app
+```
+
+Build an installer:
+
+```bash
+npm run dist     # stages the web UI into ./app, then runs electron-builder
+```
+
+Output lands in **`desktop/dist/`** — `.exe` (Windows), `.dmg`/`.zip` (macOS),
+`.AppImage` (Linux).
+
+- **Build on the OS you're shipping for.** `electron-builder` doesn't reliably
+  cross-compile the native MIDI module, so run `npm run dist` on Windows for the
+  `.exe`, macOS for the `.dmg`, etc.
+- **First build needs internet** (downloads the Electron binary once).
+- **Windows:** it can't create a virtual port — install
+  [loopMIDI](https://www.tobias-erichsen.de/software/loopmidi.html), make a
+  port, and select it as the Destination. The build is unsigned, so SmartScreen
+  warns on first launch → **More info → Run anyway**.
+
+(A `.github/workflows/build-desktop.yml` can also build the Windows installer on
+GitHub Actions if you'd rather not build locally, but it's optional.)
+
+## Using it
 
 1. Connect the SL MkIII by USB and press the **InControl** button on the unit.
-2. Open the app:
-   - **Easiest:** serve the folder and open it in Chrome/Edge/Opera:
-     ```bash
-     python3 -m http.server 8000
-     # then visit http://localhost:8000
-     ```
-   - Opening `index.html` directly (`file://`) also works in most Chromium
-     builds, but a local server is the reliable path for Web MIDI + SysEx.
-3. Click **Connect MIDI**, grant the SysEx permission, and pick the
-   **InControl** output port.
-4. Click any control, choose a colour. With **Live send** on, it updates the
-   hardware immediately.
+2. Open the app (web or desktop). Ports auto-detect and the engine auto-starts;
+   override them in **⚙ settings** if needed, and set a **Destination** port for
+   your DAW/synth to receive the mapped MIDI and the sequencer's notes.
+3. **Editor** tab: build/import templates in the left library, map each to a
+   Part (the 1-8 dots), and edit any control's mapping + LED colour — changes
+   push to the hardware live.
+4. **Sequencer** tab: program steps, hit **Play**, and drive everything from the
+   SL. Save the arrangement as a **session** (left column).
 
-## Features
+### On the hardware (InControl mode)
 
-- Visual editor for all **68** addressable LEDs, grouped by section.
-- Full RGB colour picker + hex entry + one-click preset swatches.
-- Per-LED **solid / flash / pulse** mode.
-- Multi-select (Shift/Ctrl-click) to colour many controls at once.
-- **Live send** to hardware, plus **Send all**, **All off**, and **Rainbow**.
-- **Save/Load** your layout as `.json`.
-- **Export `.syx`** (a Standard MIDI SysEx file you can replay from any SysEx
-  utility) or **Copy SysEx** hex to the clipboard.
-- Layout autosaves to the browser between sessions.
+- **Pads** are the step grid (or playable notes via **Grid**); play head, used
+  steps, and the current step are shown in the Part colour with a white head.
+- **Soft buttons 1-8** (below the screens) select the Part/channel; **9-24**
+  (above the faders) are the **Mute/Solo** bank — or, once you page button banks,
+  your own button banks.
+- **Options** enters editing mode: soft buttons pick **Velocity / Gate / Chance
+  / Tempo / Pattern**, knobs 1-8 edit the value, the screens show it, and the top
+  six above-fader buttons become **micro-steps**.
+- The sequencer sends **MIDI clock** to the SL so its **arpeggiator** and other
+  tempo-driven features lock to the sequence (set the SL's Clock Source to
+  External/Auto).
+
+![The InControl Studio sequencer](assets/studio-sequencer.png)
 
 ## Templates & LED colours (important)
 
 A common question: *can I bake custom LED colours into the stored **templates**
 (the ones Components saves as `.syx`)?*
 
-**Short answer: no — the template format doesn't carry LED colours.** I fully
-reverse-engineered the template `.syx` format (see
-[docs/TEMPLATE-FORMAT.md](docs/TEMPLATE-FORMAT.md)) and verified a bit-exact
-round-trip. Templates store control **mappings** (MIDI type, CC/note, channel,
-value range) — every colour-looking `7F` byte is actually a control's max value
-(127). Novation's User Guide confirms it. That's precisely why Components has no
-template LED-colour UI. Custom colours are only controllable **live** via the
-InControl SysEx API — which is what the main tool does.
+**Short answer: no — the template format doesn't carry LED colours.** The
+template `.syx` format is fully reverse-engineered (see
+[docs/TEMPLATE-FORMAT.md](docs/TEMPLATE-FORMAT.md)) with a bit-exact round-trip:
+templates store control **mappings** (MIDI type, CC/note, channel, value range) —
+every colour-looking `7F` byte is actually a control's max value (127). That's
+why Components has no template LED-colour UI. Custom colours are only
+controllable **live** via the InControl SysEx API — which is what this app does.
 
-**This was confirmed on real hardware:** editing template bytes produced **no**
-colour change, and live RGB SysEx only affects LEDs in InControl view. So custom
-colours are strictly a live, InControl feature — mappings go in the template,
-colours are applied live.
+## Save / import / export
 
-### Editing templates
+- **Save / Load `.json`** — the entire setup: control mappings, LED colours, the
+  template library, the session library, and the sequencer.
+- **Import `.syx`** — a Components template, added to the template library.
+- **Import pack** (`.slmkiiipack`) / **Import sessions** (`.syx`) — Components
+  packs and sessions; sessions land in the Sequencer's session library and play
+  back.
+- **Export `.syx`** — writes the active template back out as a Components
+  template (bit-exact codec with recomputed CRC-32, so it re-imports cleanly).
 
-Template editing lives in **InControl Studio** (below): **Import .syx** loads a
-real Components template, and **Export .syx** writes one back. The codec is a JS
-port of the proven [`inno/slmkiii`](https://github.com/inno/slmkiii) library — it
-round-trips both sample templates **bit-exact** and recomputes the CRC-32, so
-exports import cleanly into Novation Components.
+## Bridge (optional, headless)
 
-## InControl Studio
-
-A full customizer + live engine for InControl mode, going beyond Components:
-
-- **7 editor tabs** (Rotary, Faders, Buttons, Pads, Wheels, Pedals, Keys) with
-  every parameter: message type (CC/NRPN/Note/PC/Bank/Sub-bank/Song Pos/Pitch
-  Bend/Aftertouch), channel, CC/Note #, start/end, **bit depth (7/8/14-bit)**,
-  button/pad behaviour, knob resolution/mode/pivot, pad velocity min/max + curve,
-  and **per-state LED colours** (idle / pressed / pressure).
-- **Unlimited knob & button banks** (Components is fixed); the first button bank
-  is Mute/Send for ch 1–8.
-- **Live engine**: turn a knob / hit a pad and it emits your assigned MIDI to a
-  destination port (endless-encoder knobs accumulate correctly; **combined
-  continuous bank-change** lets one knob sweep programs then roll the bank), while
-  per-state LED colours are pushed back to the SL. Nav buttons page banks / cycle
-  channel. Start it from the "Live engine" bar (SL in / SL out / destination).
-- **Step sequencer** (mirrors the SL's own): 8 tracks × 8 patterns × 16 steps,
-  per-step note/velocity/gate/chance, 4 directions, 8 sync rates, tempo, transport,
-  Undo/Redo. On-screen grid editor plus a hardware step-grid on the pads (Grid
-  button toggles playable pads ↔ steps; play head + notes shown via pad LEDs).
-
-![The InControl Studio sequencer](assets/studio-sequencer.png)
-
-**Imports and exports** Components `.syx` templates (Import/Export .syx), and
-saves/loads the whole setup (mappings + colours + sequence) as JSON. Modules: `js/studio-model.js`,
-`js/studio-ui.js`, `js/studio-engine.js` (+ `test/studio-engine.test.js`),
-`js/studio-runtime.js`, `js/studio-sequencer.js` (+ `test/studio-sequencer.test.js`),
-`js/studio-sequencer-ui.js`.
-
-## Bridge — colours *and* your own mappings, live
-
-Custom colours only exist in InControl mode, where controls send *fixed* messages
-instead of your template's mapping. The **Bridge** reconciles that: it holds your
-colours on the unit (re-asserting them so they stick) **and** remaps the fixed
-InControl messages to another MIDI port your DAW/synth reads. Colours + custom
-mappings at once, no firmware — while it's running.
-
-![The Bridge tab: ports and per-control remapping](assets/bridge.png)
-
-Two ways to run it:
-
-- **In the app** (Bridge tab) — pick an existing destination port (a browser
-  can't create one: use an **IAC** bus on macOS or **loopMIDI** on Windows).
-- **Headless** (`bridge/` Node service) — creates its own virtual port, good for
-  always-on use. See [bridge/README.md](bridge/README.md):
-  ```bash
-  cd bridge && npm install
-  node bridge.js --list                 # find your ports
-  cp config.example.json config.json    # edit colours + mappings
-  node bridge.js                        # SL MkIII in InControl mode
-  ```
-  The app's **Export config** button writes a `bridge-config.json` the Node
-  service reads directly.
-
-## Desktop app (Electron)
-
-Prefer a real app? [**`desktop/`**](desktop/) is an Electron build of the same
-three tabs with **native MIDI** — and it can **create its own virtual port**, so
-the Bridge needs no IAC/loopMIDI setup (the port `SL MkIII Bridge` just appears
-for your DAW). All MIDI runs in the main process via `@julusian/midi`; the shared
-`js/midi.js` auto-detects Electron and routes through it instead of Web MIDI.
-
-**You don't have to build it yourself.** A GitHub Actions workflow builds the
-**Windows** installer for you — open the **Actions** tab → **Build desktop app**
-→ **Run workflow**, then download it from the run's *Artifacts*. Or push a
-version tag (`git tag v1.0.0 && git push origin v1.0.0`) and it's attached to a
-GitHub Release. The build is unsigned, so approve on first launch (Windows
-SmartScreen → More info → Run anyway).
-
-To run from source instead:
+For always-on use there's a standalone Node service in
+[`bridge/`](bridge/README.md) that creates its own virtual port and re-asserts
+colours + remaps InControl messages without the app open:
 
 ```bash
-cd desktop
-npm install
-npm start            # dev run
-npm run dist         # build a .dmg / .exe / .AppImage locally
+cd bridge && npm install
+node bridge.js --list                 # find your ports
+cp config.example.json config.json    # edit colours + mappings
+node bridge.js                        # SL MkIII in InControl mode
 ```
-
-See [desktop/README.md](desktop/README.md).
 
 ## Browser support
 
-The browser build requires the **Web MIDI API with SysEx**: Chrome, Edge, and
-Opera (desktop). Safari and Firefox don't support Web MIDI SysEx — use one of
-those, the exported `.syx` with a native SysEx tool, or the **desktop app**
-above (works everywhere, no Web MIDI needed).
+The web build needs the **Web MIDI API with SysEx**: Chrome, Edge, Opera
+(desktop). Safari and Firefox don't support Web MIDI SysEx — use one of those,
+the exported `.syx` with a native SysEx tool, or the **desktop app** (works
+everywhere, no Web MIDI needed).
+
+## Tests
+
+Pure Node, no framework:
+
+```bash
+for t in test/*.test.js; do node "$t"; done
+```
 
 ## How it works
 
-- [`js/sysex.js`](js/sysex.js) — builds the `F0 00 20 29 02 0A 01 03 …` LED
-  messages and handles 8-bit ⟷ 7-bit colour conversion.
-- [`js/controls.js`](js/controls.js) — the map of every LED and its SysEx id.
-- [`js/midi.js`](js/midi.js) — Web MIDI wrapper (ports, send, input subscribe).
-- [`js/app.js`](js/app.js) — the Live Colours editor, sending and import/export.
-- [`js/sltemplate.js`](js/sltemplate.js) / [`js/template-editor.js`](js/template-editor.js)
-  — full template codec (7-to-8 encoding, all mapping fields, CRC-32) and the
-  Template Editor UI.
-- [`js/incontrol.js`](js/incontrol.js) / [`js/bridge-web.js`](js/bridge-web.js)
-  — InControl message resolution/remap and the in-app Bridge.
-- [`js/tabs.js`](js/tabs.js) — tab switching with `#hash` deep-links.
-- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — the full message reference;
-  [`docs/TEMPLATE-FORMAT.md`](docs/TEMPLATE-FORMAT.md) — the template format.
+- [`js/sysex.js`](js/sysex.js) — builds the `F0 00 20 29 02 0A 01 …` LED / screen
+  messages and 8-bit ⟷ 7-bit colour conversion.
+- [`js/incontrol.js`](js/incontrol.js) — resolves incoming InControl messages
+  (pads, buttons, knobs, faders, pad pressure) to named controls.
+- [`js/midi.js`](js/midi.js) — Web MIDI wrapper (and an Electron native backend);
+  auto-detects the SL's InControl / keys ports.
+- [`js/studio-model.js`](js/studio-model.js) — the data model: controls, banks,
+  per-state colours, the template + session libraries.
+- [`js/studio-engine.js`](js/studio-engine.js) — pure control→MIDI + LED logic.
+- [`js/studio-runtime.js`](js/studio-runtime.js) — the live engine: reads the SL,
+  drives LEDs/screens, runs the sequencer clock, records, sends MIDI + clock.
+- [`js/studio-options.js`](js/studio-options.js) — the Options-mode menus/screens.
+- [`js/studio-sequencer.js`](js/studio-sequencer.js) — the tick-driven sequencer.
+- [`js/studio-ui.js`](js/studio-ui.js) / [`js/studio-sequencer-ui.js`](js/studio-sequencer-ui.js)
+  — the on-screen Editor and Sequencer.
+- [`js/sltemplate.js`](js/sltemplate.js) / [`js/pack.js`](js/pack.js) /
+  [`js/session.js`](js/session.js) — the template, pack, and session codecs.
+- [`docs/PROTOCOL.md`](docs/PROTOCOL.md) — message reference;
+  [`docs/SEQUENCER-CONTROL.md`](docs/SEQUENCER-CONTROL.md) — hardware control map;
+  [`docs/SESSION-FORMAT.md`](docs/SESSION-FORMAT.md) /
+  [`docs/TEMPLATE-FORMAT.md`](docs/TEMPLATE-FORMAT.md) — the file formats.
 
 ## Disclaimer
 
 Not affiliated with or endorsed by Novation / Focusrite. "Novation" and
-"SL MkIII" are trademarks of their respective owners. Protocol details come
-from Novation's publicly published Programmer's Reference Guide. Use at your
-own risk.
+"SL MkIII" are trademarks of their respective owners. Protocol details come from
+Novation's publicly published Programmer's Reference Guide. Use at your own risk.
 
 ## License
 
