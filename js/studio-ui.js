@@ -212,7 +212,7 @@
     $('#studio-new').addEventListener('click', () => { model = S.newModel(); ui.knobBank = 0; ui.buttonBank = 1; ui.sel = null; syncName(); render(); setStatus('New setup.', 'ok'); });
     $('#studio-import').addEventListener('change', (e) => { if (e.target.files[0]) importTemplate(e.target.files[0]); e.target.value = ''; });
     $('#studio-load').addEventListener('change', (e) => { if (e.target.files[0]) loadJson(e.target.files[0]); e.target.value = ''; });
-    $('#studio-save').addEventListener('click', () => { model.name = $('#studio-name').value || 'Studio Setup'; download((model.name).replace(/[^\w -]/g, '') + '.json', S.toJSON(model)); setStatus('Saved setup JSON.', 'ok'); });
+    $('#studio-save').addEventListener('click', () => { model.name = $('#studio-name').value || 'Studio Setup'; S.ensureSequencer(model); download((model.name).replace(/[^\w -]/g, '') + '.json', S.toJSON(model)); setStatus('Saved setup + sequencer JSON.', 'ok'); });
     $('#studio-export-syx').addEventListener('click', () => {
       model.name = $('#studio-name').value || 'Template';
       const bytes = T.exportSysex(S.toTemplate(model));
