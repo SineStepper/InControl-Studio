@@ -34,7 +34,7 @@
     return { channel: i + 1, activePattern: 0, color: PART_COLORS[i % 8], swing: 'On', chain: null, pending: null, patterns: Array.from({ length: PATTERNS }, newPattern) };
   }
   function newSequencer() {
-    return { tempo: 120, swing: 50, swingSync: '1/16', tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
+    return { tempo: 120, swing: 50, swingSync: '1/16', metronome: { on: false, sound: 'Ping' }, tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
   }
 
   // ---- playback runtime ----

@@ -21,7 +21,7 @@
     heldPads: new Set(), heldKeys: new Map(), shift: false, audition: new Map(), recRef: new Map(),
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
-    heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [] };
+    heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0 };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -134,8 +134,30 @@
   // MIDI real-time clock to the SL so its arp/tempo features sync (#26): FA start,
   // FC stop, F8 timing clock at 24 PPQN (once per clockTick).
   function sendClock(byte) { if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]); }
+  // ---- Metronome (#14): Ping/Tick/Pop click on each 1/4 + a green Grid flash ----
+  function metronomeTick(tick) {
+    const m = model(); const met = m && m.sequencer && m.sequencer.metronome;
+    if (!met || !met.on || tick % 24 !== 0) return; // quarter notes
+    const accent = tick % 96 === 0; // bar downbeat
+    playMetronomeSound(met.sound || 'Ping', accent);
+    if (st.slOutId) { ledHex(64, '#00ff00'); clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90); }
+  }
+  function playMetronomeSound(sound, accent) {
+    try {
+      const AC = global.AudioContext || global.webkitAudioContext; if (!AC) return;
+      if (!st.audioCtx) st.audioCtx = new AC();
+      const ac = st.audioCtx, t = ac.currentTime, gain = ac.createGain(); gain.connect(ac.destination);
+      const osc = ac.createOscillator(); osc.connect(gain);
+      if (sound === 'Tick') { osc.type = 'square'; osc.frequency.value = accent ? 2200 : 1600; gain.gain.setValueAtTime(accent ? 0.4 : 0.25, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); }
+      else if (sound === 'Pop') { osc.type = 'sine'; osc.frequency.value = accent ? 520 : 380; gain.gain.setValueAtTime(accent ? 0.6 : 0.4, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11); }
+      else { osc.type = 'sine'; osc.frequency.value = accent ? 1320 : 880; gain.gain.setValueAtTime(accent ? 0.5 : 0.35, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18); } // Ping
+      osc.start(t); osc.stop(t + 0.2);
+    } catch (e) {}
+  }
+
   function clockTick() {
     sendClock(0xf8); // 24-PPQN timing clock
+    const beatTick = st.seqRt.tick;
     const events = SEQ().onTick(st.seqRt);
     events.forEach((e) => {
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
@@ -143,6 +165,7 @@
       if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
     });
     playAutomation();
+    metronomeTick(beatTick);
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
@@ -160,11 +183,25 @@
   }
   function playAutomation() {
     const m = model(); if (!m || !m.sequencer || !st.seqRt) return;
-    m.sequencer.tracks.forEach((t) => {
+    m.sequencer.tracks.forEach((t, ti) => {
       const p = t.patterns[t.activePattern]; if (!p || !p.automation) return;
       const at = st.seqRt.tick % patternTicks(p);
-      Object.keys(p.automation).forEach((key) => { const bytes = p.automation[key][at]; if (bytes) sendMusic(st.destId, bytes); });
+      Object.keys(p.automation).forEach((key) => {
+        const bytes = p.automation[key][at]; if (!bytes) return;
+        sendMusic(st.destId, bytes);
+        if (ti === st.gridTrack && !st.optionsMode) animateAutomation(key, bytes); // reflect on the SL (#23)
+      });
     });
+  }
+  // Animate a playing automation lane on the SL: knob glyph value / fader brightness.
+  function animateAutomation(key, bytes) {
+    const parts = key.split(':'); const group = parts[0], bank = +parts[1], index = +parts[2];
+    const val = bytes[bytes.length - 1] & 0x7f;
+    if (group === 'knob' && bank === (st.rt.knobBank || 0) && index < 8 && st.slOutId && sysex) {
+      send(sysex.screenValue(index, 0, val)); send(sysex.screenText(index, 1, String(val)));
+    } else if (group === 'fader' && index < 8) {
+      refreshFaderLed(index, val);
+    }
   }
   function seqPlay() {
     const rt = ensureSeqRt(); if (!rt) return;
@@ -202,6 +239,13 @@
     refreshArrowLeds();
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('pattern ' + (t.activePattern + 1));
+  }
+  // Page the two visible Parts in Patterns view without changing the active Part (#17).
+  function pagePart(dir) {
+    const next = st.partTop + dir;
+    if (next < 0 || next > SEQ().TRACKS - 2) return; // clamp so two rows always fit
+    st.partTop = next;
+    refreshPatternPads(); refreshArrowLeds(); notify(); log('parts ' + (st.partTop + 1) + '-' + (st.partTop + 2));
   }
   function curTrack() { const m = model(); return m && m.sequencer ? m.sequencer.tracks[st.gridTrack] : null; }
   function ledHex(id, hex, beh) { if (!st.slOutId || !sysex) return; const { r, g, b } = sysex.hexTo7bit(hex); midi.sendToOutput(st.slOutId, sysex.ledRgb(id, r, g, b, beh || 'solid')); }
@@ -361,21 +405,25 @@
     }
   }
   // Patterns view (#4/#7): the 16 pads show/select the 8 patterns in the part colour.
+  // Part mode (#17): the two pad rows show two Parts' patterns (top = partTop,
+  // bottom = partTop+1), each row in its Part colour; up/down pages the Parts.
   function refreshPatternPads() {
-    const t = curTrack(); if (!t) return;
-    const color = t.color || '#3bd0ff';
-    const chain = t.chain;
-    const pend = t.pending;
-    for (let i = 0; i < SEQ().PATTERNS; i++) {
-      // A queued (deferred) pattern/chain pulses until it takes effect at the boundary (#3).
-      if (pend && (i === pend.activePattern || (pend.chain && i >= pend.chain.from && i <= pend.chain.to))) { ledHex(38 + i, '#ffffff', 'pulse'); continue; }
-      let hex;
-      if (i === t.activePattern) hex = '#ffffff';
-      else if (chain && i >= chain.from && i <= chain.to) hex = opts().lighten(color, 0.4); // chained patterns (#11)
-      else hex = opts().scaleColor(color, 0.35);
-      ledHex(38 + i, hex);
+    const m = model(); const tracks = m && m.sequencer && m.sequencer.tracks; if (!tracks) return;
+    for (let row = 0; row < 2; row++) {
+      const t = tracks[st.partTop + row];
+      for (let col = 0; col < 8; col++) {
+        const pad = row * 8 + col;
+        if (!t) { ledHex(38 + pad, '#000000'); continue; }
+        const pend = t.pending;
+        if (pend && (col === pend.activePattern || (pend.chain && col >= pend.chain.from && col <= pend.chain.to))) { ledHex(38 + pad, '#ffffff', 'pulse'); continue; }
+        const color = t.color || '#3bd0ff';
+        let hex;
+        if (col === t.activePattern) hex = '#ffffff';
+        else if (t.chain && col >= t.chain.from && col <= t.chain.to) hex = opts().lighten(color, 0.4);
+        else hex = opts().scaleColor(color, 0.35);
+        ledHex(38 + pad, hex);
+      }
     }
-    for (let i = SEQ().PATTERNS; i < 16; i++) ledHex(38 + i, '#000000');
   }
   // Up/down arrow LEDs, all consistent (lit when there's somewhere to go, else off) (#12/#24).
   //   Pads Up/Down (0/1)      -> pattern list position.
@@ -384,7 +432,10 @@
   function refreshArrowLeds() {
     const t = curTrack(); if (!t) return;
     const AR = '#00aaff';
-    const a = opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
+    // Pads Up/Down: Part-paging position in Patterns view, else pattern position.
+    const a = st.padView === 'patterns'
+      ? { up: st.partTop > 0, down: st.partTop < SEQ().TRACKS - 2 }
+      : opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
     ledHex(0, a.up ? AR : '#000000');
     ledHex(1, a.down ? AR : '#000000');
     const kbanks = (st.rt && st.rt.model.knobBanks && st.rt.model.knobBanks.length) || 1;
@@ -577,9 +628,14 @@
       if (ev.value > 0) { st.stepPage = ev.control === 'Screen Down' ? 1 : 0; refreshOptionScreens(); log('steps ' + (st.stepPage ? '9-16' : '1-8')); }
       return;
     }
-    // Pads Up/Down page patterns (or Shift-transpose an octave).
+    // Pads Up/Down: in Patterns view page the Parts (#17); in Steps view page
+    // patterns (or Shift-transpose an octave).
     if (ev.control === 'Pads Up' || ev.control === 'Pads Down') {
-      if (ev.value > 0) { if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12); else pagePattern(ev.control === 'Pads Down' ? 1 : -1); }
+      if (ev.value > 0) {
+        if (st.padView === 'patterns') { pagePart(ev.control === 'Pads Down' ? 1 : -1); }
+        else if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12);
+        else pagePattern(ev.control === 'Pads Down' ? 1 : -1);
+      }
       return;
     }
     // Screen Up/Down page the knob banks (#24) — options mode's step-paging is handled above.
@@ -623,21 +679,22 @@
       }
     }
 
-    // Patterns view: select a pattern; press two+ together to chain them (#11).
+    // Patterns view (#17): top row = Part `partTop`, bottom row = `partTop+1`.
+    // A pad selects that Part + pattern; two+ in the same row chain them (#11/#3).
     if (c && c.group === 'pad' && st.padView === 'patterns' && st.rt && st.rt.padMode === 'sequencer') {
-      const t = curTrack();
-      if (ev.value > 0 && c.index < SEQ().PATTERNS && t) {
-        if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[c.index]); refreshPatternPads(); contentChanged(); return; }
-        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = c.index; else SEQ().copyPattern(t, st.dupFrom, c.index); refreshPatternPads(); contentChanged(); return; }
+      const m = model(); const tracks = m && m.sequencer && m.sequencer.tracks;
+      const row = Math.floor(c.index / 8), col = c.index % 8, ti = st.partTop + row;
+      const t = tracks && tracks[ti];
+      if (ev.value > 0 && col < SEQ().PATTERNS && t) {
+        if (st.mod === 'clear') { SEQ().clearPattern(t.patterns[col]); refreshPatternPads(); contentChanged(); return; }
+        if (st.mod === 'dup') { if (st.dupFrom == null) st.dupFrom = col; else SEQ().copyPattern(t, st.dupFrom, col); refreshPatternPads(); contentChanged(); return; }
+        if (ti + 1 !== st.activeChannel) selectChannel(ti + 1); // pressing a Part's pad makes it the active Part
         st.heldPatterns.add(c.index);
-        // Deferred switch: while playing, queue the change to the next pattern
-        // boundary; instantly when stopped or with Shift held (#3).
+        const sameRow = [...st.heldPatterns].filter((p) => Math.floor(p / 8) === row).map((p) => p % 8);
         const instant = st.shift || !seqIsPlaying();
         let sel;
-        if (st.heldPatterns.size >= 2) {
-          const arr = [...st.heldPatterns]; sel = { activePattern: Math.min(...arr), chain: { from: Math.min(...arr), to: Math.max(...arr) } };
-          log((instant ? 'chain ' : 'queued chain ') + (sel.chain.from + 1) + '-' + (sel.chain.to + 1));
-        } else { sel = { activePattern: c.index, chain: null }; log((instant ? 'pattern ' : 'queued pattern ') + (c.index + 1)); }
+        if (sameRow.length >= 2) { sel = { activePattern: Math.min(...sameRow), chain: { from: Math.min(...sameRow), to: Math.max(...sameRow) } }; log((instant ? 'chain ' : 'queued chain ') + (sel.chain.from + 1) + '-' + (sel.chain.to + 1)); }
+        else { sel = { activePattern: col, chain: null }; log((instant ? 'pattern ' : 'queued pattern ') + (col + 1)); }
         if (instant) { t.activePattern = sel.activePattern; t.chain = sel.chain; t.pending = null; }
         else t.pending = sel;
         refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify();

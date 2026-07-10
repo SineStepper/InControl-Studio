@@ -77,6 +77,13 @@
     const qz = el('input', { type: 'checkbox', checked: c.m.sequencer.quantizeRecord !== false });
     qz.addEventListener('change', () => { c.m.sequencer.quantizeRecord = qz.checked; });
     set.appendChild(el('label', { className: 'seq-f' }, ['Quantize rec ', qz]));
+    // Metronome (#14): on/off + sound
+    c.m.sequencer.metronome = c.m.sequencer.metronome || { on: false, sound: 'Ping' };
+    const met = c.m.sequencer.metronome;
+    const mOn = el('input', { type: 'checkbox', checked: !!met.on });
+    mOn.addEventListener('change', () => { met.on = mOn.checked; });
+    set.appendChild(el('label', { className: 'seq-f' }, ['Metronome ', mOn]));
+    set.appendChild(selField('Sound', [['Ping', 'Ping'], ['Tick', 'Tick'], ['Pop', 'Pop']], met.sound || 'Ping', (v) => { met.sound = v; }));
     wrap.appendChild(set);
 
     // 16-step grid (2 rows of 8)

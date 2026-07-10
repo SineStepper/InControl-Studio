@@ -282,4 +282,12 @@ RT.seqStop();
 ok(sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && m.bytes[0] === 0xfc), '#26 Stop sends MIDI Stop (FC) to the SL out');
 st.running = false;
 
+// --- #17 Patterns view pages the Parts with Pads Up/Down ---
+st.padView = 'patterns'; st.partTop = 0; st.rt.padMode = 'sequencer';
+RT.handleControl(CC(0x56, 127)); // Pads Down -> next pair of Parts
+ok(st.partTop === 1, '#17 Pads Down pages the visible Parts');
+RT.handleControl(CC(0x55, 127)); // Pads Up
+ok(st.partTop === 0, '#17 Pads Up pages Parts back');
+st.padView = 'steps';
+
 console.log('\n' + n + ' integration assertions passed');
