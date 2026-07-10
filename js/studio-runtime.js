@@ -128,7 +128,7 @@
       const src = [
         'var id=null,tick=0,cfg={base:20,swing:50,syncTicks:6};',
         'function next(){var b=cfg.base,d=b;',
-        ' if(cfg.swing!==50&&cfg.syncTicks){var f=Math.max(0,Math.min(0.9,Math.abs(cfg.swing-50)/50));',
+        ' if(cfg.swing!==50&&cfg.syncTicks){var f=Math.max(0,Math.min(0.5,Math.abs(cfg.swing-50)/50));',
         '  var firstHalf=Math.floor(tick/cfg.syncTicks)%2===0;var sign=cfg.swing>50?1:-1;',
         '  d=b*(1+sign*(firstHalf?f:-f));}',
         ' id=setTimeout(function(){tick++;postMessage(0);next();},Math.max(2,d));}',
@@ -597,15 +597,19 @@
     const p = t.patterns[t.activePattern];
     const seq = model().sequencer;
     const cols = opts().columns(seq, p, st.optionsMenu, st.stepPage);
-    // Gate uses a text-only layout (just the hashtags + number, no knob glyph);
-    // every other menu uses the knob layout (#37). Only re-send when it changes.
-    const wantLayout = st.optionsMenu === 'gate' ? 0 : 1;
-    if (st.optScreenLayout !== wantLayout) { send(sysex.screenLayout(wantLayout)); st.optScreenLayout = wantLayout; }
+    // A knob glyph only appears where we actually send a value (type 3). So gate
+    // (no value) shows just its text/# boxes with no knob (#37), and empty columns
+    // (e.g. Tempo knobs 4-8) show no knob (#tempo-extra-glyphs). We keep the knob
+    // layout for text; on a MENU change we re-init the layout (0→1) to wipe any
+    // knobs left over from the previous menu.
+    if (st.optScreenMenu !== st.optionsMenu) {
+      send(sysex.screenLayout(0)); send(sysex.screenLayout(1)); // toggle clears stale widgets
+      st.optScreenMenu = st.optionsMenu; st.optScreenLayout = 1;
+    } else if (st.optScreenLayout !== 1) { send(sysex.screenLayout(1)); st.optScreenLayout = 1; }
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
-      send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name
-      if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph reflecting the value
-      else if (wantLayout === 1) send(sysex.screenValue(i, 0, 0)); // clear a stale knob on an empty step (knob layout only)
+      send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name (blank if unused)
+      if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob ONLY where there's a real value
       send(sysex.screenText(i, 1, c && c.mid != null ? c.mid : '')); // gate: whole number of steps
       send(sysex.screenText(i, 2, c ? (c.bottom || '') : ''));     // reading below: number / % / gate boxes
     }
@@ -651,8 +655,8 @@
   }
   function toggleOptions() {
     st.optionsMode = !st.optionsMode;
-    if (st.optionsMode) { st.stepPage = 0; st.optScreenLayout = null; refreshOptionLeds(); refreshOptionScreens(); log('options on'); }
-    else { st.selStep = null; st.heldMicros.clear(); st.optScreenLayout = null; refreshOptionLeds(); refreshSurface(); log('options off'); }
+    if (st.optionsMode) { st.stepPage = 0; st.optScreenLayout = null; st.optScreenMenu = null; refreshOptionLeds(); refreshOptionScreens(); log('options on'); }
+    else { st.selStep = null; st.heldMicros.clear(); st.optScreenLayout = null; st.optScreenMenu = null; refreshOptionLeds(); refreshSurface(); log('options off'); }
   }
   function setPadView(view) {
     st.padView = view;

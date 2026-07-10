@@ -91,15 +91,21 @@ ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
 ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
 ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
 
-// #37 gate menu uses a text-only screen layout (no knob glyph)
+// #37 gate shows text (# boxes + number) but NO knob glyph, and the screen isn't blank
 mark = sent.length;
-RT.handleControl(CC(0x33 + 1, 127)); // Soft 2 -> Gate
-const gscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 || m.bytes[7] === 0x01);
-ok(gscr.some((m) => m.bytes[7] === 0x01 && m.bytes[8] === 0), '#37 gate sets the empty (text-only) screen layout 0');
-ok(!gscr.some((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x03), '#37 gate sends no knob-glyph value (type 3)');
+RT.handleControl(CC(0x33 + 1, 127)); // Soft 2 -> Gate (a menu change)
+const gsend = sent.slice(mark);
+function txtOf(list, col, obj) { const m = list.find((x) => x.bytes[7] === 0x02 && x.bytes[8] === col && x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; }
+ok(!gsend.some((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x03), '#37 gate sends no knob glyph (no type-3 value)');
+ok(txtOf(gsend, 0, 0) === 'Step 1', '#37 gate still shows its text (screen not blank)');
+ok(gsend.some((m) => m.bytes[7] === 0x01), '#37 menu change re-inits the screen layout (clears stale knobs)');
+// tempo page: only knobs 1-2 (tempo, swing) carry a value glyph; knobs 3-8 have none
+mark = sent.length;
+RT.handleControl(CC(0x33 + 3, 127)); // Soft 4 -> Tempo
+const tsend = sent.slice(mark);
+const tvalCols = tsend.filter((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x03).map((m) => m.bytes[8]);
+ok(tvalCols.every((c) => c <= 1), '#tempo no phantom knob glyphs on knobs without a parameter (only cols 0-1)');
 RT.handleControl(CC(0x33 + 0, 127)); // back to Velocity
-const vscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x01 && m.bytes[8] === 1);
-ok(vscr.length > 0, '#37 velocity restores the knob layout 1');
 
 // tempo menu, knob1 changes tempo
 RT.handleControl(CC(0x33 + 3, 127)); // Soft 4 -> index 3 -> tempo
