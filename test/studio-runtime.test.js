@@ -348,25 +348,37 @@ const panicChans = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.
 ok(panicChans.size === 16, '#29 Play panics all 16 channels (got ' + panicChans.size + ')');
 RT.seqStop();
 
-// --- metronome latency alignment: with a sync offset, sequencer notes are
-//     scheduled (timestamped) so they land with the click; note-offs too ---
+// --- MIDI is ALWAYS realtime: sequencer notes are never scheduled/timestamped,
+//     even with the metronome on and a lead offset set ---
 st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false;
 model.sequencer.tracks[0].patterns[0] = SEQ.newPattern();
 model.sequencer.tracks[0].patterns[0].steps[0].notes = [{ note: 60, velocity: 100, gate: 6 }];
 model.sequencer.metronome = { on: true, sound: 'Ping' };
-RT.setSyncOffset(40); // force 40 ms of output delay
+RT.setMetroLead(40);
 st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1; st.gridTrack = 0;
 mark = sent.length;
 RT.tick(); // process tick 0 -> step 1 note-on
 const on0 = sent.slice(mark).find((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 60);
-ok(on0 && on0.when === 1040, 'note is scheduled 40ms ahead to align with the metronome (when=1040)');
-// with the offset cleared and metronome off, notes go out immediately (no timestamp)
-RT.setSyncOffset(0); model.sequencer.metronome.on = false;
-st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
-mark = sent.length;
-RT.tick();
-const on1 = sent.slice(mark).find((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 60);
-ok(on1 && on1.when === undefined, 'note goes out immediately when the metronome/offset is off');
-st.clock = null; st.seqRt.playing = false; RT.setSyncOffset(null);
+ok(on0 && on0.when === undefined, 'sequencer note is sent in realtime (never timestamped/delayed)');
+st.clock = null; st.seqRt.playing = false; RT.setMetroLead(null); model.sequencer.metronome.on = false;
+
+// --- metronome click is SCHEDULED EARLY (ahead by the audio latency) so it is
+//     *heard* on the beat, while MIDI stays realtime ---
+const clickTimes = [];
+global.AudioContext = function () {
+  this.currentTime = 0; this.state = 'running'; this.baseLatency = 0; this.outputLatency = 0.05; this.destination = {};
+  this.createGain = () => ({ connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } });
+  this.createOscillator = () => ({ connect() {}, frequency: {}, start(t) { clickTimes.push(t); }, stop() {} });
+  this.resume = () => {};
+};
+st.audioCtx = null; st.metro = null; RT.setMetroLead(null);
+model.sequencer.metronome = { on: true, sound: 'Ping' }; model.sequencer.tempo = 120;
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1; st.gridTrack = 0;
+const secPerTick = 60 / 120 / 24;
+for (let i = 0; i <= 16; i++) RT.tick(); // process ticks 0..16; beat 24 gets scheduled at tick 16
+ok(clickTimes.length >= 2, 'metronome look-ahead schedules clicks');
+const targetBeat24 = 8 * secPerTick; // (24-16) ticks ahead of the frozen audio-now
+ok(clickTimes.some((t) => Math.abs(t - (targetBeat24 - 0.05)) < 1e-6), 'click is scheduled 50ms (audio latency) early, so it is heard on the beat');
+st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false; st.audioCtx = null; delete global.AudioContext;
 
 console.log('\n' + n + ' integration assertions passed');

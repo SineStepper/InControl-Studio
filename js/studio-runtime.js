@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: false,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -141,47 +141,67 @@
     if (st.slOutId) midi.sendToOutput(st.slOutId, [byte]);
     if (st.keysOutId && st.keysOutId !== st.slOutId) midi.sendToOutput(st.keysOutId, [byte]);
   }
-  // ---- Metronome (#14): Ping/Tick/Pop click on each 1/4 + a green Grid flash ----
-  function metronomeTick(tick) {
-    const m = model(); const met = m && m.sequencer && m.sequencer.metronome;
-    if (!met || !met.on || !st.seqRt) return;
-    // Anchor the click to the grid track's pattern rather than absolute ticks, so
-    // the beat stays aligned with the step grid the user sees (accent on step 1),
-    // regardless of pattern length or sync rate.
-    const p = gridPattern(); if (!p) return;
-    const stepTicks = SEQ().SYNC[p.syncRate] || 6;
-    if (tick % stepTicks !== 0) return;                 // only on a grid-step boundary
-    const pos = st.seqRt.pos[st.gridTrack]; if (!pos) return;
-    const len = Math.abs((p.end || 0) - (p.start || 0)) + 1;
-    const stepInBar = ((pos.counter % len) + len) % len; // step position within the pattern
-    if ((stepInBar * stepTicks) % 24 !== 0) return;      // click on quarter-note beats
-    const accent = stepInBar === 0;                       // downbeat = first step of the pattern
-    playMetronomeSound(met.sound || 'Ping', accent);
-    if (st.slOutId) { ledHex(64, '#00ff00'); clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90); }
-  }
-  // Create (and keep warm) the metronome's AudioContext at low latency, and cache
-  // its output latency so we can align the sequencer's MIDI notes to the click.
+  // ---- Metronome (#14) ----
+  // MIDI is NEVER delayed. Instead the click is scheduled EARLY on the Web-Audio
+  // clock, using look-ahead, so that after the audio output latency it is *heard*
+  // exactly on the beat — coinciding with the realtime MIDI note.
+  const metroOn = () => { const m = model(); return !!(m && m.sequencer && m.sequencer.metronome && m.sequencer.metronome.on); };
+  // Extra manual lead (ms): positive plays the click even earlier. Blank = 0.
+  function extraLeadMs() { return st.metroSyncMs != null ? st.metroSyncMs : 0; }
+
+  // Create (and keep warm) the metronome's AudioContext at the chosen latency
+  // hint / output device, and cache its output latency for look-ahead scheduling.
   function ensureAudio() {
     try {
       const AC = global.AudioContext || global.webkitAudioContext; if (!AC) return null;
-      if (!st.audioCtx) { try { st.audioCtx = new AC({ latencyHint: 'interactive' }); } catch (e) { st.audioCtx = new AC(); } }
+      if (!st.audioCtx) {
+        const hint = st.audioLatencyHint || 'interactive';
+        try { st.audioCtx = new AC({ latencyHint: hint }); } catch (e) { st.audioCtx = new AC(); }
+        if (st.audioSinkId && st.audioCtx.setSinkId) { try { st.audioCtx.setSinkId(st.audioSinkId); } catch (e) {} }
+      }
       const ac = st.audioCtx;
       if (ac.state === 'suspended' && ac.resume) ac.resume();
       st.audioLatencyMs = Math.round(((ac.baseLatency || 0) + (ac.outputLatency || 0)) * 1000);
       return ac;
     } catch (e) { return null; }
   }
-  const metroOn = () => { const m = model(); return !!(m && m.sequencer && m.sequencer.metronome && m.sequencer.metronome.on); };
-  // How much to delay the sequencer's note output so it lands together with the
-  // Web-Audio metronome click (which is delayed by the audio output latency). Only
-  // while the metronome is on — otherwise notes go out immediately (lowest latency).
-  // A manual override (metroSyncMs) wins when set.
-  function outputDelayMs() { if (st.metroSyncMs != null) return st.metroSyncMs; return metroOn() ? (st.audioLatencyMs || 0) : 0; }
-  function noteWhen() { const d = outputDelayMs(); return (d > 0 && global.performance && global.performance.now) ? global.performance.now() + d : undefined; }
-  function playMetronomeSound(sound, accent) {
+  // Rebuild the audio context (after a latency-mode / output-device change).
+  function resetAudio() { try { if (st.audioCtx && st.audioCtx.close) st.audioCtx.close(); } catch (e) {} st.audioCtx = null; st.metro = null; if (metroOn()) ensureAudio(); }
+
+  // Look-ahead scheduler: schedule every beat click whose audio time falls inside
+  // the look-ahead window, at (predicted beat audio time − audio latency − extra
+  // lead) so the sound is *heard* on the beat. Driven off the live (audioNow,
+  // currentTick) mapping so it tracks tempo changes automatically.
+  function scheduleMetronome(curTick) {
+    if (!metroOn() || !st.seqRt) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const m = model(); const met = m.sequencer.metronome;
+    const p = gridPattern(); if (!p) return;
+    const tempo = m.sequencer.tempo || 120;
+    const secPerTick = 60 / tempo / 24;
+    const leadSec = ((st.audioLatencyMs || 0) + extraLeadMs()) / 1000; // how early to fire the oscillator
+    const pt = patternTicks(p);                                        // ticks per pattern loop (accent period)
+    const audioNow = ac.currentTime;
+    if (!st.metro || st.metro.tempo !== tempo) st.metro = { nextBeat: Math.ceil(curTick / 24) * 24, tempo }; // (re)anchor
+    const LOOK = Math.max(0.18, leadSec + 2 * secPerTick); // seconds of look-ahead
+    // schedule all beats coming due within the window
+    while ((st.metro.nextBeat - curTick) * secPerTick <= LOOK) {
+      const beat = st.metro.nextBeat;
+      const beatAudioTime = audioNow + (beat - curTick) * secPerTick; // when the beat is *heard*-target
+      const when = Math.max(audioNow, beatAudioTime - leadSec);       // fire the osc this early
+      const accent = pt > 0 ? (((beat % pt) + pt) % pt) === 0 : (beat % 96 === 0);
+      playClick(ac, when, accent, met.sound || 'Ping');
+      st.metro.nextBeat += 24; // steady quarter-note pulse
+    }
+  }
+  // Grid LED flash on the *actual* beat (realtime), so the visual matches the grid.
+  function metronomeFlash(tick) {
+    if (!metroOn() || !st.slOutId || tick % 24 !== 0) return;
+    ledHex(64, '#00ff00'); clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90);
+  }
+  function playClick(ac, when, accent, sound) {
     try {
-      const ac = ensureAudio(); if (!ac) return;
-      const t = ac.currentTime, gain = ac.createGain(); gain.connect(ac.destination);
+      const t = Math.max(ac.currentTime, when), gain = ac.createGain(); gain.connect(ac.destination);
       const osc = ac.createOscillator(); osc.connect(gain);
       if (sound === 'Tick') { osc.type = 'square'; osc.frequency.value = accent ? 2200 : 1600; gain.gain.setValueAtTime(accent ? 0.4 : 0.25, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03); }
       else if (sound === 'Pop') { osc.type = 'sine'; osc.frequency.value = accent ? 520 : 380; gain.gain.setValueAtTime(accent ? 0.6 : 0.4, t); gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11); }
@@ -193,7 +213,9 @@
   function clockTick() {
     sendClock(0xf8); // 24-PPQN timing clock
     const beatTick = st.seqRt.tick;
-    const when = noteWhen(); // schedule notes to land with the metronome click (latency-aligned)
+    // Schedule any upcoming metronome click BEFORE processing notes so the audio
+    // gets maximum lead time. MIDI is always sent in realtime (never delayed).
+    scheduleMetronome(beatTick);
     const events = SEQ().onTick(st.seqRt);
     events.forEach((e) => {
       // Drop the sequencer's own echo of a note we just recorded + monitored live
@@ -204,11 +226,11 @@
         st.recEcho.delete(ek);                   // window elapsed — play normally from now on
       }
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
-      sendMusic(st.destId, msg, when);
+      sendMusic(st.destId, msg); // realtime — MIDI is never delayed
       if (channelAudible(e.channel + 1)) keyLed(e.note, e.type === 'on' ? KEY_PLAY : '#000000'); // light guide follows playback (#10)
     });
     playAutomation();
-    metronomeTick(beatTick);
+    metronomeFlash(beatTick); // grid LED flash on the actual beat (realtime, visual)
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
@@ -254,6 +276,7 @@
     // Clear any hung notes on all 16 channels BEFORE the clock starts, so this
     // never lands on top of (and cuts off) the sequencer's first note (#29).
     panicAllChannels();
+    st.metro = null;              // re-anchor the metronome scheduler to the new start
     if (metroOn()) ensureAudio(); // warm the click's audio + measure latency before step 1
     SEQ().start(rt);
     sendClock(0xfa); // MIDI Start
@@ -942,10 +965,24 @@
     handleControl: (bytes) => onMsg(bytes),
     handleKeys: (bytes) => onKeys(bytes),
     tick: () => clockTick(), // drive one 24-PPQN tick (tests)
-    // Metronome/audio sync: null = auto (measured audio latency); a number forces
-    // that many ms of sequencer-output delay so notes line up with the click.
-    setSyncOffset: (ms) => { st.metroSyncMs = ms == null || ms === '' ? null : Math.max(0, +ms || 0); },
-    syncOffset: () => (st.metroSyncMs != null ? st.metroSyncMs : st.audioLatencyMs || 0),
+    // Extra metronome lead (ms): plays the click even earlier. MIDI is never
+    // delayed; only the audio click is scheduled ahead. Blank/null = 0 (auto
+    // latency compensation still applies from the measured audio latency).
+    setMetroLead: (ms) => { st.metroSyncMs = ms == null || ms === '' ? null : Math.max(-200, Math.min(200, +ms || 0)); },
+    metroLead: () => (st.metroSyncMs != null ? st.metroSyncMs : 0),
+    audioLatency: () => st.audioLatencyMs || 0,
+    // Metronome audio output selection (low-latency driver / device, #ask).
+    setAudioLatencyHint: (h) => { if (h && h !== st.audioLatencyHint) { st.audioLatencyHint = h; resetAudio(); } },
+    audioLatencyHint: () => st.audioLatencyHint,
+    setAudioSink: (id) => { st.audioSinkId = id || null; if (st.audioCtx && st.audioCtx.setSinkId) { try { st.audioCtx.setSinkId(id || ''); } catch (e) {} } else resetAudio(); },
+    audioSink: () => st.audioSinkId,
+    listAudioOutputs: async () => {
+      try {
+        if (!global.navigator || !global.navigator.mediaDevices || !global.navigator.mediaDevices.enumerateDevices) return [];
+        const devs = await global.navigator.mediaDevices.enumerateDevices();
+        return devs.filter((d) => d.kind === 'audiooutput').map((d) => ({ id: d.deviceId, name: d.label || 'Output' }));
+      } catch (e) { return []; }
+    },
     setKeyGuide: (on) => { st.keyGuide = !!on; if (!on) st.litKeys.forEach((note) => ledHex(54 + (note - LOW_NOTE), '#000000')); },
     refreshSurface,
     state: () => st,

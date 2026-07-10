@@ -85,13 +85,23 @@
     mOn.addEventListener('change', () => { met.on = mOn.checked; });
     set.appendChild(el('label', { className: 'seq-f' }, ['Metronome ', mOn]));
     set.appendChild(selField('Sound', [['Ping', 'Ping'], ['Tick', 'Tick'], ['Pop', 'Pop']], met.sound || 'Ping', (v) => { met.sound = v; }));
-    // Click sync (#): delay the sequencer's note output so it lines up with the
-    // metronome click. Blank = auto (measured audio latency); raise it if the
-    // sequencer still sounds ahead of the click on your setup.
-    const syncInp = el('input', { type: 'number', min: 0, max: 200, value: met.syncMs == null ? '' : met.syncMs, placeholder: 'auto' });
-    syncInp.addEventListener('change', () => { const v = syncInp.value === '' ? null : Math.max(0, Math.min(200, parseInt(syncInp.value, 10) || 0)); met.syncMs = v; if (RT() && RT().setSyncOffset) RT().setSyncOffset(v); });
-    set.appendChild(el('label', { className: 'seq-f', title: 'Delay notes to line up with the metronome click. Blank = automatic.' }, ['Click sync ms ', syncInp]));
-    if (RT() && RT().setSyncOffset && met.syncMs != null) RT().setSyncOffset(met.syncMs); // apply stored override on render
+    // MIDI is never delayed. The click is scheduled EARLY on the audio clock by
+    // the measured output latency; this extra Lead nudges it earlier/later to taste.
+    const leadInp = el('input', { type: 'number', min: -100, max: 200, value: met.leadMs == null ? '' : met.leadMs, placeholder: '0' });
+    leadInp.addEventListener('change', () => { const v = leadInp.value === '' ? null : Math.max(-100, Math.min(200, parseInt(leadInp.value, 10) || 0)); met.leadMs = v; if (RT() && RT().setMetroLead) RT().setMetroLead(v); });
+    set.appendChild(el('label', { className: 'seq-f', title: 'Play the click this many ms earlier (+) or later (−). MIDI is never delayed.' }, ['Lead ms ', leadInp]));
+    if (RT() && RT().setMetroLead && met.leadMs != null) RT().setMetroLead(met.leadMs);
+    // Low-latency audio: latency mode + output device (an ASIO / low-latency
+    // Windows device shows up here as an output; select it for the tightest click).
+    set.appendChild(selField('Latency', [['interactive', 'Interactive (low)'], ['balanced', 'Balanced'], ['playback', 'Playback']], met.latencyHint || 'interactive', (v) => { met.latencyHint = v; if (RT() && RT().setAudioLatencyHint) RT().setAudioLatencyHint(v); }));
+    const outSel = el('select', {}); outSel.appendChild(el('option', { value: '' }, 'System default'));
+    outSel.addEventListener('change', () => { met.audioSink = outSel.value || null; if (RT() && RT().setAudioSink) RT().setAudioSink(outSel.value); });
+    set.appendChild(el('label', { className: 'seq-f', title: 'Send the metronome click to a specific (e.g. ASIO / low-latency) audio output.' }, ['Audio out ', outSel]));
+    if (RT() && RT().listAudioOutputs) RT().listAudioOutputs().then((outs) => {
+      outs.forEach((o) => outSel.appendChild(el('option', { value: o.id, selected: o.id === met.audioSink }, o.name)));
+    });
+    if (RT() && met.latencyHint && RT().setAudioLatencyHint) RT().setAudioLatencyHint(met.latencyHint);
+    if (RT() && met.audioSink && RT().setAudioSink) RT().setAudioSink(met.audioSink);
     wrap.appendChild(set);
 
     // 16-step grid (2 rows of 8)
