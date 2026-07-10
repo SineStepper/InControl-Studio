@@ -80,7 +80,9 @@
           notes.forEach((n) => (n[menu.field] = nv));
         }
       };
-      if (shift) { for (let i = 0; i < 16; i++) set(i); return 'all ' + menu.field; }
+      // Shift edits ALL steps at once, and is ALWAYS driven by Knob 1 (index 0),
+      // regardless of which knob holds the first step (#6). Other knobs do nothing.
+      if (shift) { if (knobIndex !== 0) return null; for (let i = 0; i < 16; i++) set(i); return 'all ' + menu.field; }
       if (knobIndex > 7) return null;
       const stepIdx = page * 8 + knobIndex;
       if (stepIdx > 15) return null;
@@ -113,10 +115,16 @@
     return list[clamp(i + delta, 0, list.length - 1)];
   }
 
+  // A "small white box" for the gate readout (0-5 of them = the ⅙-step remainder).
+  // The SL screen text is 7-bit ASCII, so we use the most box-like printable glyph.
+  const boxes = (n) => Array(Math.max(0, Math.min(5, n)) + 1).join('#');
+  const scale = (v, lo, hi) => clamp(Math.round(((v - lo) / (hi - lo)) * 127), 0, 127);
+
   /**
-   * Per-knob screen readout (up to 8 columns) for the current menu/page.
-   * Each column: { label, value } where value is 0-127 (for the screen bar) and
-   * text conveys the real reading. Returns [] when nothing to show.
+   * Per-knob screen descriptors (up to 8 columns) for the current menu/page.
+   * Each column: { top, glyph, glyphValue (0-127), mid, bottom } — the runtime
+   * draws the top label, an optional white knob glyph, and the reading below.
+   * Matches the standalone sequencer's screens (#6).
    */
   function columns(seq, pattern, menuKey, page) {
     const menu = MENUS[menuKey];
@@ -125,28 +133,39 @@
       const cols = [];
       for (let i = 0; i < 8; i++) {
         const stepIdx = page * 8 + i;
-        const notes = stepNotes(pattern, stepIdx);
-        let v;
-        if (menu.onStep) v = pattern.steps[stepIdx].chance == null ? 100 : pattern.steps[stepIdx].chance;
-        else v = notes.length ? Math.max.apply(null, notes.map((n) => (n[menu.field] == null ? menu.min : n[menu.field]))) : null; // highest of the step's notes
-        cols.push({ label: 'St' + (stepIdx + 1), value: v == null ? 0 : clamp(v, 0, 127), text: v == null ? '-' : String(v) });
+        const top = 'Step ' + (stepIdx + 1);                 // tops of each screen say "Step N"
+        if (menuKey === 'chance') {
+          const v = pattern.steps[stepIdx].chance == null ? 100 : pattern.steps[stepIdx].chance;
+          cols.push({ top, glyph: true, glyphValue: scale(v, 0, 100), bottom: v + '%' }); // white knob glyph + %
+        } else if (menuKey === 'velocity') {
+          const notes = stepNotes(pattern, stepIdx);
+          const v = notes.length ? Math.max.apply(null, notes.map((n) => (n.velocity == null ? 1 : n.velocity))) : null;
+          cols.push({ top, glyph: v != null, glyphValue: clamp(v || 0, 0, 127), bottom: v == null ? '-' : String(v) }); // white knob glyph + number
+        } else { // gate: whole number of steps + 0-5 small white boxes for the ⅙ remainder (never 0-192)
+          const notes = stepNotes(pattern, stepIdx);
+          const g = notes.length ? Math.max.apply(null, notes.map((n) => (n.gate == null ? 6 : n.gate))) : null;
+          if (g == null) cols.push({ top, glyph: false, bottom: '-' });
+          else cols.push({ top, glyph: false, mid: String(Math.floor(g / 6)), bottom: boxes(g % 6) });
+        }
       }
       return cols;
     }
     if (menuKey === 'tempo') {
+      const t = seq.tempo || 120, sw = seq.swing == null ? 50 : seq.swing;
       return [
-        { label: 'Tempo', value: clamp(seq.tempo || 120, 0, 127), text: String(seq.tempo || 120) },
-        { label: 'Swing', value: clamp(seq.swing == null ? 50 : seq.swing, 0, 127), text: (seq.swing == null ? 50 : seq.swing) + '%' },
-        { label: 'Sw.Syn', value: 0, text: seq.swingSync || '1/16' },
+        { top: 'Tempo', glyph: true, glyphValue: scale(t, 40, 240), bottom: String(t) },
+        { top: 'Swing', glyph: true, glyphValue: scale(sw, 10, 80), bottom: sw + '%' },
+        { top: 'Swing Sync Rate', glyph: false, bottom: seq.swingSync || '1/16' },
       ];
     }
     if (menuKey === 'pattern') {
+      const s = pattern.start || 0, e = pattern.end == null ? 15 : pattern.end, sh = pattern.shift || 0;
       return [
-        { label: 'Start', value: pattern.start || 0, text: String((pattern.start || 0) + 1) },
-        { label: 'End', value: pattern.end == null ? 15 : pattern.end, text: String((pattern.end == null ? 15 : pattern.end) + 1) },
-        { label: 'Dir', value: 0, text: (pattern.direction || 'Forward').slice(0, 4) },
-        { label: 'Sync', value: 0, text: pattern.syncRate || '1/16' },
-        { label: 'Shift', value: pattern.shift || 0, text: String(pattern.shift || 0) },
+        { top: 'Start', glyph: true, glyphValue: scale(s, 0, 15), bottom: String(s + 1) },
+        { top: 'End', glyph: true, glyphValue: scale(e, 0, 15), bottom: String(e + 1) },
+        { top: 'Direction', glyph: false, bottom: pattern.direction || 'Forward' },
+        { top: 'Sync Rate', glyph: false, bottom: pattern.syncRate || '1/16' },
+        { top: 'Shift', glyph: true, glyphValue: scale(sh, 0, 15), bottom: String(sh) },
       ];
     }
     return [];
@@ -159,8 +178,9 @@
    */
   function softLeds(activeMenu) {
     const leds = {};
-    for (let i = 0; i < 8; i++) leds[i] = '#000000'; // unmapped menu buttons (Soft 1-8) unlit (#12)
-    MICROSTEP_BUTTONS.forEach((i) => (leds[i] = LIGHT_ORANGE));
+    for (let i = 0; i < 8; i++) leds[i] = '#000000';  // unmapped menu buttons (Soft 1-8) unlit (#12)
+    for (let i = 8; i < 24; i++) leds[i] = '#000000';  // the whole above-fader section goes dark (#6)…
+    MICROSTEP_BUTTONS.forEach((i) => (leds[i] = LIGHT_ORANGE)); // …except the top 6 microstep buttons
     Object.keys(MENU_BUTTONS).forEach((k) => {
       const idx = +k;
       const menu = MENUS[MENU_BUTTONS[idx]];

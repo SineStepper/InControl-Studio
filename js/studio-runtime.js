@@ -555,14 +555,16 @@
     const cols = opts().columns(seq, p, st.optionsMenu, st.stepPage);
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
-      send(sysex.screenText(i, 0, c ? c.label : ''));       // label above the icon
-      send(sysex.screenValue(i, 0, c ? c.value : 0));       // value on the graphic knob
-      send(sysex.screenText(i, 2, c ? c.text : ''));        // reading below the icon
+      send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name
+      if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph reflecting the value
+      else send(sysex.screenValue(i, 0, 0));                       // no glyph (gate uses boxes; list values)
+      send(sysex.screenText(i, 1, c && c.mid != null ? c.mid : '')); // gate: whole number of steps
+      send(sysex.screenText(i, 2, c ? (c.bottom || '') : ''));     // reading below: number / % / gate boxes
     }
-    // Centre screen names the active menu ("Velocity", "Gate", … per issue #6).
+    // Centre screen: menu name at the BOTTOM ("Velocity", "Gate", …), step page at the top (#6).
     const menu = opts().MENUS[st.optionsMenu];
-    send(sysex.screenText(8, 0, menu ? menu.label : ''));
-    if (menu && menu.perStep) send(sysex.screenText(8, 1, 'Steps ' + (st.stepPage ? '9-16' : '1-8')));
+    send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
+    send(sysex.screenText(8, 2, menu ? menu.label : ''));
   }
   function restartClockIfRunning() { if (st.clock) { stopClock(); startClock(); } }
   // Coalesce the (heavy) option-screen redraw so spinning a knob doesn't flood the

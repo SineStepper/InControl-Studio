@@ -67,11 +67,29 @@ eq(p.direction, 'Backwards', 'pattern knob3 steps direction');
 O.applyKnob(s, p, 'pattern', 0, +4, 0, false);
 eq(p.start, 4, 'pattern knob1 sets start');
 
+// ---- Shift only responds to Knob 1 (#6) ----
+p = freshPattern();
+const beforeV = p.steps[2].notes[0].velocity;
+O.applyKnob(seq(), p, 'velocity', 2, +5, 0, true); // shift + Knob 3 -> nothing
+eq(p.steps[2].notes[0].velocity, beforeV, 'shift + a non-first knob does nothing (Knob 1 always)');
+
 // ---- Screen columns ----
 p = freshPattern();
 const cols = O.columns(seq(), p, 'velocity', 0);
 eq(cols.length, 8, 'velocity page shows 8 columns');
-eq([cols[0].text, cols[1].text, cols[2].text], ['100', '-', '80'], 'columns read step velocities, empty step = -');
+eq([cols[0].top, cols[1].top], ['Step 1', 'Step 2'], 'column tops say "Step N"');
+eq([cols[0].bottom, cols[1].bottom, cols[2].bottom], ['100', '-', '80'], 'columns read step velocities, empty step = -');
+eq([cols[0].glyph, cols[1].glyph], [true, false], 'velocity draws a white knob glyph where a note exists');
+// gate shows whole steps + 0-5 boxes (never a raw 0-192 number)
+const gp = freshPattern(); gp.steps[0].notes[0].gate = 15; // 2 whole steps + 3/6
+const gcols = O.columns(seq(), gp, 'gate', 0);
+eq(gcols[0].mid, '2', 'gate shows whole number of steps');
+eq(gcols[0].bottom, '###', 'gate shows 0-5 boxes for the 1/6 remainder');
+eq(gcols[0].glyph, false, 'gate uses boxes, not a knob glyph');
+// chance / swing render as percentages
+eq(O.columns(seq(), freshPattern(), 'chance', 0)[0].bottom, '100%', 'chance shows a percentage');
+eq(O.columns(seq(), freshPattern(), 'tempo', 0)[1].bottom, '50%', 'swing shows a percentage');
+eq(O.columns(seq(), freshPattern(), 'tempo', 0)[2].top, 'Swing Sync Rate', 'tempo knob 3 labelled Swing Sync Rate');
 
 // ---- Soft LEDs / arrows / pattern pads ----
 const leds = O.softLeds('gate');

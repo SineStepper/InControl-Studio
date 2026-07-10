@@ -82,6 +82,15 @@ ok(st.stepPage === 1, '#6 Screen Down pages to steps 9-16');
 RT.handleControl(CC(0x51, 127));
 ok(st.stepPage === 0, '#6 Screen Up pages back to steps 1-8');
 
+// #6 option screens: "Step N" tops, white knob glyph, menu name at centre-bottom
+mark = sent.length;
+RT.handleControl(CC(0x33 + 0, 127)); // Soft 1 -> Velocity
+const scr6 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02);
+function scrText(col, obj) { const m = scr6.find((x) => x.bytes[8] === col && x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0x00; i++) s += String.fromCharCode(m.bytes[i]); return s; }
+ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
+ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
+ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
+
 // tempo menu, knob1 changes tempo
 RT.handleControl(CC(0x33 + 3, 127)); // Soft 4 -> index 3 -> tempo
 const t0 = model.sequencer.tempo;
