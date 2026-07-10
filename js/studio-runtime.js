@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1 };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -273,7 +273,7 @@
     // Only repaint the pad grid when the play-head STEP actually changes, not every
     // tick — repainting 16 pads 24×/beat floods the SL, lagging the knob screens
     // (#55) and glitching the step LED at high swing (#56).
-    if (st.rt && st.rt.padMode === 'sequencer') {
+    if (st.rt && st.rt.padMode === 'sequencer' && viewingActive()) {
       const head = st.seqRt.pos[st.gridTrack] ? st.seqRt.pos[st.gridTrack].pad : -1;
       if (head !== st.lastGridHead) { st.lastGridHead = head; refreshGrid(); }
     }
@@ -350,7 +350,13 @@
   function rechannel(bytes, ch) { const s = bytes[0] & 0xf0; return (s >= 0x80 && s <= 0xe0) ? [s | (ch & 0x0f)].concat(Array.prototype.slice.call(bytes, 1)) : bytes; }
 
   // ---- pad grid (step editing + play head) in sequencer mode ----
-  function gridPattern() { const m = model(); if (!m || !m.sequencer) return null; const t = m.sequencer.tracks[st.gridTrack]; return t.patterns[t.activePattern]; }
+  // The pattern shown/edited on the pad grid. Normally the active (playing) one,
+  // but Steps-view paging can VIEW another pattern without moving the playhead
+  // (#54); st.viewPattern holds that index (null = follow the active pattern).
+  function gridPattern() { const m = model(); if (!m || !m.sequencer) return null; const t = m.sequencer.tracks[st.gridTrack]; const idx = st.viewPattern != null ? st.viewPattern : t.activePattern; return t.patterns[idx] || t.patterns[t.activePattern]; }
+  // The pattern actually playing — live-record always targets this, at the playhead.
+  function playPattern() { const m = model(); if (!m || !m.sequencer) return null; const t = m.sequencer.tracks[st.gridTrack]; return t.patterns[t.activePattern]; }
+  const viewingActive = () => st.viewPattern == null || st.viewPattern === (model().sequencer.tracks[st.gridTrack].activePattern);
   function pagePattern(dir) {
     const m = model(); if (!m || !m.sequencer) return;
     const t = m.sequencer.tracks[st.gridTrack];
@@ -362,12 +368,26 @@
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('pattern ' + (t.activePattern + 1));
   }
-  // Page the two visible Parts in Patterns view without changing the active Part (#17).
+  // Page the two visible Parts in Patterns view without changing the active Part
+  // (#17). Pages by 2 so the two visible rows never overlap across pages (#52).
   function pagePart(dir) {
-    const next = st.partTop + dir;
-    if (next < 0 || next > SEQ().TRACKS - 2) return; // clamp so two rows always fit
+    const next = st.partTop + dir * 2;
+    if (next < 0 || next > SEQ().TRACKS - 2) return; // clamp so two rows always fit (0,2,4,6)
     st.partTop = next;
     refreshPatternPads(); refreshArrowLeds(); notify(); log('parts ' + (st.partTop + 1) + '-' + (st.partTop + 2));
+  }
+  // Steps view: page which pattern the grid VIEWS, without changing what plays (#54).
+  function viewPatternPage(dir) {
+    const m = model(); if (!m || !m.sequencer) return;
+    const t = m.sequencer.tracks[st.gridTrack];
+    const cur = st.viewPattern != null ? st.viewPattern : t.activePattern;
+    const next = cur + dir;
+    if (next < 0 || next >= SEQ().PATTERNS) return; // clamp, no wrap (#6)
+    st.viewPattern = next;
+    if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
+    refreshArrowLeds();
+    if (st.optionsMode) refreshOptionScreens();
+    notify(); log('view pattern ' + (next + 1) + (next === t.activePattern ? ' (playing)' : ''));
   }
   function curTrack() { const m = model(); return m && m.sequencer ? m.sequencer.tracks[st.gridTrack] : null; }
   function ledHex(id, hex, beh) { if (!st.slOutId || !sysex) return; const { r, g, b } = sysex.hexTo7bit(hex); midi.sendToOutput(st.slOutId, sysex.ledRgb(id, r, g, b, beh || 'solid')); }
@@ -425,8 +445,9 @@
   // ---- Channel / instrument select (Soft 1-8 below the screens), in Part colours ----
   function refreshChannelLeds() {
     const m = model(); const tracks = (m && m.sequencer && m.sequencer.tracks) || [];
+    const PART = SEQ().PART_COLORS;
     for (let i = 0; i < 8; i++) {
-      const color = (tracks[i] && tracks[i].color) || '#3bd0ff';
+      const color = (tracks[i] && tracks[i].color) || PART[i % 8]; // rainbow Part colours, not a blue default (#42)
       ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : opts().scaleColor(color, 0.4)); // active white, others dim part colour
     }
   }
@@ -434,6 +455,7 @@
     const padMode = st.rt ? st.rt.padMode : 'sequencer';
     st.activeChannel = ch;
     st.gridTrack = ch - 1;                 // the sequencer track follows the channel
+    st.viewPattern = null;                 // new Part: grid follows its playing pattern (#54)
     st.rt = runtimeForChannel(ch);         // swap in this channel's control mapping (own template if assigned)
     st.rt.padMode = padMode;
     st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
@@ -531,7 +553,9 @@
     if (!st.slOutId || !global.SLMK.sysex) return;
     if (st.padView === 'patterns') return refreshPatternPads();
     const p = gridPattern(); if (!p) return;
-    const head = st.seqRt ? st.seqRt.pos[st.gridTrack].pad : -1;
+    // Only show the moving play-head when the grid is viewing the pattern that's
+    // actually playing; when previewing another pattern the head stays hidden (#54).
+    const head = (st.seqRt && viewingActive()) ? st.seqRt.pos[st.gridTrack].pad : -1;
     const color = partColor();
     const lo = Math.min(p.start, p.end), hi = Math.max(p.start, p.end);
     const playing = seqIsPlaying();
@@ -574,10 +598,12 @@
   function refreshArrowLeds() {
     const t = curTrack(); if (!t) return;
     const AR = '#00aaff';
-    // Pads Up/Down: Part-paging position in Patterns view, else pattern position.
+    // Pads Up/Down: Part-paging position in Patterns view, else the VIEWED pattern
+    // position (which the grid previews, #54).
+    const viewIdx = st.viewPattern != null ? st.viewPattern : t.activePattern;
     const a = st.padView === 'patterns'
       ? { up: st.partTop > 0, down: st.partTop < SEQ().TRACKS - 2 }
-      : opts().arrowLeds(t.activePattern, SEQ().PATTERNS);
+      : opts().arrowLeds(viewIdx, SEQ().PATTERNS);
     ledHex(0, a.up ? AR : '#000000');
     ledHex(1, a.down ? AR : '#000000');
     const kbanks = (st.rt && st.rt.model.knobBanks && st.rt.model.knobBanks.length) || 1;
@@ -683,6 +709,11 @@
   }
   function setPadView(view) {
     st.padView = view;
+    // Switching view keeps the selected Part, and auto-pages to what's currently
+    // playing (#53): Patterns view shows the active Part's row; Steps view snaps
+    // the viewed pattern back to the one that's playing.
+    if (view === 'patterns') st.partTop = Math.min(SEQ().TRACKS - 2, st.gridTrack & ~1);
+    else st.viewPattern = null; // follow the active (playing) pattern
     refreshSceneLeds();
     if (st.rt && st.rt.padMode === 'sequencer') refreshGrid();
     refreshArrowLeds();
@@ -730,7 +761,7 @@
     }
   }
   function recordNoteOn(note, velocity) {
-    const p = gridPattern(); if (!p) return;
+    const p = playPattern(); if (!p) return; // live-record always targets the PLAYING pattern (#54)
     const pos = st.seqRt ? st.seqRt.pos[st.gridTrack] : { pad: 0, counter: 0 };
     const stepTicks = SEQ().SYNC[p.syncRate] || 6;
     let step = pos.pad; // current play-head step (correct for any direction/length)
@@ -770,7 +801,7 @@
   function recordNoteOff(note) {
     const ref = st.recRef.get(note); if (!ref) return;
     st.recRef.delete(note);
-    const p = gridPattern(); if (!p) return;
+    const p = playPattern(); if (!p) return;
     const stepTicks = SEQ().SYNC[p.syncRate] || 6;
     const held = Math.max(1, st.seqRt.tick - ref.startTick);
     ref.n.gate = Math.max(1, Math.round((held / stepTicks) * 6)); // gate in sixths of a step
@@ -824,13 +855,13 @@
       if (ev.value > 0) { st.stepPage = ev.control === 'Screen Down' ? 1 : 0; refreshOptionScreens(); log('steps ' + (st.stepPage ? '9-16' : '1-8')); }
       return;
     }
-    // Pads Up/Down: in Patterns view page the Parts (#17); in Steps view page
-    // patterns (or Shift-transpose an octave).
+    // Pads Up/Down: in Patterns view page the Parts (#17); in Steps view page the
+    // VIEWED pattern (view-only, doesn't move the playhead — #54) or Shift-transpose.
     if (ev.control === 'Pads Up' || ev.control === 'Pads Down') {
       if (ev.value > 0) {
         if (st.padView === 'patterns') { pagePart(ev.control === 'Pads Down' ? 1 : -1); }
         else if (st.shift) transposeCurrent(ev.control === 'Pads Up' ? 12 : -12);
-        else pagePattern(ev.control === 'Pads Down' ? 1 : -1);
+        else viewPatternPage(ev.control === 'Pads Down' ? 1 : -1);
       }
       return;
     }

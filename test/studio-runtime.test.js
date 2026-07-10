@@ -126,13 +126,14 @@ ok(model.sequencer.tracks[0].activePattern === 2, '#4 pad selects pattern in Pat
 RT.handleControl(CC(0x54, 127)); // Scene Bottom -> steps
 ok(st.padView === 'steps', '#4 Scene Bottom -> Steps view');
 
-// --- #7 Pads Up/Down cycle patterns + arrow LEDs ---
-model.sequencer.tracks[0].activePattern = 0;
+// --- #54 Steps-view Pads Up/Down PREVIEW patterns without changing what plays ---
+model.sequencer.tracks[0].activePattern = 0; st.viewPattern = null; st.gridTrack = 0;
 mark = sent.length;
-RT.handleControl(CC(0x56, 127)); // Pads Down
-ok(model.sequencer.tracks[0].activePattern === 1, '#7 Pads Down advances pattern');
+RT.handleControl(CC(0x56, 127)); // Pads Down (steps view)
+ok(st.viewPattern === 1 && model.sequencer.tracks[0].activePattern === 0, '#54 Pads Down previews the next pattern, playhead unchanged');
 // arrow LED ids 0 (up) and 1 (down) should have been emitted
 ok(sent.slice(mark).some((m) => m.bytes[8] === 0) && sent.slice(mark).some((m) => m.bytes[8] === 1), '#7 arrow LEDs (id 0/1) refreshed');
+st.viewPattern = null;
 
 // --- #1 Mute/Solo (Soft 9-24) gate output ---
 model.sequencer.tracks[0].activePattern = 0;
@@ -154,14 +155,14 @@ ok(st.activeChannel === 5, '#7 Soft 5 selects channel 5');
 ok(st.gridTrack === 4, '#7 channel select moves grid track to 5');
 ok(st.rt.channel === 5, '#7 rt.channel follows selected channel');
 
-// --- #6 no-wrap pattern paging ---
-model.sequencer.tracks[4].activePattern = 0;
-st.gridTrack = 4;
-RT.handleControl(CC(0x55, 127)); // Pads Up at pattern 0 -> should NOT wrap to 7
-ok(model.sequencer.tracks[4].activePattern === 0, '#6 Pads Up at top does not wrap');
-model.sequencer.tracks[4].activePattern = 7;
-RT.handleControl(CC(0x56, 127)); // Pads Down at pattern 7 -> should NOT wrap to 0
-ok(model.sequencer.tracks[4].activePattern === 7, '#6 Pads Down at bottom does not wrap');
+// --- #6 no-wrap pattern-view paging ---
+st.gridTrack = 4; st.viewPattern = 0;
+RT.handleControl(CC(0x55, 127)); // Pads Up at view 0 -> should NOT wrap to 7
+ok(st.viewPattern === 0, '#6 view paging at top does not wrap');
+st.viewPattern = 7;
+RT.handleControl(CC(0x56, 127)); // Pads Down at view 7 -> should NOT wrap to 0
+ok(st.viewPattern === 7, '#6 view paging at bottom does not wrap');
+st.viewPattern = null; st.gridTrack = 0;
 
 // --- #2 fader LED brightness emitted on fader move ---
 mark = sent.length;
@@ -325,10 +326,27 @@ st.running = false;
 
 // --- #17 Patterns view pages the Parts with Pads Up/Down ---
 st.padView = 'patterns'; st.partTop = 0; st.rt.padMode = 'sequencer';
-RT.handleControl(CC(0x56, 127)); // Pads Down -> next pair of Parts
-ok(st.partTop === 1, '#17 Pads Down pages the visible Parts');
+RT.handleControl(CC(0x56, 127)); // Pads Down -> next pair of Parts (by 2, #52)
+ok(st.partTop === 2, '#52 Pads Down pages the visible Parts by 2');
 RT.handleControl(CC(0x55, 127)); // Pads Up
 ok(st.partTop === 0, '#17 Pads Up pages Parts back');
+st.padView = 'steps';
+
+// --- #53 switching view keeps the Part + auto-pages to what's playing ---
+st.gridTrack = 5; st.activeChannel = 6; st.partTop = 0; st.viewPattern = 3;
+RT.handleControl(CC(0x53, 127)); // Scene Top -> Patterns view
+ok(st.activeChannel === 6, '#53 switching view does not change the selected Part');
+ok(st.partTop === 4, '#53 Patterns view auto-pages to the active Part (track 5 -> row 4)');
+RT.handleControl(CC(0x54, 127)); // Scene Bottom -> Steps view
+ok(st.viewPattern === null, '#53 Steps view snaps the viewed pattern back to the playing one');
+// --- #42 Part-select buttons default to rainbow Part colours, not blue ---
+st.gridTrack = 0; st.activeChannel = 1; st.running = true;
+model.sequencer.tracks[1].color = null; // no explicit colour -> should fall back to a Part colour, not blue
+mark = sent.length;
+RT.refreshSurface();
+const p2led = lastLed(4 + 1); // Soft 2 = Part 2 (id 5)
+ok(p2led && !(p2led.r < p2led.b && p2led.g < p2led.b), '#42 Part 2 button is a Part colour (orange-ish), not a blue default');
+st.running = false;
 st.padView = 'steps';
 
 // --- double-key on record: the sequencer must not echo a just-recorded note
