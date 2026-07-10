@@ -273,14 +273,20 @@ require('assert').ok(true);
 // simulate the sequencer trying to send a note-off on the muted channel 1 (ch 0)
 // via sendMusic path: use a fader mapped... simplest: check channelAudible logic indirectly is covered above.
 
-// --- #19 button-bank nav must not clobber the Mute/Solo LEDs ---
-st.mute.clear(); st.solo.clear(); st.running = true;
+// --- #31 button-bank paging repaints the 16 above-fader buttons to the bank's
+//     colours (bank 0 = mute/solo orange; bank 1 shows the bank's own colours) ---
+st.mute.clear(); st.solo.clear(); st.running = true; st.rt.buttonBank = 0;
+model.buttonBanks[1][0].enabled = true; model.buttonBanks[1][0].led.idle = '#00ff00'; // bank-1 button 1 = green
 RT.refreshSurface();
 const muteBefore = lastLed(12);
-RT.handleControl(CC(0x58, 127)); // Right Soft Down -> button bank + (should NOT repaint mute row)
-const muteAfter = lastLed(12);
-ok(muteAfter && muteAfter.r > 0 && muteAfter.b === 0 && muteBefore.r === muteAfter.r, '#19 Mute LED unchanged (orange) after button-bank nav');
-st.running = false;
+ok(muteBefore && muteBefore.r > 0 && muteBefore.b === 0, '#31 bank 0 shows Mute (orange) on id 12');
+RT.handleControl(CC(0x58, 127)); // Right Soft Down -> button bank + (to bank 1)
+ok(st.rt.buttonBank === 1, '#31 Right Soft Down pages to button bank 1');
+const bankLed = lastLed(12);
+ok(bankLed && bankLed.g > 60 && bankLed.r === 0, '#31 bank 1 repaints id 12 to the bank colour (green), not stuck orange');
+RT.handleControl(CC(0x57, 127)); // Right Soft Up -> back to bank 0
+ok(lastLed(12).r > 0 && lastLed(12).b === 0, '#31 paging back restores Mute (orange)');
+st.rt.buttonBank = 0; st.running = false;
 
 // --- #26 sequencer sends MIDI clock (Start/Stop) to the SL out port ---
 st.running = true;

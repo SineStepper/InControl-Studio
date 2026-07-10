@@ -16,7 +16,7 @@
     return {
       model,
       knobBank: 0,
-      buttonBank: 1, // 0 is the fixed Mute/Send bank
+      buttonBank: 0, // start on the fixed Mute/Solo bank; paging cycles to banks 1+ (#31)
       channel: (model.global && model.global.channel) || 1,
       template: (model.global && model.global.template) || 1,
       padMode: 'sequencer', // 'sequencer' (pads drive the step/pattern grid) | 'pads' (instrument, via Grid)

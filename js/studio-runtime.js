@@ -94,7 +94,7 @@
     const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
     send(sysex.screenText(8, 0, name));                                   // left row 1: part name
     send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // left row 2: knob bank
-    send(sysex.screenText(8, 2, 'Btns ' + ((st.rt.buttonBank || 0) + 1)));// right row 1: button bank
+    send(sysex.screenText(8, 2, (st.rt.buttonBank || 0) === 0 ? 'MuteSolo' : 'Btns ' + ((st.rt.buttonBank || 0) + 1))); // right row 1: button bank
   }
 
   // ---- sequencer clock / transport ----
@@ -359,6 +359,18 @@
     }
     for (let i = 0; i < 8; i++) { const a = bank[8 + i]; if (a) ledHex(20 + i, st.solo.has(a.channel) ? a.led.pressed : a.led.idle); } // Soft 17-24 = Solo
   }
+  // Paint the 16 above-fader soft buttons (ids 12-27) for the current button bank:
+  // bank 0 is the fixed Mute/Solo bank; banks ≥1 show that bank's own button
+  // colours so paging actually changes what's lit (#31).
+  function refreshButtonArea() {
+    const bank = (st.rt && st.rt.buttonBank) || 0;
+    if (bank === 0) return refreshMuteSolo();
+    const b = (st.rt && st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || [];
+    for (let i = 0; i < 16; i++) {
+      const a = b[i];
+      ledHex(12 + i, (a && a.enabled && a.led && a.led.idle) ? a.led.idle : '#000000');
+    }
+  }
   function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
   function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
 
@@ -454,7 +466,7 @@
     if (group === 'pad') { if (st.rt && st.rt.padMode === 'sequencer') refreshGrid(); else { const l = engine.ledOne(st.rt, 'pad', index); if (l) midi.sendToOutput(st.slOutId, l); } return; }
     if (group === 'button') {
       if (index < 8) refreshChannelLeds();
-      else if (index < 24) refreshMuteSolo();
+      else if (index < 24) refreshButtonArea();
       else { const l = engine.ledOne(st.rt, 'button', index); if (l) midi.sendToOutput(st.slOutId, l); }
     }
   }
@@ -595,7 +607,7 @@
   function refreshSurface() {
     if (!st.running || !st.slOutId) return;
     if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
-    refreshChannelLeds(); refreshMuteSolo(); refreshTransport(); refreshFunctionLeds(); refreshSceneLeds(); refreshArrowLeds();
+    refreshChannelLeds(); refreshButtonArea(); refreshTransport(); refreshFunctionLeds(); refreshSceneLeds(); refreshArrowLeds();
     for (let i = 0; i < 8; i++) refreshFaderLed(i, 0);
     if (st.optionsMode) { refreshOptionLeds(); refreshOptionScreens(); } else refreshKnobScreens();
   }
@@ -822,7 +834,16 @@
     // Soft buttons: 1-8 (below the screens) select the channel/instrument;
     // 9-24 (above the faders) are the fixed Mute/Solo bank. Press-to-lighten (#5).
     if (c && c.group === 'button') {
+      const bank = (st.rt && st.rt.buttonBank) || 0;
       pressFlash('button', c.index, ev.value > 0);
+      if (c.index >= 8 && c.index < 24 && bank > 0) {
+        // Non-Mute/Solo button bank: the 16 buttons emit their mapped MIDI (#31).
+        const idx = c.index - 8;
+        const res = engine.handle(st.rt, { group: 'button', index: idx, value: ev.value });
+        res.out.forEach((mb) => sendMusic(st.destId, mb));
+        if (res.out.length) { recordAutomation('button', idx, res.out[res.out.length - 1]); log('▶ Soft ' + (c.index + 1)); }
+        return;
+      }
       if (ev.value > 0) {
         if (c.index < 8) selectChannel(c.index + 1);              // Soft 1-8 -> channel 1-8 (#7)
         else if (c.index < 24) { const a = msBank()[c.index - 8]; if (a) (c.index < 16 ? toggleMute : toggleSolo)(a.channel); } // Soft 9-16 Mute, 17-24 Solo (#1)
@@ -831,7 +852,7 @@
     }
 
     const navAction = engine.NAV_MAP[ev.control];
-    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); if (/knobBank/.test(navAction)) refreshKnobScreens(); else refreshCentreScreen(); refreshArrowLeds(); log('⇄ ' + ev.control); } return; }
+    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); if (/knobBank/.test(navAction)) refreshKnobScreens(); else { if (/buttonBank/.test(navAction)) refreshButtonArea(); refreshCentreScreen(); } refreshArrowLeds(); log('⇄ ' + ev.control); } return; }
     if (!c) return;
 
     // Pad in the step sequencer: hold-pad + keys note entry, clear/duplicate, audition
@@ -885,7 +906,7 @@
     refreshOptionLeds();
     refreshFunctionLeds();
     refreshTransport();
-    refreshMuteSolo();
+    refreshButtonArea();
     refreshChannelLeds();
     for (let i = 0; i < 8; i++) refreshFaderLed(i, 0); // faders start dim (value unknown until moved)
     st.rt.channel = st.activeChannel;
