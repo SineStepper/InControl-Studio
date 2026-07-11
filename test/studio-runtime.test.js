@@ -322,6 +322,9 @@ ok(!sent.slice(mark).some((m) => m.id === 'out' && m.bytes.length === 1 && (m.by
 mark = sent.length;
 RT.seqStop();
 ok(!sent.slice(mark).some((m) => m.bytes.length === 1 && m.bytes[0] === 0xfc), '#34 Stop does not send FC to the SL');
+// #59 Stop sends All-Notes-Off (CC123) to every channel
+const stopPanic = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0xb0 && m.bytes[1] === 123).map((m) => m.bytes[0] & 0x0f));
+ok(stopPanic.size === 16, '#59 Stop sends All-Notes-Off to all 16 channels (got ' + stopPanic.size + ')');
 st.running = false;
 
 // --- #17 Patterns view pages the Parts with Pads Up/Down ---

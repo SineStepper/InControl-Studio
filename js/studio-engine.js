@@ -207,10 +207,12 @@
   function nav(rt, action) {
     const m = rt.model;
     switch (action) {
-      case 'knobBank+': rt.knobBank = (rt.knobBank + 1) % m.knobBanks.length; return { ledDirty: true };
-      case 'knobBank-': rt.knobBank = (rt.knobBank - 1 + m.knobBanks.length) % m.knobBanks.length; return { ledDirty: true };
-      case 'buttonBank+': rt.buttonBank = (rt.buttonBank + 1) % m.buttonBanks.length; return { ledDirty: true };
-      case 'buttonBank-': rt.buttonBank = (rt.buttonBank - 1 + m.buttonBanks.length) % m.buttonBanks.length; return { ledDirty: true };
+      // Bank paging clamps at the ends (no wrap) so it matches the arrow LEDs,
+      // which go dark when there are no more pages in that direction.
+      case 'knobBank+': rt.knobBank = Math.min(m.knobBanks.length - 1, rt.knobBank + 1); return { ledDirty: true };
+      case 'knobBank-': rt.knobBank = Math.max(0, rt.knobBank - 1); return { ledDirty: true };
+      case 'buttonBank+': rt.buttonBank = Math.min(m.buttonBanks.length - 1, rt.buttonBank + 1); return { ledDirty: true };
+      case 'buttonBank-': rt.buttonBank = Math.max(0, rt.buttonBank - 1); return { ledDirty: true };
       case 'channel+': rt.channel = (rt.channel % 16) + 1; return { ledDirty: true };
       case 'channel-': rt.channel = ((rt.channel - 2 + 16) % 16) + 1; return { ledDirty: true };
       case 'grid': rt.padMode = rt.padMode === 'pads' ? 'sequencer' : 'pads'; return { ledDirty: true };

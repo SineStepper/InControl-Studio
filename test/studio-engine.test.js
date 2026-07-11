@@ -54,7 +54,9 @@ eq(E.handle(rt, { group: 'pad', index: 0, value: 0 }).out, [[0x80, 36, 0]], 'pad
 
 S.addKnobBank(m);
 E.nav(rt, 'knobBank+'); eq(rt.knobBank, 1, 'knobBank+ -> 1');
-E.nav(rt, 'knobBank+'); eq(rt.knobBank, 0, 'knobBank+ wraps');
+E.nav(rt, 'knobBank+'); eq(rt.knobBank, 1, 'knobBank+ clamps at the last bank (no wrap, matches the arrow LEDs)');
+E.nav(rt, 'knobBank-'); eq(rt.knobBank, 0, 'knobBank- -> 0');
+E.nav(rt, 'knobBank-'); eq(rt.knobBank, 0, 'knobBank- clamps at the first bank');
 E.nav(rt, 'channel+'); eq(rt.channel, 2, 'channel+ -> 2');
 
 const leds = E.ledMessages(rt);

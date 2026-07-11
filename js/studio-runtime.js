@@ -338,6 +338,7 @@
     st.recEcho.clear();
     // No MIDI Stop (FC) to the SL either — see seqPlay (#34).
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
+    panicAllChannels(); // Stop also sends All-Notes-Off to every channel so nothing hangs (#59)
     if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); }
     notify();
   }
