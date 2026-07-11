@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), baseRt: null, channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1 };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map() };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -266,6 +266,7 @@
       }
       const msg = e.type === 'on' ? [0x90 | e.channel, e.note & 0x7f, e.velocity & 0x7f] : [0x80 | e.channel, e.note & 0x7f, 0];
       sendMusic(st.destId, msg); // realtime — MIDI is never delayed
+      if (e.type === 'on') st.seqNoteTick.set(e.note, st.seqRt.tick); // remember what the sequencer just played (echo guard, #44)
       if (channelAudible(e.channel + 1)) keyPlay(e.note, e.type === 'on'); // playing keys of a part = green (#48)
     });
     playAutomation();
@@ -503,26 +504,27 @@
     ledHex(54 + index, opts().valueColor((a.led && a.led.idle) || '#20c0ff', value, 127));
   }
 
-  // ---- Keybed light guide (palette-Note method) ----
-  // The RGB LED-SysEx ids for keys overlap the fader/function LEDs, so we light
-  // keys with the palette Note method instead (Note-On ch16 = Solid; data1 = key
-  // note, data2 = palette colour). That addresses keys by note number and doesn't
-  // collide with any LED SysEx id. Idle = the current Part's colour (#51); playing
-  // = green (#48), auditioned/held = red (#49), pressed = white (#50).
-  // Palette indices are best-effort for the SL MkIII colour table (tunable here).
-  const KEY_PAL = { off: 0, white: 3, green: 21, red: 5 };
-  const PART_PAL = [5, 9, 13, 21, 37, 45, 49, 53]; // per Part index (tunable)
-  const KEY_LO = 36, KEY_HI = 96;                   // light-guide note range
-  const partPalette = () => PART_PAL[(st.gridTrack || 0) % 8];
-  function lightKey(note, palette) {
+  // ---- Keybed light guide (RGB LED-SysEx method) ----
+  // Keys are lit with the same RGB LED command as every other LED, at ids
+  // 54 + (note - KEY_BASE_NOTE), giving EXACT colours. Ids 54-67 are shared with
+  // the fader (54-61) and function (62-67) LEDs, so we skip that range to avoid
+  // clobbering them — the light guide covers notes 50-96 (ids 68-114). Idle = the
+  // current Part's colour (#51); playing = green (#48), auditioned/held = red
+  // (#49), pressed = white (#50); releasing reverts to the Part colour.
+  const KEY_GREEN = '#00ff00', KEY_RED = '#ff0000', KEY_WHITE = '#ffffff';
+  const KEY_BASE_NOTE = 36, KEY_LO = 36, KEY_HI = 96;
+  const keyIdle = () => { const t = curTrack(); return (t && t.color) || SEQ().PART_COLORS[(st.gridTrack || 0) % 8]; };
+  function lightKey(note, hex) {
     if (!st.keyGuide || !st.slOutId || note < KEY_LO || note > KEY_HI) return;
-    midi.sendToOutput(st.slOutId, [0x9f, note & 0x7f, palette & 0x7f]); // ch16 Note-On = Solid palette
+    const id = 54 + (note - KEY_BASE_NOTE);
+    if (id < 68 || id > 114) return; // skip the fader/function LED collision zone (ids 54-67)
+    ledHex(id, hex);
   }
   // Paint the whole light guide in the current Part's colour (idle state, #51).
-  function refreshKeyGuide() { for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, partPalette()); }
-  const keyPlay = (note, on) => lightKey(note, on ? KEY_PAL.green : partPalette());     // #48
-  const keyAudition = (note, on) => lightKey(note, on ? KEY_PAL.red : partPalette());   // #49
-  const keyPressed = (note, on) => lightKey(note, on ? KEY_PAL.white : partPalette());  // #50
+  function refreshKeyGuide() { const c = keyIdle(); for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, c); }
+  const keyPlay = (note, on) => lightKey(note, on ? KEY_GREEN : keyIdle());     // #48
+  const keyAudition = (note, on) => lightKey(note, on ? KEY_RED : keyIdle());   // #49
+  const keyPressed = (note, on) => lightKey(note, on ? KEY_WHITE : keyIdle());  // #50
 
   // ---- Press feedback (#5/#12): note pads show part colour (dim/bright), other buttons flash white ----
   function pressFlash(group, index, pressed) {
@@ -762,6 +764,11 @@
     }
   }
   function recordNoteOn(note, velocity) {
+    // Echo guard (#44): if the sequencer itself just played this note (e.g. the
+    // Destination is looped back into the app), don't re-record that echo as a
+    // fresh note — it would land at whatever step is playing (often the start).
+    const played = st.seqNoteTick.get(note);
+    if (played != null && st.seqRt && (st.seqRt.tick - played) >= 0 && (st.seqRt.tick - played) <= 2) { log('skip echo ' + note); return; }
     const p = playPattern(); if (!p) return; // live-record always targets the PLAYING pattern (#54)
     const pos = st.seqRt ? st.seqRt.pos[st.gridTrack] : { pad: 0, counter: 0 };
     const stepTicks = SEQ().SYNC[p.syncRate] || 6;
@@ -1109,7 +1116,11 @@
         return devs.filter((d) => d.kind === 'audiooutput').map((d) => ({ id: d.deviceId, name: d.label || 'Output' }));
       } catch (e) { return []; }
     },
-    setKeyGuide: (on) => { const was = st.keyGuide; st.keyGuide = !!on; if (on && !was) refreshKeyGuide(); else if (!on && st.slOutId) { for (let nt = KEY_LO; nt <= KEY_HI; nt++) midi.sendToOutput(st.slOutId, [0x9f, nt & 0x7f, KEY_PAL.off]); } },
+    setKeyGuide: (on) => {
+      const was = st.keyGuide;
+      if (on) { st.keyGuide = true; if (!was) refreshKeyGuide(); }
+      else { for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, '#000000'); st.keyGuide = false; } // clear while still enabled, then disable
+    },
     refreshSurface,
     state: () => st,
   };

@@ -207,23 +207,28 @@ const scr = sent.slice(mark).filter((m) => m.id === 'out' && m.bytes[7] === 0x02
 ok(scr.some((m) => m.bytes[9] === 0x03 && m.bytes[10] === 0), '#8 knob turn sets the graphic-knob value (type 3, value obj 0)');
 ok(scr.some((m) => m.bytes[9] === 0x01 && m.bytes[10] === 1), '#8 knob turn sets the value number above the glyph (text type 1, obj 1)');
 
-// --- #48-51 keybed light guide via the palette Note method (Note-On ch16 = 0x9f),
-//     which addresses keys by note and doesn't collide with LED SysEx ids ---
+// --- #48-51 keybed light guide via the RGB LED-SysEx command (id = 54 + note-36),
+//     skipping ids 54-67 which are shared with the fader/function LEDs ---
 st.padView = 'steps'; st.rt.padMode = 'sequencer'; st.clock = null; st.keyGuide = true;
-RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a note 60)
+RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a note 60 -> id 78)
 mark = sent.length;
 RT.handleControl([0x90, 0x60, 127]); // Pad 1 press -> auditions step 1 (stopped) -> key red
-ok(sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 60 && m.bytes[2] === 5), '#49 auditioned key lights red (palette note)');
+ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 78 && m.bytes[10] > 60 && m.bytes[11] === 0), '#49 auditioned key (note 60 -> id 78) lights red');
 RT.handleControl([0x80, 0x60, 0]);   // release -> reverts to Part colour
 mark = sent.length;
-RT.handleKeys([0x90, 64, 100]); // played key on the keybed -> white
-ok(sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 64 && m.bytes[2] === 3), '#50 pressed key lights white (palette note)');
+RT.handleKeys([0x90, 64, 100]); // played key on the keybed (note 64 -> id 82) -> white
+ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 82 && m.bytes[10] > 60 && m.bytes[11] > 60 && m.bytes[12] > 60), '#50 pressed key lights white');
 RT.handleKeys([0x80, 64, 0]);
-// guide off -> no palette colour for played keys
+// keys that fall in the fader/function id zone (ids 54-67 = notes 36-49) are skipped
+mark = sent.length;
+RT.handleKeys([0x90, 40, 100]); // note 40 -> id 58 (fader zone) -> skipped
+ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 58), '#48-51 low keys in the fader/function id zone are not lit (no clobber)');
+RT.handleKeys([0x80, 40, 0]);
+// guide off -> no colour for played keys
 RT.setKeyGuide(false);
 mark = sent.length;
 RT.handleKeys([0x90, 64, 100]);
-ok(!sent.slice(mark).some((m) => m.bytes[0] === 0x9f && m.bytes[1] === 64 && m.bytes[2] !== 0), '#51 guide off: no palette note for a played key');
+ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 82 && (m.bytes[10] || m.bytes[11] || m.bytes[12])), '#51 guide off: no colour for a played key');
 RT.handleKeys([0x80, 64, 0]);
 RT.setKeyGuide(true);
 
