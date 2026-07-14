@@ -531,7 +531,8 @@ ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0
 ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB colour (type 4, obj 2)');
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
-ok(stxt(4, 2) != null && stxt(4, 3) != null, '#66 5th screen (col 4) shows a two-row step graphic on objs 2 & 3');
+ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
+ok(stxt(8, 3) != null && stxt(8, 4) != null, '#66 the step/chain animation is on the 5th screen (column 8, objs 3 & 4)');
 st.running = false;
 
 // --- centre screen: three stable rows; button label tinted the (stable) button
@@ -564,8 +565,8 @@ Object.assign(model.knobBanks[0][0], { message_type: 'CC', cc: 74, start: 0, end
 st.channelRt = {}; RT.handleControl(CC(0x33 + 0, 127));
 mark = sent.length;
 RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
-const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 4 && m.bytes[9] === 0x01 && (m.bytes[10] === 2 || m.bytes[10] === 3));
-ok(v5.length > 0, '#69 turning a knob writes an overlay onto the 5th screen (col 4 bottom half)');
+const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8 && m.bytes[9] === 0x01 && (m.bytes[10] === 3 || m.bytes[10] === 4));
+ok(v5.length > 0, '#69 turning a knob writes a value overlay onto the 5th screen (column 8 bottom half)');
 st.screen5 = null; st.running = false;
 
 console.log('\n' + n + ' integration assertions passed');

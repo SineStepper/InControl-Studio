@@ -80,7 +80,6 @@
       const { r, g, b } = sysex.hexTo7bit(hex);
       send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
       sendKnobValue(i);
-      if (i === 4) continue; // 5th screen's bottom half is the info / step area (#66/#69) — drawn below
       // Each column's bottom label names Part i+1; underline it with THAT Part's
       // colour, and highlight (full colour) the currently-selected Part, others
       // dimmed (#68). We only get one RGB per object, so bright vs dim stands in
@@ -94,17 +93,19 @@
     refreshCentreScreen();
     refresh5thScreen(true); // 5th screen bottom half: step graphic / value / part names (#66/#69)
   }
-  // The bottom half of the 5th screen (column 4, objects 2 & 3) is a shared info
+  // The bottom half of the 5th screen (column 8, objects 3 & 4) is a shared info
   // area. Priority: a transient overlay wins while it's active (a knob/fader value
   // being adjusted, or the two Part names on a Patterns-view page change, #69);
-  // otherwise it shows the selected Part's playing-step graphic (#66).
+  // otherwise it shows the selected Part's playing-step / chained-pattern graphic
+  // (#66). The 5th screen is protocol column 8 (the centre notification screen).
+  const S5 = 8, S5_TOP = 3, S5_BOT = 4; // 5th screen + its two bottom-half text rows
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
     if (st.screen5) { // an overlay owns the area right now
-      send(sysex.screenText(4, 2, st.screen5.top || ''));
-      send(sysex.screenText(4, 3, st.screen5.bottom || ''));
+      send(sysex.screenText(S5, S5_TOP, st.screen5.top || ''));
+      send(sysex.screenText(S5, S5_BOT, st.screen5.bottom || ''));
       const c = sysex.hexTo7bit(st.screen5.color || '#ffffff');
-      send(sysex.screenRgb(4, 2, c.r, c.g, c.b));
+      send(sysex.screenRgb(S5, S5_TOP, c.r, c.g, c.b));
       return;
     }
     const p = gridPattern(); if (!p) return;
@@ -112,8 +113,8 @@
     if (!force && st.lastStepScreen === head) return;
     st.lastStepScreen = head;
     const rows = opts().stepBars(p, head);
-    send(sysex.screenText(4, 2, rows[0]));
-    send(sysex.screenText(4, 3, rows[1]));
+    send(sysex.screenText(S5, S5_TOP, rows[0]));
+    send(sysex.screenText(S5, S5_BOT, rows[1]));
   }
   // Show a transient two-line overlay on the 5th screen's bottom half, then revert
   // to the step graphic after `ms` (#69). `color` tints the top line. Only repaints
@@ -153,11 +154,11 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // Centre screen: three stacked rows — Part name, knob bank, button bank. Only
-  // the button-bank label is tinted, and with the (stable) BUTTON colour — the
-  // Mute/Solo bank in mute orange — so nothing on this screen changes colour as
-  // Parts change (user feedback: the button label's bar was following the Part
-  // colour and the Part name was doubling from a speculative 2-column layout).
+  // 5th screen (protocol column 8) top rows: Part name, knob bank name, button
+  // bank name. Its bottom half (objects 3 & 4) is the chained-pattern / step
+  // animation, owned by refresh5thScreen(). Only the button-bank label is tinted,
+  // with the stable BUTTON colour (mute orange), so nothing here changes colour as
+  // Parts change.
   function refreshCentreScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
@@ -166,9 +167,9 @@
     send(sysex.screenText(8, 0, name));                                   // row 1: part name
     send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // row 2: knob bank
     send(sysex.screenText(8, 2, bank === 0 ? 'Mute Solo' : 'Btns ' + (bank + 1))); // row 3: button bank
-    send(sysex.screenText(8, 3, ''));                                     // clear any stale 4th row
     const bc = sysex.hexTo7bit(bank === 0 ? '#ff6a00' : buttonRowAvg(false)); // stable button colour
     send(sysex.screenRgb(8, 2, bc.r, bc.g, bc.b));
+    // rows 3 & 4 (the bottom half) are drawn by refresh5thScreen() — the animation.
   }
 
   // ---- sequencer clock / transport ----
