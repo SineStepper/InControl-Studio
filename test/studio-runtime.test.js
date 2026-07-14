@@ -82,20 +82,20 @@ ok(st.stepPage === 1, '#6 Screen Down pages to steps 9-16');
 RT.handleControl(CC(0x51, 127));
 ok(st.stepPage === 0, '#6 Screen Up pages back to steps 1-8');
 
-// #6 option screens: "Step N" tops, white knob glyph, menu name at centre-bottom
+// #6 option screens: "Step N" tops, white knob glyph, menu name at center-bottom
 mark = sent.length;
 RT.handleControl(CC(0x33 + 0, 127)); // Soft 1 -> Velocity
 const scr6 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02);
 function scrText(col, obj) { const m = scr6.find((x) => x.bytes[8] === col && x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0x00; i++) s += String.fromCharCode(m.bytes[i]); return s; }
 ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
 ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
-ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
-// #68 each menu button's screen has a colour bar (obj 3) in its menu colour; none where there's no label
+ok(scrText(8, 2) === 'Velocity', '#6 center screen names the menu at the bottom');
+// #68 each menu button's screen has a color bar (obj 3) in its menu color; none where there's no label
 const optRgb = (col) => scr6.find((m) => m.bytes[9] === 0x04 && m.bytes[8] === col && m.bytes[10] === 3);
 const velBar = optRgb(0); // Velocity -> red
 ok(velBar && velBar.bytes[11] > 0 && velBar.bytes[12] === 0 && velBar.bytes[13] === 0, '#68 Velocity menu bar is red (obj 3)');
-const emptyBar = optRgb(4); // no menu maps to soft button 5 -> no colour
-ok(!emptyBar || (emptyBar.bytes[11] === 0 && emptyBar.bytes[12] === 0 && emptyBar.bytes[13] === 0), '#68 a column with no menu label gets no colour bar');
+const emptyBar = optRgb(4); // no menu maps to soft button 5 -> no color
+ok(!emptyBar || (emptyBar.bytes[11] === 0 && emptyBar.bytes[12] === 0 && emptyBar.bytes[13] === 0), '#68 a column with no menu label gets no color bar');
 
 // #37 gate shows text (# boxes + number) but NO knob glyph, and the screen isn't blank
 mark = sent.length;
@@ -220,7 +220,7 @@ RT.handleControl(CC(0x33 + 0, 127)); // channel 1 -> gridTrack 0 (step 1 has a n
 mark = sent.length;
 RT.handleControl([0x90, 0x60, 127]); // Pad 1 press -> auditions step 1 (stopped) -> key red
 ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 78 && m.bytes[10] > 60 && m.bytes[11] === 0), '#49 auditioned key (note 60 -> id 78) lights red');
-RT.handleControl([0x80, 0x60, 0]);   // release -> reverts to Part colour
+RT.handleControl([0x80, 0x60, 0]);   // release -> reverts to Part color
 mark = sent.length;
 RT.handleKeys([0x90, 64, 100]); // played key on the keybed (note 64 -> id 82) -> white
 ok(sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 82 && m.bytes[10] > 60 && m.bytes[11] > 60 && m.bytes[12] > 60), '#50 pressed key lights white');
@@ -230,11 +230,11 @@ mark = sent.length;
 RT.handleKeys([0x90, 40, 100]); // note 40 -> id 58 (fader zone) -> skipped
 ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 58), '#48-51 low keys in the fader/function id zone are not lit (no clobber)');
 RT.handleKeys([0x80, 40, 0]);
-// guide off -> no colour for played keys
+// guide off -> no color for played keys
 RT.setKeyGuide(false);
 mark = sent.length;
 RT.handleKeys([0x90, 64, 100]);
-ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 82 && (m.bytes[10] || m.bytes[11] || m.bytes[12])), '#51 guide off: no colour for a played key');
+ok(!sent.slice(mark).some((m) => m.bytes[7] === 0x03 && m.bytes[8] === 82 && (m.bytes[10] || m.bytes[11] || m.bytes[12])), '#51 guide off: no color for a played key');
 RT.handleKeys([0x80, 64, 0]);
 RT.setKeyGuide(true);
 
@@ -250,7 +250,7 @@ const laneKey = Object.keys(lane)[0];
 ok(lane[laneKey][0] && lane[laneKey][0].length === 3, 'automation captured the CC bytes at tick 0');
 st.recording = false; st.clock = null;
 
-// --- #12 LED colour scheme ---
+// --- #12 LED color scheme ---
 // helper: last RGB SysEx sent for an LED id -> {r,g,b,beh}
 function lastLed(id) {
   for (let i = sent.length - 1; i >= 0; i--) { const b = sent[i].bytes; if (b[7] === 0x03 && b[8] === id) return { beh: b[9], r: b[10], g: b[11], b: b[12] }; }
@@ -308,7 +308,7 @@ require('assert').ok(true);
 // via sendMusic path: use a fader mapped... simplest: check channelAudible logic indirectly is covered above.
 
 // --- #31 button-bank paging repaints the 16 above-fader buttons to the bank's
-//     colours (bank 0 = mute/solo orange; bank 1 shows the bank's own colours) ---
+//     colors (bank 0 = mute/solo orange; bank 1 shows the bank's own colors) ---
 st.mute.clear(); st.solo.clear(); st.running = true; st.rt.buttonBank = 0;
 model.buttonBanks[1][0].enabled = true; model.buttonBanks[1][0].led.idle = '#00ff00'; // bank-1 button 1 = green
 RT.refreshSurface();
@@ -317,7 +317,7 @@ ok(muteBefore && muteBefore.r > 0 && muteBefore.b === 0, '#31 bank 0 shows Mute 
 RT.handleControl(CC(0x58, 127)); // Right Soft Down -> button bank + (to bank 1)
 ok(st.rt.buttonBank === 1, '#31 Right Soft Down pages to button bank 1');
 const bankLed = lastLed(12);
-ok(bankLed && bankLed.g > 60 && bankLed.r === 0, '#31 bank 1 repaints id 12 to the bank colour (green), not stuck orange');
+ok(bankLed && bankLed.g > 60 && bankLed.r === 0, '#31 bank 1 repaints id 12 to the bank color (green), not stuck orange');
 RT.handleControl(CC(0x57, 127)); // Right Soft Up -> back to bank 0
 ok(lastLed(12).r > 0 && lastLed(12).b === 0, '#31 paging back restores Mute (orange)');
 st.rt.buttonBank = 0; st.running = false;
@@ -353,13 +353,13 @@ ok(st.activeChannel === 6, '#53 switching view does not change the selected Part
 ok(st.partTop === 4, '#53 Patterns view auto-pages to the active Part (track 5 -> row 4)');
 RT.handleControl(CC(0x54, 127)); // Scene Bottom -> Steps view
 ok(st.viewPattern === null, '#53 Steps view snaps the viewed pattern back to the playing one');
-// --- #42 Part-select buttons default to rainbow Part colours, not blue ---
+// --- #42 Part-select buttons default to rainbow Part colors, not blue ---
 st.gridTrack = 0; st.activeChannel = 1; st.running = true;
-model.sequencer.tracks[1].color = null; // no explicit colour -> should fall back to a Part colour, not blue
+model.sequencer.tracks[1].color = null; // no explicit color -> should fall back to a Part color, not blue
 mark = sent.length;
 RT.refreshSurface();
 const p2led = lastLed(4 + 1); // Soft 2 = Part 2 (id 5)
-ok(p2led && !(p2led.r < p2led.b && p2led.g < p2led.b), '#42 Part 2 button is a Part colour (orange-ish), not a blue default');
+ok(p2led && !(p2led.r < p2led.b && p2led.g < p2led.b), '#42 Part 2 button is a Part color (orange-ish), not a blue default');
 st.running = false;
 st.padView = 'steps';
 
@@ -526,25 +526,25 @@ let g1 = led64(mark);
 ok(g1 && g1.r > 0 && g1.g > 0 && g1.b === 0, '#61 non-downbeat beats flash yellow');
 st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false;
 
-// --- #63/#65/#66 knob screens: coloured bars, part label at the bottom, 5th-screen step graphic ---
+// --- #63/#65/#66 knob screens: colored bars, part label at the bottom, 5th-screen step graphic ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
 RT.handleControl(CC(0x33 + 0, 127)); // Part 1
 mark = sent.length;
 RT.refreshSurface();
 const kscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02);
 const stxt = (col, obj) => { const m = kscr.find((x) => x.bytes[8] === col && x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
-ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0), '#63 knob screen top bar gets an RGB colour (type 4, obj 0)');
-ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB colour (type 4, obj 2)');
+ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0), '#63 knob screen top bar gets an RGB color (type 4, obj 0)');
+ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB color (type 4, obj 2)');
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
 ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
 const notif = sent.slice(mark).find((m) => m.bytes[7] === 0x04);
-ok(notif, '#66 the 8-pattern chain strip is sent via the centre-screen notification command (0x04)');
+ok(notif, '#66 the 8-pattern chain strip is sent via the center-screen notification command (0x04)');
 { let s = ''; for (let i = 8; i < notif.bytes.length && notif.bytes[i] !== 0; i++) s += String.fromCharCode(notif.bytes[i]); ok(s.length === 8, '#66 the notification carries the 8-pattern strip'); }
 st.running = false;
 
 // --- 5th screen (column 8): knob bank / part name / Mute+Solo rows, with the
-//     correct edge-bar colours (left = Part, right-top = top button row, right-bottom = bottom row) ---
+//     correct edge-bar colors (left = Part, right-top = top button row, right-bottom = bottom row) ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
 if (st.rt) st.rt.buttonBank = 0;
 RT.handleControl(CC(0x33 + 0, 127)); // Part 1
@@ -555,21 +555,21 @@ const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.byte
 ok(ctxt(1) === 'Part 1', '#69 5th screen row 1 (obj 1) is the Part name');
 ok(/^Knobs/.test(ctxt(0) || ''), '#69 the row above the part name (obj 0) is the knob bank, not the pattern strip');
 ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 the button-bank rows read "Mute" (obj 2) over "Solo" (obj 3)');
-// on this screen an object's colour bar renders one region below its text, so the
+// on this screen an object's color bar renders one region below its text, so the
 // RIGHT-TOP bar (beside "Mute" on obj 2) is set on obj 1 and RIGHT-BOTTOM on obj 2.
 const cRgb = (obj) => cscr.find((m) => m.bytes[9] === 0x04 && m.bytes[10] === obj);
 const leftBar = cRgb(0), topBar = cRgb(1), botBar = cRgb(2);
-ok(leftBar && leftBar.bytes[11] > leftBar.bytes[13], '#68 LEFT edge bar (obj 0) is the selected Part colour (Part 1 red: R > B)');
+ok(leftBar && leftBar.bytes[11] > leftBar.bytes[13], '#68 LEFT edge bar (obj 0) is the selected Part color (Part 1 red: R > B)');
 ok(topBar && topBar.bytes[11] > topBar.bytes[13], '#68 RIGHT-TOP bar (obj 1) is the mute row average (orange: R > B)');
 ok(botBar && botBar.bytes[13] > botBar.bytes[11], '#68 RIGHT-BOTTOM bar (obj 2) is the solo row average (blue: B > R)');
-ok(!cRgb(3), '#68 obj 3 gets no colour (its bar region is off-screen)');
+ok(!cRgb(3), '#68 obj 3 gets no color (its bar region is off-screen)');
 
 // --- #68 knob screen top bar only appears for ENABLED knobs ---
 model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
 mark = sent.length; RT.refreshSurface();
 const kbars = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x04 && m.bytes[10] === 0);
 const barAt = (col) => { const m = kbars.find((x) => x.bytes[8] === col); return m ? (m.bytes[11] || m.bytes[12] || m.bytes[13]) : 0; };
-ok(barAt(0) > 0, '#68 enabled knob (col 0) shows a Part-colour top bar');
+ok(barAt(0) > 0, '#68 enabled knob (col 0) shows a Part-color top bar');
 ok(barAt(1) === 0, '#68 disabled knob (col 1) shows no top bar (black)');
 model.knobBanks[0][1].enabled = true;
 

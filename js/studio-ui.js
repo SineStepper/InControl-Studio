@@ -5,7 +5,7 @@
  * top-middle, Destination + engine + settings top-right; two top-level tabs
  * (Editor / Sequencer, issue #28). The Editor mirrors Novation Components: a row
  * of control glyphs (name above, current assignment below), a wide left column
- * with the full behaviour/assignment mappings, and a thin scrollable bank list
+ * with the full behavior/assignment mappings, and a thin scrollable bank list
  * on the right (issue #30). Templates and setups are one and the same — importing
  * a template merges its parameters into the current setup (issue #27).
  */
@@ -246,7 +246,7 @@
   const BIT_DEPTH_CLASSES = { knob: true, fader: true, button: true, footswitch: true, pad_pressure: true, sustain: true, pitch: true, mod: true, expression: false, keys: false, pad_hit: false };
 
   // Wide left column: the selected control's mappings, grouped into Name/Enabled,
-  // Behaviour and Assignment section boxes with three-column rows (#80).
+  // Behavior and Assignment section boxes with three-column rows (#80).
   function inspector(ctrl) {
     const panel = el('aside', { className: 'comp-insp panel' });
     if (!ctrl) { panel.appendChild(el('p', { className: 'hint' }, 'Select a control above to edit it.')); return panel; }
@@ -295,33 +295,33 @@
       if (o.cls === 'pad_hit') rows.push(row(cell('Vel min', num(o, 'vel_min', 0, 127)), cell('Vel max', num(o, 'vel_max', 0, 127)), cell('Vel curve', sel(o, 'vel_curve', S.VEL_CURVES))));
       return sec(title || 'Assignment', rows, enableObj);
     }
-    function behaviourSection(o) {
+    function behaviorSection(o) {
       if (o.cls === 'knob') {
-        return sec('Behaviour', [
+        return sec('Behavior', [
           row(cell('Resolution', num(o, 'resolution', 0, 16383)), cell('Mode', sel(o, 'mode', S.KNOB_MODES)), cell('Step', num(o, 'step', 0, 127))),
           row(cell('Bank paging', sel(o, 'combined', S.COMBINED)), empty(), empty()),
         ]);
       }
-      // switch behaviour: dropdown | action (push/release) | step (inc/dec) + wrap/pair
+      // switch behavior: dropdown | action (push/release) | step (inc/dec) + wrap/pair
       const rows = [row(
-        cell('Behaviour', sel(o, 'behavior', S.BEHAVIORS)),
+        cell('Behavior', sel(o, 'behavior', S.BEHAVIORS)),
         o.behavior === 'Momentary' ? empty() : cell('Action', sel(o, 'action', ['On Push', 'On Release'])),
         o.behavior === 'Inc/Dec' ? cell('Step', num(o, 'step_size', 1, 127)) : empty(),
       )];
       if (o.behavior === 'Inc/Dec') { const wp = row(cellChk('Wrap', chk(o, 'wrap')), cellChk('Pair', chk(o, 'pair')), empty()); rows.push(wp); }
-      return sec('Behaviour', rows);
+      return sec('Behavior', rows);
     }
     const cellChk = (label, node) => { const c = el('div', { className: 'insp-cell insp-cell-chk' }); const lab = el('label', {}); lab.append(node, document.createTextNode(' ' + label)); c.appendChild(lab); return c; };
 
     // ---- title ----
     panel.appendChild(el('div', { className: 'insp-title' }, (a.name || a.cls) + (a.fixed ? '  (fixed)' : '')));
 
-    // ---- fixed Mute/Solo: colour only ----
+    // ---- fixed Mute/Solo: color only ----
     if (a.colorOnly) {
-      panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its colour is editable.'));
+      panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its color is editable.'));
       const c = el('input', { type: 'color', value: a.led.idle });
       c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); pushLeds(); });
-      const box = el('div', { className: 'insp-sec' }); box.appendChild(cell('Colour', c)); panel.appendChild(box);
+      const box = el('div', { className: 'insp-sec' }); box.appendChild(cell('Color', c)); panel.appendChild(box);
       return panel;
     }
 
@@ -330,7 +330,7 @@
       // independently enable-able. Hit and Pressure share the name.
       const pressure = model.pads.pressures[ctrl.index];
       panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9, [pressure])), empty(), empty())]));
-      panel.appendChild(behaviourSection(a));
+      panel.appendChild(behaviorSection(a));
       panel.appendChild(assignment(a, 'Assignment (Hit)', a));
       panel.appendChild(assignment(pressure, 'Assignment (Pressure)', pressure));
       panel.appendChild(ledSection(a));
@@ -338,31 +338,31 @@
     }
 
     // ---- Name / Enabled ----
-    panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9)), cell('Enabled', chk(a, 'enabled')), empty())]));
-    // ---- Behaviour (encoders + switches) ----
-    if (a.cls === 'knob' || isSwitch(a.cls)) panel.appendChild(behaviourSection(a));
+    panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9)), cellChk('Enabled', chk(a, 'enabled')), empty())]));
+    // ---- Behavior (encoders + switches) ----
+    if (a.cls === 'knob' || isSwitch(a.cls)) panel.appendChild(behaviorSection(a));
     // ---- Assignment ----
     panel.appendChild(assignment(a));
-    // ---- LED colour ----
+    // ---- LED color ----
     panel.appendChild(ledSection(a));
     return panel;
 
-    // LED colour section (kept from the previous inspector, in a section box).
+    // LED color section (kept from the previous inspector, in a section box).
     function ledSection(o) {
       const ledWrap = el('div', { className: 'insp-sec insp-color' });
       const field = (lbl, node) => { const f = el('div', { className: 'insp-cell' }, [el('label', {}, lbl), node]); return f; };
       if (o.colorMode === 'value') {
-        ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
+        ledWrap.appendChild(el('h4', {}, 'LED color (brightness tracks value)'));
         const c = el('input', { type: 'color', value: o.led.idle });
         c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
-        ledWrap.appendChild(row(field('Colour', c)));
+        ledWrap.appendChild(row(field('Color', c)));
       } else if (o.cls === 'knob') {
-        ledWrap.appendChild(el('h4', {}, 'Knob glyph colour'));
+        ledWrap.appendChild(el('h4', {}, 'Knob glyph color'));
         const c = el('input', { type: 'color', value: o.led.idle });
         c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
-        ledWrap.appendChild(row(field('Colour', c)));
+        ledWrap.appendChild(row(field('Color', c)));
       } else {
-        ledWrap.appendChild(el('h4', {}, 'LED colour'));
+        ledWrap.appendChild(el('h4', {}, 'LED color'));
         const states = hasPressureLed(o.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
         const cells = states.map((s) => { const c = el('input', { type: 'color', value: o.led[s] === '#000000' ? '#000000' : o.led[s] }); c.addEventListener('input', () => { o.led[s] = c.value; render(); pushLeds(); }); return field(s[0].toUpperCase() + s.slice(1), c); });
         ledWrap.appendChild(row.apply(null, cells));

@@ -2,14 +2,14 @@
 
 Run the Novation SL MkIII in **InControl** mode as a full, standalone-style
 instrument + step sequencer — controlled entirely from the hardware — with
-**custom RGB LED colours** on every pad, button and fader, the thing **Novation
+**custom RGB LED colors** on every pad, button and fader, the thing **Novation
 Components doesn't let you do** even though the hardware supports it.
 
 It's a single web/Electron app — **InControl Studio** — with two top-level tabs:
 
 - **Editor** — a Components-style customizer with *more* than Components allows:
   a **template library** you map to the 8 Parts, unlimited knob/button banks,
-  per-state LED colours, and richer message types (14-bit, NRPN, combined
+  per-state LED colors, and richer message types (14-bit, NRPN, combined
   continuous bank-change). Imports Components `.syx` templates and
   `.slmkiiipack` packs.
 - **Sequencer** — a step sequencer modelled on the SL MkIII's own (8 tracks ×
@@ -85,7 +85,7 @@ GitHub Actions if you'd rather not build locally, but it's optional.)
    override them in **⚙ settings** if needed, and set a **Destination** port for
    your DAW/synth to receive the mapped MIDI and the sequencer's notes.
 3. **Editor** tab: build/import templates in the left library, map each to a
-   Part (the 1-8 dots), and edit any control's mapping + LED colour — changes
+   Part (the 1-8 dots), and edit any control's mapping + LED color — changes
    push to the hardware live.
 4. **Sequencer** tab: program steps, hit **Play**, and drive everything from the
    SL. Save the arrangement as a **session** (left column).
@@ -93,7 +93,7 @@ GitHub Actions if you'd rather not build locally, but it's optional.)
 ### On the hardware (InControl mode)
 
 - **Pads** are the step grid (or playable notes via **Grid**); play head, used
-  steps, and the current step are shown in the Part colour with a white head.
+  steps, and the current step are shown in the Part color with a white head.
 - **Soft buttons 1-8** (below the screens) select the Part/channel; **9-24**
   (above the faders) are the **Mute/Solo** bank — or, once you page button banks,
   your own button banks.
@@ -106,22 +106,22 @@ GitHub Actions if you'd rather not build locally, but it's optional.)
 
 ![The InControl Studio sequencer](assets/studio-sequencer.png)
 
-## Templates & LED colours (important)
+## Templates & LED colors (important)
 
-A common question: *can I bake custom LED colours into the stored **templates**
+A common question: *can I bake custom LED colors into the stored **templates**
 (the ones Components saves as `.syx`)?*
 
-**Short answer: no — the template format doesn't carry LED colours.** The
+**Short answer: no — the template format doesn't carry LED colors.** The
 template `.syx` format is fully reverse-engineered (see
 [docs/TEMPLATE-FORMAT.md](docs/TEMPLATE-FORMAT.md)) with a bit-exact round-trip:
 templates store control **mappings** (MIDI type, CC/note, channel, value range) —
-every colour-looking `7F` byte is actually a control's max value (127). That's
-why Components has no template LED-colour UI. Custom colours are only
+every color-looking `7F` byte is actually a control's max value (127). That's
+why Components has no template LED-color UI. Custom colors are only
 controllable **live** via the InControl SysEx API — which is what this app does.
 
 ## Save / import / export
 
-- **Save / Load `.json`** — the entire setup: control mappings, LED colours, the
+- **Save / Load `.json`** — the entire setup: control mappings, LED colors, the
   template library, the session library, and the sequencer.
 - **Import `.syx`** — a Components template, added to the template library.
 - **Import pack** (`.slmkiiipack`) / **Import sessions** (`.syx`) — Components
@@ -134,12 +134,12 @@ controllable **live** via the InControl SysEx API — which is what this app doe
 
 For always-on use there's a standalone Node service in
 [`bridge/`](bridge/README.md) that creates its own virtual port and re-asserts
-colours + remaps InControl messages without the app open:
+colors + remaps InControl messages without the app open:
 
 ```bash
 cd bridge && npm install
 node bridge.js --list                 # find your ports
-cp config.example.json config.json    # edit colours + mappings
+cp config.example.json config.json    # edit colors + mappings
 node bridge.js                        # SL MkIII in InControl mode
 ```
 
@@ -161,13 +161,13 @@ for t in test/*.test.js; do node "$t"; done
 ## How it works
 
 - [`js/sysex.js`](js/sysex.js) — builds the `F0 00 20 29 02 0A 01 …` LED / screen
-  messages and 8-bit ⟷ 7-bit colour conversion.
+  messages and 8-bit ⟷ 7-bit color conversion.
 - [`js/incontrol.js`](js/incontrol.js) — resolves incoming InControl messages
   (pads, buttons, knobs, faders, pad pressure) to named controls.
 - [`js/midi.js`](js/midi.js) — Web MIDI wrapper (and an Electron native backend);
   auto-detects the SL's InControl / keys ports.
 - [`js/studio-model.js`](js/studio-model.js) — the data model: controls, banks,
-  per-state colours, the template + session libraries.
+  per-state colors, the template + session libraries.
 - [`js/studio-engine.js`](js/studio-engine.js) — pure control→MIDI + LED logic.
 - [`js/studio-runtime.js`](js/studio-runtime.js) — the live engine: reads the SL,
   drives LEDs/screens, runs the sequencer clock, records, sends MIDI + clock.

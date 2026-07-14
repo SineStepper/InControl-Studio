@@ -3,7 +3,7 @@
  *
  * Ported from the proven `inno/slmkiii` Python library (MIT), so the byte layout
  * and 7-to-8 encoding match Novation Components exactly. Exposes every mapping
- * field (message type, channel, CC/note, value range, button/pad behaviour,
+ * field (message type, channel, CC/note, value range, button/pad behavior,
  * knob resolution, …) so we can build a real template editor.
  *
  * Record order (77 × 44 bytes after a 20-byte header): 16 buttons, 16 knobs,

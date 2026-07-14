@@ -66,7 +66,7 @@
     bar.appendChild(selField('Channel', range(16).map((i) => [i + 1, 'Ch ' + (i + 1)]), c.track.channel, (v) => { c.track.channel = +v; }));
     const col = el('input', { type: 'color', value: c.track.color || '#3bd0ff' });
     col.addEventListener('input', () => { c.track.color = col.value; if (RT()) RT().refreshSurface(); render(host); });
-    bar.appendChild(el('label', { className: 'seq-f' }, ['Part colour ', col]));
+    bar.appendChild(el('label', { className: 'seq-f' }, ['Part color ', col]));
     bar.appendChild(selField('Swing', [['On', 'On'], ['Off', 'Off']], c.track.swing || 'On', (v) => { c.track.swing = v; }));
     main.appendChild(bar);
 

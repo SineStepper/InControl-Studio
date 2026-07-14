@@ -8,7 +8,7 @@ const HEADER = [0xf0, 0x00, 0x20, 0x29, 0x02, 0x0a, 0x01];
 const EOX = 0xf7;
 const BEHAVIOR = { solid: 0x01, flash: 0x02, pulse: 0x03 };
 
-// LED SysEx ids by friendly name (subset most people colour; extend as needed).
+// LED SysEx ids by friendly name (subset most people color; extend as needed).
 const LED_IDS = {};
 for (let i = 0; i < 16; i++) LED_IDS['Pad ' + (i + 1)] = 38 + i;
 for (let i = 0; i < 24; i++) LED_IDS['Soft ' + (i + 1)] = 4 + i;
@@ -36,7 +36,7 @@ function ledRgb(ledId, r, g, b, behavior) {
 }
 
 /**
- * Build SysEx messages for a colour layout.
+ * Build SysEx messages for a color layout.
  * @param {object} colors  Either { "Pad 1": {hex,behavior}, ... } (names) or
  *                         { "38": {hex,behavior}, ... } (numeric LED ids), i.e.
  *                         the browser tool's exported `config`.

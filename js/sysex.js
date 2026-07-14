@@ -5,11 +5,11 @@
  * LEDs are addressed on the *InControl* USB port while the unit is in
  * InControl view. Two addressing schemes exist:
  *
- *   1. RGB via SysEx (what this app uses — fully custom 21-bit colour):
+ *   1. RGB via SysEx (what this app uses — fully custom 21-bit color):
  *        F0 00 20 29 02 0A 01 03 <ledId> <behavior> <R> <G> <B> F7
  *      R/G/B are each 0-127 (7-bit).
  *
- *   2. Palette via Note/CC on a behaviour-specific channel (128 fixed colours):
+ *   2. Palette via Note/CC on a behavior-specific channel (128 fixed colors):
  *        solid   -> channel 16   flash -> channel 2   pulse -> channel 3
  *      (kept here for reference / .syx export completeness).
  */
@@ -24,7 +24,7 @@
   // Command IDs (byte immediately after the header).
   const CMD_SET_LED = 0x03;
 
-  // LED behaviour byte for the RGB SysEx command.
+  // LED behavior byte for the RGB SysEx command.
   const BEHAVIOR = { solid: 0x01, flash: 0x02, pulse: 0x03 };
 
   const clamp7 = (n) => Math.max(0, Math.min(127, n | 0));
@@ -51,7 +51,7 @@
     ]);
   }
 
-  // ---- Colour helpers: the UI works in 8-bit #RRGGBB, hardware in 7-bit. ----
+  // ---- Color helpers: the UI works in 8-bit #RRGGBB, hardware in 7-bit. ----
 
   const to7 = (v255) => clamp7(Math.round((v255 * 127) / 255)); // 0-255 -> 0-127
   const to8 = (v127) => Math.round((clamp7(v127) * 255) / 127); // 0-127 -> 0-255
@@ -68,7 +68,7 @@
     return '#' + h(r & 0xff) + h(g & 0xff) + h(b & 0xff);
   }
 
-  /** Convert a UI colour (#RRGGBB) into the 7-bit triple the device expects. */
+  /** Convert a UI color (#RRGGBB) into the 7-bit triple the device expects. */
   function hexTo7bit(hex) {
     const { r, g, b } = hexToRgb255(hex);
     return { r: to7(r), g: to7(g), b: to7(b) };
@@ -112,10 +112,10 @@
     const t = []; for (const ch of String(text).slice(0, 9)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00);
     return HEADER.concat([0x02, col & 0x7f, 0x01, obj & 0x7f], t, [EOX]);
   }
-  // Set an RGB colour property (type 4) on a column's object.
+  // Set an RGB color property (type 4) on a column's object.
   function screenRgb(col, obj, r, g, b) { return HEADER.concat([0x02, col & 0x7f, 0x04, obj & 0x7f, clamp7(r), clamp7(g), clamp7(b), EOX]); }
-  // Centre-screen notification (command 0x04): up to two lines of 7-bit ASCII shown
-  // across the top of the centre screen. Each line is NUL-terminated.
+  // Center-screen notification (command 0x04): up to two lines of 7-bit ASCII shown
+  // across the top of the center screen. Each line is NUL-terminated.
   function screenNotify(line1, line2) {
     const enc = (s) => { const t = []; for (const ch of String(s || '').slice(0, 9)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00); return t; };
     return HEADER.concat([0x04], enc(line1), enc(line2 || ''), [EOX]);

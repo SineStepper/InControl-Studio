@@ -23,7 +23,7 @@
   const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
   const STEPS = 16, TRACKS = 8, PATTERNS = 8;
 
-  // Default Part colours (one per track), echoing the SL MkIII's coloured Parts.
+  // Default Part colors (one per track), echoing the SL MkIII's colored Parts.
   const PART_COLORS = ['#ff2d2d', '#ff8c00', '#ffd000', '#38d430', '#00c8c8', '#2b7bff', '#8a4bff', '#ff3bce'];
 
   function newStep() { return { notes: [], chance: 100 }; }
