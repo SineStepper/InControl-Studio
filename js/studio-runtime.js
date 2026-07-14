@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -67,19 +67,28 @@
   // knobs (value arc), value numbers and per-knob colours.
   function refreshKnobScreens() {
     if (!st.slOutId || !sysex || !st.rt) return;
-    send(sysex.screenLayout(1)); // Knob Layout
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
+    // When the set of enabled knobs changes, re-init the layout (0→1) to wipe any
+    // knob glyph left behind by a knob that was just disabled (#75); otherwise just
+    // (re)assert the knob layout without the flicker of a toggle.
+    const mask = (st.rt.knobBank || 0) + ':' + bank.map((a) => (a && a.enabled ? 1 : 0)).join('');
+    if (st.lastKnobMask !== mask) { send(sysex.screenLayout(0)); send(sysex.screenLayout(1)); st.lastKnobMask = mask; }
+    else send(sysex.screenLayout(1)); // Knob Layout
     const cur = sysex.hexTo7bit(partColor());              // the selected Part's colour
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
       const enabled = !!(a && a.enabled);
-      send(sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : '')); // knob name at the top
-      // Bar of Part colour above the knob label — ONLY when the knob is enabled (#68).
-      send(sysex.screenRgb(i, 0, enabled ? cur.r : 0, enabled ? cur.g : 0, enabled ? cur.b : 0));
-      const hex = (a && a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph colour
-      const { r, g, b } = sysex.hexTo7bit(hex);
-      send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
-      sendKnobValue(i);
+      // A DISABLED knob shows nothing on its screen — no title, glyph or value —
+      // just its Part label at the bottom (#75). Only enabled knobs get the name,
+      // Part-colour bar, glyph colour and value.
+      send(sysex.screenText(i, 0, enabled ? (a.name || 'Knob ' + (i + 1)) : ''));
+      send(sysex.screenRgb(i, 0, enabled ? cur.r : 0, enabled ? cur.g : 0, enabled ? cur.b : 0)); // top bar, enabled only (#68)
+      if (enabled) {
+        const hex = (a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph colour
+        const { r, g, b } = sysex.hexTo7bit(hex);
+        send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
+        sendKnobValue(i);
+      }
       // Each column's bottom label names Part i+1; underline it with THAT Part's
       // colour, and highlight (full colour) the currently-selected Part, others
       // dimmed (#68). We only get one RGB per object, so bright vs dim stands in
@@ -1203,7 +1212,18 @@
     $('#se-out').addEventListener('change', (e) => { st.slOutId = e.target.value; if (st.running) refreshSurface(); });
     $('#se-dest').addEventListener('change', (e) => (st.destId = e.target.value));
     if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => (st.keysInId = e.target.value));
-    $('#se-start').addEventListener('click', () => (st.running ? stop() : start()));
+    // Start button. Firefox only grants Web MIDI in response to a user gesture, so
+    // if we're not connected yet (its on-load auto-connect was blocked/denied),
+    // connect here — this click IS the gesture — then start (#81).
+    $('#se-start').addEventListener('click', () => {
+      if (st.running) { stop(); return; }
+      if (!midi.snapshot().connected) {
+        log('Connecting…');
+        midi.connect().then(() => { refreshPorts(); autoStart(); if (!st.running) start(); }).catch((e) => log('MIDI: ' + e.message));
+        return;
+      }
+      start();
+    });
     // Native MIDI (Electron) or Web MIDI: connect automatically, then auto-start.
     if (global.electronMIDI || (global.navigator && global.navigator.requestMIDIAccess)) {
       midi.connect().then(() => { refreshPorts(); autoStart(); }).catch((e) => log('MIDI: ' + e.message));

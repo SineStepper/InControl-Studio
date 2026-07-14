@@ -92,8 +92,22 @@
 
     if ($('#chan-status')) refreshChanStatus();
 
+    renderLibrary(); // the Templates / Sessions column beside the tabs (#77)
     if (ui.view === 'sequencer') { const host = $('#sequencer-body'); if (host && global.SLMK.sequencerUI) global.SLMK.sequencerUI.render(host); return; }
     renderEditor();
+  }
+
+  // #77: the left library column lives beside the tabs and shows Templates in the
+  // Editor view, Sessions in the Sequencer view.
+  function renderLibrary() {
+    const col = $('#library-col'); if (!col) return;
+    col.innerHTML = '';
+    if (ui.view === 'sequencer') {
+      if (global.SLMK.sequencerUI && global.SLMK.sequencerUI.libraryColumn) col.appendChild(global.SLMK.sequencerUI.libraryColumn());
+    } else {
+      S.ensureTemplates(model);
+      col.appendChild(templateColumn());
+    }
   }
 
   function renderEditor() {
@@ -105,10 +119,6 @@
     const host = $('#editor-body'); if (!host) return;
     host.innerHTML = '';
     S.ensureTemplates(model);
-
-    // Two columns: the template library (left) + the Components-style editor (right).
-    const twoCol = el('div', { className: 'editor-2col' });
-    twoCol.appendChild(templateColumn());
 
     const controls = currentControls();
     if (ui.sel == null && controls.length) ui.sel = 0;
@@ -130,12 +140,12 @@
     });
     layout.appendChild(glyphRow);
 
-    const cols = el('div', { className: 'comp-cols' });
+    const banks = bankList();                                                   // thin scrollable bank list (right) — null when the control has no banks (#78)
+    const cols = el('div', { className: 'comp-cols' + (banks ? '' : ' no-banks') });
     cols.appendChild(inspector(controls[ui.sel] ? controls[ui.sel].ref : null)); // wide left column
-    cols.appendChild(bankList());                                               // thin scrollable bank list (right)
+    if (banks) cols.appendChild(banks);
     layout.appendChild(cols);
-    twoCol.appendChild(layout);
-    host.appendChild(twoCol);
+    host.appendChild(layout);
   }
 
   // Left column (#32): the template library. New Template + sorting at the top,
@@ -190,7 +200,11 @@
   // Thin scrollable list of banks / modes for the current tab (replaces the old
   // dropdown-with-arrows). Rotary & Buttons have multiple banks (+ Add); Pads
   // switch Hit/Pressure; single-set tabs just show one entry.
+  // Only Rotary and Buttons have real banks (Pads switch Hit/Pressure). Everything
+  // else is a single set, so the Banks column is hidden for it (#78).
+  const hasBanks = (tab) => tab === 'rotary' || tab === 'buttons' || tab === 'pads';
   function bankList() {
+    if (!hasBanks(ui.tab)) return null;
     const aside = el('aside', { className: 'bank-list panel' });
     aside.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
     const list = el('div', { className: 'bl-scroll' });
@@ -494,12 +508,34 @@
     if (!pack) return;
     const i = +$('#pack-sessions-sel').value;
     const s = pack.sessions[i]; if (!s || !s.bytes) return;
+    snapshot();
     S.ensureSequencer(model);
     model.sequencer = global.SLMK.session.readSequence(s.bytes);
+    // #76: also bring the pack's templates into the library and map them onto the
+    // Parts (template N -> Part N), so loading a session sets up each Part's
+    // instrument too. Templates are de-duplicated by name across repeated loads.
+    const mapped = loadPackTemplatesToParts();
     packSessionSlot = i;
-    ui.view = 'sequencer'; render();
+    ui.view = 'sequencer'; render(); pushLeds();
     const notes = global.SLMK.session.sequenceHasNotes(s.bytes);
-    setStatus('Loaded session "' + (s.name || 'Session') + '" into the sequencer' + (notes ? '.' : ' (no notes).'), 'ok');
+    setStatus('Loaded session "' + (s.name || 'Session') + '" into the sequencer' + (notes ? '' : ' (no notes)') + (mapped ? ' — mapped ' + mapped + ' Part templates.' : '.'), 'ok');
+  }
+  // Import each pack template (once) into the library and map it to a Part in
+  // order (#76). Returns how many Parts were mapped.
+  function loadPackTemplatesToParts() {
+    if (!pack || !(pack.templates || []).length) return 0;
+    S.ensureTemplates(model);
+    let n = 0;
+    pack.templates.slice(0, 8).forEach((pt, i) => {
+      if (!pt.bytes) return;
+      let tpl; try { tpl = T.parse(Array.from(pt.bytes)); } catch (e) { return; }
+      const name = tpl.name || pt.name || ('Template ' + (i + 1));
+      const existing = (model.templates || []).find((t) => t.name === name);
+      const id = existing ? existing.id : S.addTemplate(model, { from: S.fromTemplate(tpl), name }).id;
+      S.mapTemplateToPart(model, id, i);
+      n++;
+    });
+    return n;
   }
   function exportPack() {
     if (!pack) return;
@@ -516,5 +552,10 @@
   function bodyFromSyx(bytes) {
     try { const tpl = T.parse(bytes); return new Uint8Array(T.toBody(tpl)); } catch (e) { return null; }
   }
+  // Exposed so the Sequencer UI's session column (rendered into the shared library
+  // sidebar, #77) can trigger a full re-render of the library + active view.
+  global.SLMK = global.SLMK || {};
+  global.SLMK.studioUI = { render };
+
   document.addEventListener('DOMContentLoaded', init);
 })(window);

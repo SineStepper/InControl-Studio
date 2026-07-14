@@ -122,6 +122,12 @@
         const src = T.knobs[b * 8 + i];
         const a = make('knob', { name: src.name || 'Knob ' + (i + 1) });
         mapCommon(a, src); a.cc = src.first_param || 0; a.resolution = src.resolution || 616;
+        // Carry the knob's pivot / step / mode / bit-depth across import — these
+        // were being dropped, so an imported knob's pivot point never took effect (#74).
+        if (src.pivot != null) a.pivot = src.pivot;
+        if (src.step != null) a.step = src.step || 1;
+        if (src.relative != null) a.mode = src.relative ? 'Relative' : 'Absolute';
+        if (src.eight_bit != null) a.bit_depth = src.eight_bit ? '14-bit' : '7-bit';
         bank.push(a);
       }
       m.knobBanks.push(bank);

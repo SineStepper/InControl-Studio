@@ -90,20 +90,26 @@
     </div>
   </div>
 
-  <!-- ========================= TOP-LEVEL TABS =========================== -->
-  <nav class="main-tabs" id="main-tabs">
-    <button class="mtab active" type="button" data-view="editor">Editor</button>
-    <button class="mtab" type="button" data-view="sequencer">Sequencer</button>
-  </nav>
+  <!-- ============ LIBRARY COLUMN (left) + TABS/VIEWS (right) ============ -->
+  <!-- #77: the Templates / Sessions column sits BESIDE the tabs, not under them. -->
+  <div class="app-cols">
+    <aside id="library-col" class="library-col"></aside>
+    <div class="app-main">
+      <nav class="main-tabs" id="main-tabs">
+        <button class="mtab active" type="button" data-view="editor">Editor</button>
+        <button class="mtab" type="button" data-view="sequencer">Sequencer</button>
+      </nav>
 
-  <section id="view-editor" class="mview active">
-    <nav id="editor-subtabs" class="editor-subtabs"></nav>
-    <div id="editor-body" class="studio-body"></div>
-  </section>
+      <section id="view-editor" class="mview active">
+        <nav id="editor-subtabs" class="editor-subtabs"></nav>
+        <div id="editor-body" class="studio-body"></div>
+      </section>
 
-  <section id="view-sequencer" class="mview">
-    <div id="sequencer-body" class="studio-body"></div>
-  </section>
+      <section id="view-sequencer" class="mview">
+        <div id="sequencer-body" class="studio-body"></div>
+      </section>
+    </div>
+  </div>
   </section>
 
   <script src="js/sysex.js"></script>

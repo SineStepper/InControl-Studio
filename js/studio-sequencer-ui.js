@@ -46,12 +46,10 @@
     if (prev) prev.remove();
     const c = ctx();
     const wrap = el('div', { className: 'seq-wrap' });
-    // Two columns: the session library (left) + the sequencer (right).
-    const twoCol = el('div', { className: 'seq-2col' });
+    // The session library now lives in the shared left sidebar beside the tabs
+    // (#77); this view renders only the sequencer itself.
     const main = el('div', { className: 'seq-main' });
-    twoCol.appendChild(sessionColumn(host));
-    twoCol.appendChild(main);
-    wrap.appendChild(twoCol);
+    wrap.appendChild(main);
 
     // transport + global
     const bar = el('div', { className: 'seq-bar' });
@@ -138,18 +136,20 @@
   // state + which template maps to each Part. New/snapshot at top, sorting, then
   // the list — click to load & play back. Imported Components sessions land here.
   let sessionSort = 'recent';
-  function sessionColumn(host) {
+  // Re-render the whole app (library sidebar + active view) after a session action.
+  const rerender = () => { if (global.SLMK.studioUI) global.SLMK.studioUI.render(); else { const h = document.querySelector('#sequencer-body'); if (h) render(h); } };
+  function sessionColumn() {
     const m = model(); S().ensureSessions(m);
     const aside = el('aside', { className: 'lib-col panel' });
     const head = el('div', { className: 'lib-head' });
     head.appendChild(el('div', { className: 'lib-title' }, 'Sessions'));
     const nu = el('button', { className: 'btn primary lib-new', title: 'Save the current sequencer + Part mapping as a session' }, '+ Save');
-    nu.addEventListener('click', () => { const s = S().snapshotSession(m); const n = prompt('Session name', s.name); if (n) S().renameSession(m, s.id, n.slice(0, 24)); render(host); });
+    nu.addEventListener('click', () => { const s = S().snapshotSession(m); const n = prompt('Session name', s.name); if (n) S().renameSession(m, s.id, n.slice(0, 24)); rerender(); });
     head.appendChild(nu);
     aside.appendChild(head);
     const sortSel = el('select', { className: 'lib-sort' });
     [['recent', 'Sort: Recent'], ['name', 'Sort: Name']].forEach(([v, t]) => sortSel.appendChild(el('option', { value: v, selected: v === sessionSort }, t)));
-    sortSel.addEventListener('change', () => { sessionSort = sortSel.value; render(host); });
+    sortSel.addEventListener('change', () => { sessionSort = sortSel.value; rerender(); });
     aside.appendChild(sortSel);
 
     const list = el('div', { className: 'lib-scroll' });
@@ -160,11 +160,11 @@
     sessions.forEach((s) => {
       const row = el('div', { className: 'lib-item' });
       const nm = el('button', { className: 'lib-name', title: 'Load & play this session' }, s.name + (s.imported ? ' ♪' : ''));
-      nm.addEventListener('click', () => { S().loadSession(m, s.id); if (RT()) RT().refreshSurface(); selStep = 0; render(host); });
+      nm.addEventListener('click', () => { S().loadSession(m, s.id); if (RT()) RT().refreshSurface(); selStep = 0; rerender(); });
       row.appendChild(nm);
       const tools = el('div', { className: 'lib-tools' });
-      const ren = el('button', { className: 'lib-mini', title: 'Rename' }, '✎'); ren.addEventListener('click', () => { const n = prompt('Session name', s.name); if (n) { S().renameSession(m, s.id, n.slice(0, 24)); render(host); } });
-      const del = el('button', { className: 'lib-mini', title: 'Delete' }, '🗑'); del.addEventListener('click', () => { S().removeSession(m, s.id); render(host); });
+      const ren = el('button', { className: 'lib-mini', title: 'Rename' }, '✎'); ren.addEventListener('click', () => { const n = prompt('Session name', s.name); if (n) { S().renameSession(m, s.id, n.slice(0, 24)); rerender(); } });
+      const del = el('button', { className: 'lib-mini', title: 'Delete' }, '🗑'); del.addEventListener('click', () => { S().removeSession(m, s.id); rerender(); });
       tools.append(ren, del); row.appendChild(tools);
       // part->template mapping summary
       const parts = (s.partTemplates || []).map((tid, i) => tid ? (i + 1) : null).filter((x) => x);
@@ -214,5 +214,5 @@
   const noteName = (n) => NOTES[n % 12] + (Math.floor(n / 12) - 2);
 
   global.SLMK = global.SLMK || {};
-  global.SLMK.sequencerUI = { render };
+  global.SLMK.sequencerUI = { render, libraryColumn: sessionColumn };
 })(window);

@@ -60,9 +60,12 @@
   async function connect() {
     if (!navigator.requestMIDIAccess) {
       throw new Error(
-        'Web MIDI is not available in this browser. Use Chrome, Edge, or Opera.'
+        'Web MIDI is not available in this browser. Use Chrome, Edge, Opera, or Firefox 108+ (grant the MIDI permission when prompted).'
       );
     }
+    // Firefox exposes Web MIDI (v108+) but only grants it in response to a user
+    // gesture and prompts for the sysex/MIDI permission — the engine's Start button
+    // provides that gesture (#81).
     state.access = await navigator.requestMIDIAccess({ sysex: true });
     state.access.onstatechange = () => {
       // If our chosen port vanished, fall back to a default.
