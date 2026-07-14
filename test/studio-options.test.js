@@ -55,8 +55,12 @@ eq(s.tempo, 150, 'tempo knob1 +30 -> 150');
 O.applyKnob(s, freshPattern(), 'tempo', 0, +1000, 0, false);
 eq(s.tempo, 240, 'tempo clamps to 240');
 s = seq();
-O.applyKnob(s, freshPattern(), 'tempo', 1, +5, 0, false);
-eq(s.swing, 55, 'tempo knob2 edits swing');
+O.applyKnob(s, freshPattern(), 'tempo', 1, +5, 0, false); // swing halves its rate: +5 detents -> +2
+eq(s.swing, 52, 'tempo knob2 edits swing (reduced sensitivity)');
+// below the threshold a small nudge does nothing (deliberate turn required)
+s = seq();
+O.applyKnob(s, freshPattern(), 'tempo', 1, +1, 0, false);
+eq(s.swing == null ? 50 : s.swing, 50, 'tempo knob2 ignores a sub-threshold swing nudge');
 
 // ---- Pattern menu ----
 p = freshPattern(); s = seq();
@@ -88,9 +92,11 @@ eq(gcols[0].glyph, false, 'gate uses boxes, not a knob glyph');
 // #57 menu labels for the option buttons
 eq([O.menuLabelForButton(0), O.menuLabelForButton(1), O.menuLabelForButton(3), O.menuLabelForButton(7)], ['Velocity', 'Gate', 'Tempo', 'Pattern'], '#57 menu labels for buttons 1/2/4/8');
 // metronome controls on the tempo page (#46/#47/#45)
-const ms = seq(); O.applyKnob(ms, freshPattern(), 'tempo', 3, +1, 0, false); eq(ms.metronome.on, true, '#46 knob 4 toggles metronome on');
-O.applyKnob(ms, freshPattern(), 'tempo', 4, +1, 0, false); eq(ms.metronome.sound, 'Tick', '#47 knob 5 cycles the click sound');
-O.applyKnob(ms, freshPattern(), 'tempo', 5, +1, 0, false); eq(ms.metronome.silent, true, '#45 knob 6 sets blink-only (no sound)');
+// these discrete controls need a deliberate turn (~4 detents) to change (reduced sensitivity)
+const ms = seq(); O.applyKnob(ms, freshPattern(), 'tempo', 3, +1, 0, false); eq(ms.metronome.on, false, '#46 knob 4 ignores a sub-threshold nudge');
+O.applyKnob(ms, freshPattern(), 'tempo', 3, +4, 0, false); eq(ms.metronome.on, true, '#46 knob 4 toggles metronome on after a full turn');
+O.applyKnob(ms, freshPattern(), 'tempo', 4, +4, 0, false); eq(ms.metronome.sound, 'Tick', '#47 knob 5 cycles the click sound');
+O.applyKnob(ms, freshPattern(), 'tempo', 5, +4, 0, false); eq(ms.metronome.silent, true, '#45 knob 6 sets blink-only (no sound)');
 // chance / swing render as percentages
 eq(O.columns(seq(), freshPattern(), 'chance', 0)[0].bottom, '100%', 'chance shows a percentage');
 eq(O.columns(seq(), freshPattern(), 'tempo', 0)[1].bottom, '50%', 'swing shows a percentage');

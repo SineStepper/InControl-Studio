@@ -95,11 +95,15 @@
     if (menuKey === 'tempo') {
       const met = (seq.metronome = seq.metronome || { on: false, sound: 'Ping' });
       if (knobIndex === 0) { seq.tempo = clamp((seq.tempo || 120) + delta, 40, 240); return 'tempo ' + seq.tempo; }
-      if (knobIndex === 1) { seq.swing = clamp((seq.swing == null ? 50 : seq.swing) + delta, 10, 80); return 'swing ' + seq.swing; }
+      // Swing and the three discrete metronome controls were far too twitchy — a
+      // single detent flipped them (user feedback). Accumulate raw encoder deltas
+      // and only act once a threshold of detents is crossed, so a deliberate turn
+      // is required. Swing halves its rate; the toggles need ~4 detents per change.
+      if (knobIndex === 1) { const d = accumulate(seq, 'swing', delta, 2); if (!d) return null; seq.swing = clamp((seq.swing == null ? 50 : seq.swing) + d, 10, 80); return 'swing ' + seq.swing; }
       if (knobIndex === 2) { seq.swingSync = cycleIndex(SYNC_DISPLAY, seq.swingSync, delta); return 'swing sync ' + seq.swingSync; }
-      if (knobIndex === 3) { met.on = delta > 0; return 'metronome ' + (met.on ? 'on' : 'off'); }        // #46 on/off
-      if (knobIndex === 4) { met.sound = cycleIndex(['Ping', 'Tick', 'Pop'], met.sound || 'Ping', delta); return 'metro sound ' + met.sound; } // #47
-      if (knobIndex === 5) { met.silent = delta > 0; return 'metro ' + (met.silent ? 'blink only' : 'click'); } // #45 blink-only (no sound)
+      if (knobIndex === 3) { const d = accumulate(seq, 'metOn', delta, 4); if (!d) return null; met.on = d > 0; return 'metronome ' + (met.on ? 'on' : 'off'); }        // #46 on/off
+      if (knobIndex === 4) { const d = accumulate(seq, 'metSound', delta, 4); if (!d) return null; met.sound = cycleIndex(['Ping', 'Tick', 'Pop'], met.sound || 'Ping', d); return 'metro sound ' + met.sound; } // #47
+      if (knobIndex === 5) { const d = accumulate(seq, 'metSilent', delta, 4); if (!d) return null; met.silent = d > 0; return 'metro ' + (met.silent ? 'blink only' : 'click'); } // #45 blink-only (no sound)
       return null;
     }
 
@@ -112,6 +116,17 @@
       return null;
     }
     return null;
+  }
+
+  // Sensitivity limiter for the twitchy tempo-page knobs: accumulate raw encoder
+  // deltas per control on `seq` and only emit a whole effective step once a
+  // `threshold` of detents is reached, keeping the remainder for the next turn.
+  function accumulate(seq, key, delta, threshold) {
+    const acc = (seq.knobAccum = seq.knobAccum || {});
+    const total = (acc[key] || 0) + delta;
+    const steps = (total / threshold) | 0; // truncate toward zero
+    acc[key] = total - steps * threshold;  // carry the remainder
+    return steps;
   }
 
   // Step a value through a list by a signed delta (clamped, no wrap).

@@ -788,14 +788,19 @@
       if (microRaw >= 6) { step = nextStep(); micro = 0; } else micro = microRaw;
     } else if (st.seqRt) {
       // Plain nearest-step quantise: round symmetrically to the closer step
-      // boundary — but don't round a note played near the END of the pattern
-      // FORWARD across the loop, or it lands on step 1 as a phantom note (#44).
-      const hi = Math.max(p.start, p.end == null ? 15 : p.end);
-      if (sub * 2 >= stepTicks && pos.pad !== hi) step = nextStep();
+      // boundary. A note played near the END of the pattern rounds FORWARD across
+      // the loop to step 1, where it was meant — the echo guard above (not a
+      // clamp) is what keeps the sequencer's own output from being re-recorded,
+      // so a note meant for step 1 no longer gets stuck on the last step (#44).
+      if (sub * 2 >= stepTicks) step = nextStep();
     }
     const s = p.steps[step];
-    let n = s.notes.find((x) => x.note === note && (x.micro || 0) === micro);
-    if (!n) { n = { note, velocity, gate: 6, micro }; s.notes.push(n); }
+    // A re-recorded note of the same pitch overwrites the previous one on this
+    // step rather than stacking a duplicate: drop any existing same-pitch notes
+    // (at any micro position) before adding the fresh hit (user request).
+    s.notes = s.notes.filter((x) => x.note !== note);
+    const n = { note, velocity, gate: 6, micro };
+    s.notes.push(n);
     st.recRef.set(note, { n, startTick: st.seqRt.tick });
     // We already monitored this key live. Suppress ONLY the immediate re-trigger
     // (within ~1 step) so we don't hear the same hit twice back-to-back; a note

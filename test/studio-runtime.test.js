@@ -398,6 +398,29 @@ ok(recAt(2, 82) === 0, 'note before the halfway point records to the current ste
 ok(recAt(4, 83) === 1, 'note past the halfway point records to the next step');         // rounds forward
 st.recEcho.clear();
 
+// --- same-note overwrite: re-recording a pitch on a step replaces it, no stacking ---
+model.sequencer.tracks[0].patterns[0] = SEQ.newPattern();
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+st.recEcho.clear(); st.recRef.clear(); st.seqNoteTick.clear(); st.recording = true;
+RT.tick(); // playhead on step 1
+RT.handleKeys([0x90, 60, 40]); RT.handleKeys([0x80, 60, 0]);  // C4 vel 40 on step 1
+RT.handleKeys([0x90, 60, 110]); RT.handleKeys([0x80, 60, 0]); // C4 again on step 1 -> overwrite
+const step0c4 = model.sequencer.tracks[0].patterns[0].steps[0].notes.filter((x) => x.note === 60);
+ok(step0c4.length === 1, 'a re-recorded C4 on a step overwrites, not stacks (one note)');
+ok(step0c4[0].velocity === 110, 're-recorded note keeps the newest velocity');
+st.recording = false; st.clock = null; st.seqRt.playing = false; st.recEcho.clear();
+
+// --- forward-quantize wraps past the loop end to step 1 (no longer stuck on the last step) ---
+model.sequencer.tracks[0].patterns[0] = SEQ.newPattern();
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+st.recEcho.clear(); st.recRef.clear(); st.seqNoteTick.clear(); st.recording = true;
+for (let i = 0; i <= 94; i++) RT.tick(); // late in step 16 (tick 94, past its halfway boundary)
+RT.handleKeys([0x90, 77, 100]); RT.handleKeys([0x80, 77, 0]);
+const steps77 = model.sequencer.tracks[0].patterns[0].steps;
+ok(steps77[0].notes.some((x) => x.note === 77) && !steps77[15].notes.some((x) => x.note === 77),
+  'a note played late in the last step rounds forward to step 1, not stranded on step 16');
+st.recording = false; st.clock = null; st.seqRt.playing = false; st.recEcho.clear(); st.seqNoteTick.clear();
+
 // --- #12 per-pad pressure drives pad LED brightness (instrument mode) ---
 st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false; st.running = true;
 st.rt.padMode = 'pads';
