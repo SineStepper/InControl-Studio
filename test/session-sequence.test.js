@@ -72,8 +72,10 @@ eq(fr.tracks[0].patterns[0].steps[0].notes[0].gate, 18, '3-step gate round-trips
 eq(fr.tracks[0].patterns[0].steps[1].notes[0].tie, true, 'tie flag round-trips');
 
 // ---- optional: ground-truth files ----
-const dir = '/root/.claude/uploads/82a8edf0-56ac-5b7c-9549-24618c73766c/';
-const files = { A: '6024969a-Session_A.syx', B: 'd11409b2-Session_B.syx', C: 'c1cc618e-Session_C.syx' };
+// Drop the controlled ground-truth captures in test/ground-truth/ (or point
+// GROUND_TRUTH_DIR at them) to verify exact decoded notes; skipped when absent.
+const dir = (process.env.GROUND_TRUTH_DIR || require('path').join(__dirname, 'ground-truth')) + '/';
+const files = { A: 'Session_A.syx', B: 'Session_B.syx', C: 'Session_C.syx' };
 function loadBody(f) { return S.decodeSyx(new Uint8Array(fs.readFileSync(dir + f))).find((x) => x.body.length === 94208).body; }
 function flatNotes(body) {
   const seq = S.readSequence(body); const out = [];
