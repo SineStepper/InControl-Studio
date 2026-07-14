@@ -93,21 +93,8 @@
     if ($('#chan-status')) refreshChanStatus();
 
     renderLibrary(); // the Templates / Sessions column beside the tabs (#77)
-    renderBanks();   // the Banks column docked on the right (Editor only)
     if (ui.view === 'sequencer') { const host = $('#sequencer-body'); if (host && global.SLMK.sequencerUI) global.SLMK.sequencerUI.render(host); return; }
     renderEditor();
-  }
-
-  // The Banks column is a full-height right dock. It only appears in the Editor
-  // view for tabs that actually have banks (Encoders / Buttons); otherwise the
-  // column collapses so the editor uses the full width.
-  function renderBanks() {
-    const col = $('#banks-col'); if (!col) return;
-    col.innerHTML = '';
-    const wrap = document.querySelector('.app-cols');
-    const banks = ui.view === 'editor' ? bankList() : null;
-    if (banks) { col.appendChild(banks); if (wrap) wrap.classList.add('with-banks'); }
-    else if (wrap) wrap.classList.remove('with-banks');
   }
 
   // #77: the left library column lives beside the tabs and shows Templates in the
@@ -153,10 +140,12 @@
     });
     layout.appendChild(glyphRow);
 
-    // Banks now live in the right dock (renderBanks); the editor body is just the
-    // glyph row + the grouped inspector.
-    const cols = el('div', { className: 'comp-cols no-banks' });
-    cols.appendChild(inspector(controls[ui.sel] || null)); // wide left column (grouped sections, #80)
+    // Banks sit to the RIGHT of the inspector, matching its height (Encoders /
+    // Buttons only); other tabs have no banks so the inspector spans full width.
+    const banks = bankList();
+    const cols = el('div', { className: 'comp-cols' + (banks ? '' : ' no-banks') });
+    cols.appendChild(inspector(controls[ui.sel] || null)); // grouped inspector (#80)
+    if (banks) cols.appendChild(banks);
     layout.appendChild(cols);
     host.appendChild(layout);
   }
@@ -218,22 +207,22 @@
   const hasBanks = (tab) => tab === 'rotary' || tab === 'buttons';
   function bankList() {
     if (!hasBanks(ui.tab)) return null;
+    // A vertical column beside the inspector: Banks title + Add, then the list.
     const aside = el('aside', { className: 'bank-list panel' });
     const head = el('div', { className: 'bl-head' });
     head.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
-    // "Add" sits at the top-right of the column, mirroring the library's "New".
-    const add = el('button', { className: 'btn primary lib-new' }, 'Add');
+    const add = el('button', { className: 'btn primary bl-add' }, 'Add');
     head.appendChild(add);
     aside.appendChild(head);
     const list = el('div', { className: 'bl-scroll' });
     const item = (label, active, on) => { const b = el('button', { className: 'bl-item' + (active ? ' active' : '') }, label); b.addEventListener('click', on); return b; };
 
     if (ui.tab === 'rotary') {
-      add.addEventListener('click', () => { snapshot(); ui.knobBank = S.addKnobBank(model); ui.sel = null; render(); });
       model.knobBanks.forEach((_, i) => list.appendChild(item('Knob bank ' + (i + 1), i === ui.knobBank, () => { ui.knobBank = i; ui.sel = null; render(); })));
+      add.addEventListener('click', () => { snapshot(); ui.knobBank = S.addKnobBank(model); ui.sel = null; render(); });
     } else { // buttons
-      add.addEventListener('click', () => { snapshot(); ui.buttonBank = S.addButtonBank(model); ui.sel = null; render(); });
       model.buttonBanks.forEach((_, i) => list.appendChild(item(i === 0 ? 'Mute / Solo (fixed)' : 'Bank ' + i, i === ui.buttonBank, () => { ui.buttonBank = i; ui.sel = null; render(); })));
+      add.addEventListener('click', () => { snapshot(); ui.buttonBank = S.addButtonBank(model); ui.sel = null; render(); });
     }
     aside.appendChild(list);
     return aside;
