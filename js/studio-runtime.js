@@ -111,6 +111,7 @@
     if (!force && st.lastPatternStrip === str) return;
     st.lastPatternStrip = str;
     send(sysex.screenText(S5, S5_STRIP, str));
+    send(sysex.screenRgb(S5, S5_STRIP, 127, 127, 127)); // white (also makes the object render)
   }
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
@@ -159,12 +160,13 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // 5th screen (column 8) text + edge colour bars. Object roles (see the map at
-  // refreshPatternStrip): obj 0 = knob bank + LEFT edge bar (selected-Part colour);
-  // obj 1 = part name; obj 2/obj 3 = the button-bank's two rows (right, top/bottom)
-  // labelled "Mute"/"Solo" on the fixed bank (or the bank name), with the RIGHT-TOP
-  // and RIGHT-BOTTOM edge bars taking the average colour of the top / bottom button
-  // rows of the current page.
+  // 5th screen (column 8) text + edge colour bars. On this screen an object's TEXT
+  // and its COLOUR bar render in regions offset by one — the colour beside a row's
+  // text comes from the object ONE ABOVE it. So:
+  //   TEXT:  obj 0 knob bank, obj 1 part name, obj 2 "Mute"/bank, obj 3 "Solo"
+  //   COLOUR: obj 0 LEFT edge, obj 1 RIGHT-TOP bar, obj 2 RIGHT-BOTTOM bar
+  // i.e. the RIGHT-TOP bar (beside the "Mute" text on obj 2) is set on obj 1, and
+  // the RIGHT-BOTTOM bar (beside "Solo" on obj 3) is set on obj 2.
   function refreshCentreScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
@@ -176,10 +178,10 @@
     send(sysex.screenText(8, 0, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // above the part name
     send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // LEFT edge bar = selected Part colour
     send(sysex.screenText(8, 1, name));                                   // part name
+    send(sysex.screenRgb(8, 1, topAvg.r, topAvg.g, topAvg.b));            // RIGHT-TOP bar (beside "Mute" on obj 2)
     send(sysex.screenText(8, 2, bank === 0 ? 'Mute' : 'Btns ' + (bank + 1))); // right, top
-    send(sysex.screenRgb(8, 2, topAvg.r, topAvg.g, topAvg.b));            // RIGHT-TOP bar
+    send(sysex.screenRgb(8, 2, botAvg.r, botAvg.g, botAvg.b));            // RIGHT-BOTTOM bar (beside "Solo" on obj 3)
     send(sysex.screenText(8, 3, bank === 0 ? 'Solo' : ''));               // right, bottom
-    send(sysex.screenRgb(8, 3, botAvg.r, botAvg.g, botAvg.b));            // RIGHT-BOTTOM bar
   }
 
   // ---- sequencer clock / transport ----

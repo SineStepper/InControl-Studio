@@ -547,11 +547,14 @@ const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.byte
 ok(ctxt(1) === 'Part 1', '#69 5th screen row 1 (obj 1) is the Part name');
 ok(/^Knobs/.test(ctxt(0) || ''), '#69 the row above the part name (obj 0) is the knob bank, not the pattern strip');
 ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 the button-bank rows read "Mute" (obj 2) over "Solo" (obj 3)');
+// on this screen an object's colour bar renders one region below its text, so the
+// RIGHT-TOP bar (beside "Mute" on obj 2) is set on obj 1 and RIGHT-BOTTOM on obj 2.
 const cRgb = (obj) => cscr.find((m) => m.bytes[9] === 0x04 && m.bytes[10] === obj);
-const leftBar = cRgb(0), topBar = cRgb(2), botBar = cRgb(3);
+const leftBar = cRgb(0), topBar = cRgb(1), botBar = cRgb(2);
 ok(leftBar && leftBar.bytes[11] > leftBar.bytes[13], '#68 LEFT edge bar (obj 0) is the selected Part colour (Part 1 red: R > B)');
-ok(topBar && topBar.bytes[11] > topBar.bytes[13], '#68 RIGHT-TOP bar (obj 2) is the mute row average (orange: R > B)');
-ok(botBar && botBar.bytes[13] > botBar.bytes[11], '#68 RIGHT-BOTTOM bar (obj 3) is the solo row average (blue: B > R)');
+ok(topBar && topBar.bytes[11] > topBar.bytes[13], '#68 RIGHT-TOP bar (obj 1) is the mute row average (orange: R > B)');
+ok(botBar && botBar.bytes[13] > botBar.bytes[11], '#68 RIGHT-BOTTOM bar (obj 2) is the solo row average (blue: B > R)');
+ok(!cRgb(3), '#68 obj 3 gets no colour (its bar region is off-screen)');
 
 // --- #68 knob screen top bar only appears for ENABLED knobs ---
 model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
