@@ -299,16 +299,16 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 /* Small fixed-size control boxes on a fixed 8-column grid — knobs 1-8 on one
    row, buttons/pads 1-8 on top and 9-16 below. They keep their size and align
    left instead of stretching to fill the window. */
-.glyph-row { display: grid; grid-template-columns: repeat(8, 66px); gap: 8px; justify-content: start; }
+.glyph-row { display: grid; grid-template-columns: repeat(8, 80px); gap: 8px; justify-content: start; }
 /* #80: the control-select buttons are square. */
 .glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
 .glyph-cell.off { opacity: .55; }
 .glyph-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
 .glyph-cell::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, transparent); }
-.gc-name { font-size: 9px; font-weight: 600; text-align: center; line-height: 1.05; }
-.gc-sub { font-size: 8px; opacity: .8; text-align: center; }
-.glyph { width: 26px; height: 26px; color: var(--accent); }
+.gc-name { font-size: 10px; font-weight: 600; text-align: center; line-height: 1.05; }
+.gc-sub { font-size: 9px; opacity: .8; text-align: center; }
+.glyph { width: 31px; height: 31px; color: var(--accent); }
 .glyph-cell.off .glyph { color: var(--muted); }
 .glyph svg { width: 100%; height: 100%; display: block; }
 
