@@ -86,6 +86,11 @@
       <div class="field"><label title="SL MkIII InControl output — sends LED colours to the unit">SL out</label><select id="se-out"></select></div>
       <div class="field"><label title="SL MkIII keybed (regular port) — for sequencer live-record">Keys in</label><select id="se-keys"></select></div>
       <div class="field"><label>Name</label><input type="text" id="studio-name" maxlength="24" placeholder="Setup name" /></div>
+      <hr />
+      <div class="field"><label for="se-persist" title="Keep your templates, sessions and sequencer saved in this browser so they're here next time. Stored only on this device — nothing is uploaded.">Save my work in this browser</label>
+        <input type="checkbox" id="se-persist" /></div>
+      <p class="fineprint">Saved on this device only (not synced across browsers or computers). Use File ▸ Save to keep a portable copy.</p>
+      <div class="field"><button class="btn" id="se-clear">Clear saved data</button></div>
       <div class="field"><button class="btn" id="settings-close">Close</button></div>
     </div>
   </div>
@@ -119,6 +124,7 @@
   <script src="js/session.js"></script>
   <script src="js/studio-sequencer.js"></script>
   <script src="js/studio-model.js"></script>
+  <script src="js/studio-persist.js"></script>
   <script src="js/studio-engine.js"></script>
   <script src="js/studio-options.js"></script>
   <script src="js/incontrol.js"></script>

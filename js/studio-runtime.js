@@ -25,6 +25,13 @@
     audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
+
+  // Persist device/engine settings (MIDI ports, metronome, audio, key guide) in
+  // this browser so they don't have to be re-picked next launch (#persist).
+  const DEVICE_FIELDS = ['slInId', 'slOutId', 'destId', 'keysInId', 'keysOutId', 'metroSyncMs', 'audioSinkId', 'audioLatencyHint', 'keyGuide'];
+  function persist() { return global.SLMK.persist; }
+  function saveDevice() { const P = persist(); if (!P) return; const o = {}; DEVICE_FIELDS.forEach((k) => (o[k] = st[k])); P.saveDevice(o); }
+  function restoreDevice() { const P = persist(); if (!P) return; const o = P.loadDevice(); if (o) DEVICE_FIELDS.forEach((k) => { if (o[k] != null) st[k] = o[k]; }); }
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
 
   function mapControl(name) {
@@ -1204,14 +1211,15 @@
 
   function init() {
     if (!$('#view-studio') || !$('#se-start')) return;
+    restoreDevice(); // re-apply port/metronome/audio picks saved in this browser
     initTheme();
     initSettings();
     refreshPorts();
     midi.onChange(() => { if (!st.running) { refreshPorts(); autoStart(); } });
-    $('#se-in').addEventListener('change', (e) => (st.slInId = e.target.value));
-    $('#se-out').addEventListener('change', (e) => { st.slOutId = e.target.value; if (st.running) refreshSurface(); });
-    $('#se-dest').addEventListener('change', (e) => (st.destId = e.target.value));
-    if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => (st.keysInId = e.target.value));
+    $('#se-in').addEventListener('change', (e) => { st.slInId = e.target.value; saveDevice(); });
+    $('#se-out').addEventListener('change', (e) => { st.slOutId = e.target.value; saveDevice(); if (st.running) refreshSurface(); });
+    $('#se-dest').addEventListener('change', (e) => { st.destId = e.target.value; saveDevice(); });
+    if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => { st.keysInId = e.target.value; saveDevice(); });
     // Start button. Firefox only grants Web MIDI in response to a user gesture, so
     // if we're not connected yet (its on-load auto-connect was blocked/denied),
     // connect here — this click IS the gesture — then start (#81).
@@ -1284,13 +1292,13 @@
     // Extra metronome lead (ms): plays the click even earlier. MIDI is never
     // delayed; only the audio click is scheduled ahead. Blank/null = 0 (auto
     // latency compensation still applies from the measured audio latency).
-    setMetroLead: (ms) => { st.metroSyncMs = ms == null || ms === '' ? null : Math.max(-200, Math.min(200, +ms || 0)); },
+    setMetroLead: (ms) => { st.metroSyncMs = ms == null || ms === '' ? null : Math.max(-200, Math.min(200, +ms || 0)); saveDevice(); },
     metroLead: () => (st.metroSyncMs != null ? st.metroSyncMs : 0),
     audioLatency: () => st.audioLatencyMs || 0,
     // Metronome audio output selection (low-latency driver / device, #ask).
-    setAudioLatencyHint: (h) => { if (h && h !== st.audioLatencyHint) { st.audioLatencyHint = h; resetAudio(); } },
+    setAudioLatencyHint: (h) => { if (h && h !== st.audioLatencyHint) { st.audioLatencyHint = h; resetAudio(); saveDevice(); } },
     audioLatencyHint: () => st.audioLatencyHint,
-    setAudioSink: (id) => { st.audioSinkId = id || null; if (st.audioCtx && st.audioCtx.setSinkId) { try { st.audioCtx.setSinkId(id || ''); } catch (e) {} } else resetAudio(); },
+    setAudioSink: (id) => { st.audioSinkId = id || null; saveDevice(); if (st.audioCtx && st.audioCtx.setSinkId) { try { st.audioCtx.setSinkId(id || ''); } catch (e) {} } else resetAudio(); },
     audioSink: () => st.audioSinkId,
     listAudioOutputs: async () => {
       try {
@@ -1303,6 +1311,7 @@
       const was = st.keyGuide;
       if (on) { st.keyGuide = true; if (!was) refreshKeyGuide(); }
       else { for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, '#000000'); st.keyGuide = false; } // clear while still enabled, then disable
+      saveDevice();
     },
     refreshSurface,
     state: () => st,
