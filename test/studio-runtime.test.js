@@ -530,10 +530,12 @@ const stxt = (col, obj) => { const m = kscr.find((x) => x.bytes[8] === col && x.
 ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0), '#63 knob screen top bar gets an RGB colour (type 4, obj 0)');
 ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB colour (type 4, obj 2)');
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
+ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
 ok(stxt(4, 2) != null && stxt(4, 3) != null, '#66 5th screen (col 4) shows a two-row step graphic on objs 2 & 3');
 st.running = false;
 
-// --- #68/#69 centre screen: Mute/Solo two rows + edge colour bars ---
+// --- centre screen: three stable rows; button label tinted the (stable) button
+//     colour, and NOTHING tinted the Part colour (so it doesn't change per Part) ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
 if (st.rt) st.rt.buttonBank = 0;
 RT.handleControl(CC(0x33 + 0, 127)); // Part 1
@@ -541,9 +543,12 @@ mark = sent.length;
 RT.refreshSurface();
 const cscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8);
 const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
-ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 centre screen shows Mute over Solo when the Mute/Solo bank is selected');
-ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 0), '#68 centre screen left column has a Part-colour bar (RGB obj 0)');
-ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 2) && cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 3), '#68 centre screen right edge has two colour bars (RGB objs 2 & 3)');
+ok(ctxt(2) === 'Mute Solo', 'centre screen row 3 labels the Mute/Solo bank');
+ok(ctxt(0) === 'Part 1', 'centre screen row 1 shows the Part name exactly once');
+const cRgb = (obj) => cscr.find((m) => m.bytes[9] === 0x04 && m.bytes[10] === obj);
+const muteBar = cRgb(2);
+ok(muteBar && muteBar.bytes[11] > muteBar.bytes[13], 'button label is tinted the mute colour (orange: R > B), not the Part colour');
+ok(!cRgb(0) && !cRgb(1), 'centre screen Part name / knob-bank rows are NOT tinted the Part colour (no per-Part colour change)');
 
 // --- #68 knob screen top bar only appears for ENABLED knobs ---
 model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;

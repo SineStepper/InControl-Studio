@@ -87,6 +87,7 @@
       // for highlight vs underline.
       const sel = (i + 1) === st.activeChannel;
       const bar = sysex.hexTo7bit(sel ? partColorOf(i) : opts().scaleColor(partColorOf(i), 0.4));
+      send(sysex.screenText(i, 2, ''));                    // clear obj 2 — the label used to live here (#65); leaving it set showed a duplicate label row
       send(sysex.screenRgb(i, 2, bar.r, bar.g, bar.b));
       send(sysex.screenText(i, 3, partLabel(i)));          // part label hugging the bottom edge (#58/#65)
     }
@@ -152,26 +153,22 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // Centre screen. Left column = the Part (name + knob bank), tinted the Part
-  // colour — the "left-side bar" (#63/#68). Right column = the button bank: the
-  // Mute/Solo bank shows "Mute" over "Solo" (#69); the two right-edge bars take
-  // the average colour of the top and bottom button rows of the current page (#68).
+  // Centre screen: three stacked rows — Part name, knob bank, button bank. Only
+  // the button-bank label is tinted, and with the (stable) BUTTON colour — the
+  // Mute/Solo bank in mute orange — so nothing on this screen changes colour as
+  // Parts change (user feedback: the button label's bar was following the Part
+  // colour and the Part name was doubling from a speculative 2-column layout).
   function refreshCentreScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
     const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
-    const pc = sysex.hexTo7bit(partColor());
     const bank = (st.rt.buttonBank || 0);
-    send(sysex.screenText(8, 0, name));                                   // left, top: part name
-    send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // left, bottom: knob bank
-    send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // left-side bar = Part colour
-    send(sysex.screenRgb(8, 1, pc.r, pc.g, pc.b));
-    if (bank === 0) { send(sysex.screenText(8, 2, 'Mute')); send(sysex.screenText(8, 3, 'Solo')); } // #69 two rows
-    else { send(sysex.screenText(8, 2, 'Btns ' + (bank + 1))); send(sysex.screenText(8, 3, '')); }
-    const topAvg = sysex.hexTo7bit(buttonRowAvg(false));                  // right edge, top bar
-    const botAvg = sysex.hexTo7bit(buttonRowAvg(true));                   // right edge, bottom bar
-    send(sysex.screenRgb(8, 2, topAvg.r, topAvg.g, topAvg.b));
-    send(sysex.screenRgb(8, 3, botAvg.r, botAvg.g, botAvg.b));
+    send(sysex.screenText(8, 0, name));                                   // row 1: part name
+    send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // row 2: knob bank
+    send(sysex.screenText(8, 2, bank === 0 ? 'Mute Solo' : 'Btns ' + (bank + 1))); // row 3: button bank
+    send(sysex.screenText(8, 3, ''));                                     // clear any stale 4th row
+    const bc = sysex.hexTo7bit(bank === 0 ? '#ff6a00' : buttonRowAvg(false)); // stable button colour
+    send(sysex.screenRgb(8, 2, bc.r, bc.g, bc.b));
   }
 
   // ---- sequencer clock / transport ----
