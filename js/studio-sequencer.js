@@ -159,7 +159,21 @@
     return events;
   }
   function start(rt) { rt.playing = true; rt.tick = 0; rt.pos.forEach((p) => { p.counter = -1; p.pending = []; p.pendingOn = []; }); }
-  function stop(rt) { rt.playing = false; return allNotesOff(rt); }
+  function stop(rt) {
+    rt.playing = false;
+    const offs = allNotesOff(rt);
+    // #70: rewind every CHAINED track to the first pattern of its chain, positioned
+    // at that pattern's first step, so a restart begins the chain from the top
+    // instead of wherever it happened to stop. Non-chained tracks already restart
+    // at step 1 via start().
+    rt.seq.tracks.forEach((track, ti) => {
+      if (!track.chain) return;
+      track.activePattern = track.chain.from;
+      const ps = rt.pos[ti];
+      if (ps) { ps.counter = -1; ps.pending = []; ps.pendingOn = []; ps.pad = track.patterns[track.chain.from].start || 0; }
+    });
+    return offs;
+  }
 
   // ---- editing ----
   const DEFAULT_NOTE = 60;

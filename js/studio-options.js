@@ -151,6 +151,18 @@
     return rows;
   }
 
+  // Average a list of #RRGGBB colours into one #RRGGBB (ignores blanks/black).
+  // Used for the 5th/centre screen's button-bank edge bars (#68).
+  function avgColor(hexes) {
+    const list = (hexes || []).filter((h) => /^#?[0-9a-f]{6}$/i.test(h || '') && !/^#?0{6}$/.test(h || ''));
+    if (!list.length) return '#000000';
+    let r = 0, g = 0, b = 0;
+    list.forEach((h) => { const n = parseInt(h.replace('#', ''), 16); r += (n >> 16) & 0xff; g += (n >> 8) & 0xff; b += n & 0xff; });
+    const c = list.length;
+    const hx = (v) => Math.round(v / c).toString(16).padStart(2, '0');
+    return '#' + hx(r) + hx(g) + hx(b);
+  }
+
   // A "small white box" for the gate readout (0-5 of them = the ⅙-step remainder).
   // The SL screen text is 7-bit ASCII, so we use the most box-like printable glyph.
   const boxes = (n) => Array(Math.max(0, Math.min(5, n)) + 1).join('#');
@@ -273,7 +285,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studioOptions = {
     MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
-    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, stepBars, dim, scaleColor, valueColor, lighten,
+    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, stepBars, avgColor, dim, scaleColor, valueColor, lighten,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
 })(typeof window !== 'undefined' ? window : globalThis);

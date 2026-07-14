@@ -533,4 +533,34 @@ ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(4, 2) != null && stxt(4, 3) != null, '#66 5th screen (col 4) shows a two-row step graphic on objs 2 & 3');
 st.running = false;
 
+// --- #68/#69 centre screen: Mute/Solo two rows + edge colour bars ---
+st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
+if (st.rt) st.rt.buttonBank = 0;
+RT.handleControl(CC(0x33 + 0, 127)); // Part 1
+mark = sent.length;
+RT.refreshSurface();
+const cscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8);
+const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
+ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 centre screen shows Mute over Solo when the Mute/Solo bank is selected');
+ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 0), '#68 centre screen left column has a Part-colour bar (RGB obj 0)');
+ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 2) && cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 3), '#68 centre screen right edge has two colour bars (RGB objs 2 & 3)');
+
+// --- #68 knob screen top bar only appears for ENABLED knobs ---
+model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
+mark = sent.length; RT.refreshSurface();
+const kbars = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x04 && m.bytes[10] === 0);
+const barAt = (col) => { const m = kbars.find((x) => x.bytes[8] === col); return m ? (m.bytes[11] || m.bytes[12] || m.bytes[13]) : 0; };
+ok(barAt(0) > 0, '#68 enabled knob (col 0) shows a Part-colour top bar');
+ok(barAt(1) === 0, '#68 disabled knob (col 1) shows no top bar (black)');
+model.knobBanks[0][1].enabled = true;
+
+// --- #69 adjusting a knob briefly shows its value on the 5th screen ---
+Object.assign(model.knobBanks[0][0], { message_type: 'CC', cc: 74, start: 0, end: 127, bit_depth: '7-bit', channel: 'default', mode: 'Absolute', step: 1, enabled: true, led: { idle: '#00ff00', pressed: '#fff' } });
+st.channelRt = {}; RT.handleControl(CC(0x33 + 0, 127));
+mark = sent.length;
+RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
+const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 4 && m.bytes[9] === 0x01 && (m.bytes[10] === 2 || m.bytes[10] === 3));
+ok(v5.length > 0, '#69 turning a knob writes an overlay onto the 5th screen (col 4 bottom half)');
+st.screen5 = null; st.running = false;
+
 console.log('\n' + n + ' integration assertions passed');

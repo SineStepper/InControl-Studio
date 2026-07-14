@@ -128,4 +128,9 @@ eq(bars[0], 'o---#---', '#66 steps 1-8 row: note on 1, playhead on 5');
 eq(bars[1], '--o-----', '#66 steps 9-16 row: note on 11');
 eq(O.stepBars(sbp, -1)[0], 'o-------', '#66 stopped (head -1) shows no playhead marker');
 
+// #68 average colour of a set of LED colours (ignores black/blank)
+eq(O.avgColor(['#ff0000', '#0000ff']), '#800080', '#68 avgColor averages red+blue to purple');
+eq(O.avgColor(['#ffffff', '#000000', '']), '#ffffff', '#68 avgColor ignores black and blanks');
+eq(O.avgColor([]), '#000000', '#68 avgColor of nothing is black');
+
 console.log('\n' + n + ' assertions passed');

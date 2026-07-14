@@ -66,6 +66,16 @@ pressed, unless stated below.**
 - **Metronome grid flash (Grid, id 64):** the **downbeat** (first beat of the
   pattern/bar — the accented click) flashes **green**; the other beats flash
   **yellow** (#61).
+- **Stop** rewinds every **chained** track to the first pattern of its chain,
+  step 1, so a restart begins the chain from the top (#70).
+- **5th screen (knob screen 5) bottom half** is a shared info area: normally the
+  selected Part's playhead graphic (#66); while a knob/fader is being adjusted it
+  briefly shows that control's value tinted its colour; on a Patterns-view page
+  change it briefly shows the two paged-to Part names in white (#69).
+- **Keybed light guide (#67):** the selected Part lights all keys its colour;
+  a key played on the keyboard lights **white**; auditioning a step's notes with
+  a pad lights those keys **red**. The lowest ~14 keys share LED ids with the
+  fader/function LEDs, so they stay dark to avoid clobbering those.
 - **Faders/wheels** have no idle/pressed state — LED brightness tracks value.
 - Every change is pushed to the SL MkIII automatically (no refresh button).
 - **Keybed light guide** (SysEx ids 54-114): **off by default.** The
