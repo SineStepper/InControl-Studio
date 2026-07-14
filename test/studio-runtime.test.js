@@ -421,6 +421,20 @@ ok(steps77[0].notes.some((x) => x.note === 77) && !steps77[15].notes.some((x) =>
   'a note played late in the last step rounds forward to step 1, not stranded on step 16');
 st.recording = false; st.clock = null; st.seqRt.playing = false; st.recEcho.clear(); st.seqNoteTick.clear();
 
+// --- hold-pad-to-program works while the Options screen is open ---
+st.mute.clear(); st.solo.clear(); st.recording = false; st.clock = null;
+RT.handleControl(CC(0x33 + 0, 127)); // select channel 1 -> gridTrack 0
+model.sequencer.tracks[0].patterns[0] = SEQ.newPattern(); model.sequencer.tracks[0].activePattern = 0;
+st.optionsMode = true; st.padView = 'steps'; st.rt.padMode = 'sequencer'; st.heldPads.clear(); st.heldKeys.clear();
+RT.handleControl([0x90, 0x60 + 3, 127]); // hold Pad 4 (step 4) in options mode
+ok(st.heldPads.has(3), 'options mode: holding a pad registers it as held');
+RT.handleKeys([0x90, 62, 100]); RT.handleKeys([0x80, 62, 0]); // play a key while the pad is held
+ok(model.sequencer.tracks[0].patterns[0].steps[3].notes.some((x) => x.note === 62),
+  'options mode: hold-pad + key programs the note onto that step');
+RT.handleControl([0x80, 0x60 + 3, 0]); // release the pad
+ok(!st.heldPads.has(3), 'options mode: releasing the pad clears it from held');
+st.optionsMode = false; st.heldPads.clear(); st.heldKeys.clear();
+
 // --- #12 per-pad pressure drives pad LED brightness (instrument mode) ---
 st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false; st.running = true;
 st.rt.padMode = 'pads';

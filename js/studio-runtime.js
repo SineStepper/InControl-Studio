@@ -903,9 +903,20 @@
         }
         return;
       }
-      // In options mode, pressing a pad selects that step for micro-step editing (#12).
+      // In options mode a pad both selects that step for micro-step editing (#12)
+      // AND behaves as a hold-to-program target: hold it and play a key to toggle
+      // that note onto the step, exactly as outside options mode. The intercept
+      // above shadows the normal pad handler, so drive heldPads here too.
       if (c.group === 'pad' && st.padView === 'steps' && c.index < 16) {
-        if (ev.value > 0) { st.selStep = c.index; refreshOptionLeds(); notify(); log('step ' + (c.index + 1) + ' selected'); }
+        if (ev.value > 0) {
+          st.selStep = c.index;
+          st.heldPads.add(c.index);
+          const p = gridPattern();
+          if (p && st.heldKeys.size) { st.heldKeys.forEach((vel, note) => SEQ().toggleStepNote(p, c.index, note, vel, 6)); contentChanged(); } // keys already down
+          refreshOptionLeds(); if (st.rt.padMode === 'sequencer') refreshGrid(); notify(); log('step ' + (c.index + 1) + ' selected');
+        } else {
+          st.heldPads.delete(c.index);
+        }
         return;
       }
       if (c.group === 'knob') {
