@@ -121,17 +121,21 @@ two-row playhead graphic across the 5th screen's lower half (`obj 2`/`obj 3`).
 Each column's bottom label is tinted its own Part's colour (the selected Part
 brighter); the knob-name top bar shows only when that knob is enabled.
 
-**5th screen (column 8)**:
-- **Top edge** (`obj 0`, full width, white): an 8-pattern strip for the selected
-  Part — `#` = current/playing pattern, `+` = chained pattern, `-` = unchained.
-- Below it: Part name (`obj 1`), knob-bank name (`obj 2`), button-bank name
-  (`obj 3`, tinted the stable button colour).
-- **Bottom half** (`obj 4`/`obj 5`): a transient overlay — the value of a
-  knob/fader being adjusted (tinted the control's colour) or the two paged-to
-  Part names in Patterns view.
+**5th screen (column 8)** object map (deduced from hardware — text and colour
+of one object can render in different screen regions):
 
-(Per-character colour isn't possible — a screen text object takes one colour —
-so the pattern strip distinguishes its three states by glyph and is drawn white.)
+| `obj` | Text | Colour bar |
+| ----- | ---- | ---------- |
+| `0` | knob-bank name (row above the part name) | **left edge** = selected Part colour |
+| `1` | Part name | — |
+| `2` | "Mute" / button-bank name (right, top) | **right-top edge** = avg of the top button row |
+| `3` | "Solo" (right, bottom) | **right-bottom edge** = avg of the bottom button row |
+| `4` | 8-pattern chain strip on the **very top edge** (full width) | — |
+| `5` | transient overlay (knob/fader value, or paged-to Part names) | tint = control colour |
+
+The pattern strip uses `#` = current/playing, `+` = chained, `-` = unchained.
+Per-character colour isn't possible (a text object takes one colour), so the
+strip distinguishes its three states by glyph.
 
 ## Device inquiry (identify the unit)
 
