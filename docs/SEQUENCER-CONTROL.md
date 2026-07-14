@@ -37,21 +37,21 @@ logic in `js/studio-options.js`.
   selected — exactly like a hardware multitimbral part switch.
 - **Soft 9-24** (the 16 buttons above the faders) are the fixed **Mute/Solo**
   bank: Soft 9-16 = Mute 1-8, Soft 17-24 = Solo 1-8. They send no MIDI of their
-  own — only their colour is editable (Mute orange, Solo light blue by default).
+  own — only their color is editable (Mute orange, Solo light blue by default).
   Mute silences its channel's output; Solo restricts output to soloed channels.
   Channels are mappable (default 1-8).
 
-## LED colour scheme (issue #12)
+## LED color scheme (issue #12)
 
 The surface is fully cleared on start and repainted from the sequencer state, so
 nothing overlaps. Default rule: **buttons are unlit at rest and flash white when
 pressed, unless stated below.**
 
-- **Sequencer pads (Steps):** empty step = dim Part colour; used step = bright
-  Part colour; current step = white (pulsing white when stopped); **pressed = red**.
-- **Note pads (Grid/instrument):** dim Part colour at rest, bright Part when
+- **Sequencer pads (Steps):** empty step = dim Part color; used step = bright
+  Part color; current step = white (pulsing white when stopped); **pressed = red**.
+- **Note pads (Grid/instrument):** dim Part color at rest, bright Part when
   pressed. (Per-pad pressure→brightness is a follow-up.)
-- **Soft 1-8** (below screens): Part colours (active white). In options mode they
+- **Soft 1-8** (below screens): Part colors (active white). In options mode they
   become the menu buttons (Velocity red / Gate green / Chance orange / Tempo
   white / Pattern blue); unmapped ones are unlit.
 - **Soft 9-24** (above faders): Mute (orange) / Solo (light blue); a Part silenced
@@ -70,9 +70,9 @@ pressed, unless stated below.**
   step 1, so a restart begins the chain from the top (#70).
 - **5th screen (knob screen 5) bottom half** is a shared info area: normally the
   selected Part's playhead graphic (#66); while a knob/fader is being adjusted it
-  briefly shows that control's value tinted its colour; on a Patterns-view page
+  briefly shows that control's value tinted its color; on a Patterns-view page
   change it briefly shows the two paged-to Part names in white (#69).
-- **Keybed light guide (#67):** the selected Part lights all keys its colour;
+- **Keybed light guide (#67):** the selected Part lights all keys its color;
   a key played on the keyboard lights **white**; auditioning a step's notes with
   a pad lights those keys **red**. The lowest ~14 keys share LED ids with the
   fader/function LEDs, so they stay dark to avoid clobbering those.
@@ -93,7 +93,7 @@ readout and the row of soft buttons below the screens (**Soft 1-8**) selects a
 menu. The first six above-fader buttons (**Soft 9-14**) become the **microstep**
 row and light light-orange.
 
-| Button | Menu | Colour | Knobs |
+| Button | Menu | Color | Knobs |
 |--------|------|--------|-------|
 | 1 | Velocity | red | Knobs 1-8 set steps' velocity (1-127) |
 | 2 | Gate | green | Knobs 1-8 set gate length in ⅙-step units (up to 32 steps) |
@@ -110,10 +110,10 @@ row and light light-orange.
 Driven entirely from the SL MkIII hardware, matching the User Guide:
 
 - **Steps view** — pads are the 16 steps; playhead white, notes in the Part
-  colour, empty dim, notes outside start/end red, start step yellow (Pattern
+  color, empty dim, notes outside start/end red, start step yellow (Pattern
   menu). Hold pad + key (or key + pad) toggles notes; Clear+pad clears;
   Duplicate+pad copies.
-- **Patterns view** — pads are the 8 patterns in the Part colour; **press two+
+- **Patterns view** — pads are the 8 patterns in the Part color; **press two+
   together to chain**; Clear+pad resets, Duplicate+pad copies.
 - **Micro-steps** — 6 per step; in options mode select a step (pad) then hold a
   micro-step button (Soft 9-14) + play keys; playback offsets by micro/6 of a step.

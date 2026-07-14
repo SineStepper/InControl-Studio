@@ -117,7 +117,7 @@
   function outputPorts() { return portList(listOutputs()); }
   function inputPorts() { return portList(listInputs()); }
 
-  /** Send bytes to a specific output by id (for the bridge's colour + remap paths).
+  /** Send bytes to a specific output by id (for the bridge's color + remap paths).
    *  `when` (optional) is a DOMHighResTimeStamp for scheduled delivery (Web MIDI
    *  honours it natively) — used to latency-align the sequencer with the metronome. */
   function sendToOutput(id, bytes, when) {

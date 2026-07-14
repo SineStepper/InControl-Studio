@@ -1,14 +1,14 @@
 /*
  * studio-model.js — data model for the InControl Studio: a Components-style
  * customizer for the SL MkIII in InControl mode, with more than Components
- * allows (unlimited knob/button banks, per-state LED colours, richer message
+ * allows (unlimited knob/button banks, per-state LED colors, richer message
  * types). This module is the pure data layer — no MIDI, no DOM — so it's fully
  * unit-testable. The live engine (P3) and the editor UI (P2) both build on it.
  */
 (function (global) {
   'use strict';
 
-  // Message-type catalogues per control class (superset of Components).
+  // Message-type catalogs per control class (superset of Components).
   const MSG = {
     knob: ['CC', 'NRPN', 'Note', 'Program Change', 'Bank Change', 'Sub Bank Change', 'Song Position'],
     fader: ['CC', 'NRPN', 'Note', 'Program Change', 'Bank Change', 'Sub Bank Change', 'Song Position'],
@@ -47,12 +47,12 @@
       led: led('#101010', '#ffffff', '#ff3b3b'),
     };
     // Faders and wheels have no idle/pressed state — their LED brightness tracks value.
-    // led.idle is the full-value colour; the runtime dims it toward black as the value drops.
+    // led.idle is the full-value color; the runtime dims it toward black as the value drops.
     if (cls === 'fader' || cls === 'pitch' || cls === 'mod') { base.colorMode = 'value'; base.led = led('#20c0ff', '#20c0ff', '#000000'); }
-    // Knobs have no RGB ring; led.idle is the on-screen knob-glyph colour, which
+    // Knobs have no RGB ring; led.idle is the on-screen knob-glyph color, which
     // the SL shows white by default (not black/unlit).
     if (cls === 'knob') Object.assign(base, { mode: 'Absolute', resolution: 616, step: 1, pivot: 0, combined: 'None', led: led('#ffffff', '#ffffff', '#000000') });
-    // Switches (buttons / footswitch / pad hits) carry the full behaviour set so
+    // Switches (buttons / footswitch / pad hits) carry the full behavior set so
     // the editor can expose Inc/Dec step / wrap / pair and the push/release action (#80).
     if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 127, up_value: 0, action: 'On Push', step_size: 1, wrap: false, pair: false });
     if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 127, up_value: 0, action: 'On Push', step_size: 1, wrap: false, pair: false, vel_min: 1, vel_max: 127, vel_curve: 'None' });
@@ -67,9 +67,9 @@
   }
 
   // Fixed first button bank: Mute + Solo for the first 8 MIDI channels (2 rows of 8).
-  // These send no MIDI of their own and only their colour is editable. Mute stops
+  // These send no MIDI of their own and only their color is editable. Mute stops
   // MIDI on its channel; Solo restricts output to its channel. Channels are
-  // mappable (default 1-8). led.idle is the base colour; pressed shows the
+  // mappable (default 1-8). led.idle is the base color; pressed shows the
   // engaged (brighter) state.
   function muteSoloBank() {
     const arr = [];
@@ -265,7 +265,7 @@
 
   // Serialize the studio model back to a Components .syx template. Lossy: only
   // the first knob banks / first editable button bank / base assignments map to
-  // the 77-record template; extra banks, per-state colours and the sequencer
+  // the 77-record template; extra banks, per-state colors and the sequencer
   // don't exist in the template format.
   function toTemplate(sm) {
     const T = global.SLMK.sltemplate;

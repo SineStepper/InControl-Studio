@@ -140,7 +140,7 @@
   // (#66, revised): the current/playing pattern is '#', chained patterns (members
   // of the active chain, other than the current one) are '+' (filled), and
   // unchained patterns are '-' (unfilled). The whole strip is drawn in white, so
-  // per-character colour isn't needed — the glyphs carry the three states.
+  // per-character color isn't needed — the glyphs carry the three states.
   function patternStrip(active, chain, count) {
     const n = count || 8;
     const lo = chain ? Math.min(chain.from, chain.to) : -1;
@@ -169,8 +169,8 @@
     return rows;
   }
 
-  // Average a list of #RRGGBB colours into one #RRGGBB (ignores blanks/black).
-  // Used for the 5th/centre screen's button-bank edge bars (#68).
+  // Average a list of #RRGGBB colors into one #RRGGBB (ignores blanks/black).
+  // Used for the 5th/center screen's button-bank edge bars (#68).
   function avgColor(hexes) {
     const list = (hexes || []).filter((h) => /^#?[0-9a-f]{6}$/i.test(h || '') && !/^#?0{6}$/.test(h || ''));
     if (!list.length) return '#000000';
@@ -242,7 +242,7 @@
   }
 
   /**
-   * Soft-button LED colours for options mode: menu buttons in their colour
+   * Soft-button LED colors for options mode: menu buttons in their color
    * (the active one brightened), microstep row light-orange, others off.
    * Returns { softIndex: hex }.
    */
@@ -259,10 +259,10 @@
     return leds;
   }
 
-  // Halve an #RRGGBB colour's brightness (for the un-selected menu buttons).
+  // Halve an #RRGGBB color's brightness (for the un-selected menu buttons).
   function dim(hex) { return scaleColor(hex, 1 / 3); }
 
-  /** Scale an #RRGGBB colour's brightness by `frac` (0..1). */
+  /** Scale an #RRGGBB color's brightness by `frac` (0..1). */
   function scaleColor(hex, frac) {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
     if (!m) return '#000000';
@@ -275,7 +275,7 @@
   // so a fader at the bottom is dimly visible rather than looking dead.
   function valueColor(hex, value, max) { return scaleColor(hex, 0.1 + 0.9 * Math.max(0, Math.min(1, value / (max || 127)))); }
 
-  /** Mix an #RRGGBB colour toward white by `frac` (0..1) — used for engaged/pressed states. */
+  /** Mix an #RRGGBB color toward white by `frac` (0..1) — used for engaged/pressed states. */
   function lighten(hex, frac) {
     const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
     if (!m) return '#ffffff';
@@ -290,7 +290,7 @@
     return { up: activePattern > 0, down: activePattern < (patternCount - 1) };
   }
 
-  /** Pad colours (16) for the Patterns view (#4/#7): active pattern bright. */
+  /** Pad colors (16) for the Patterns view (#4/#7): active pattern bright. */
   function patternPadLeds(activePattern, patternCount) {
     const out = [];
     for (let i = 0; i < 16; i++) {

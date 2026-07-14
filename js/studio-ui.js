@@ -5,7 +5,7 @@
  * top-middle, Destination + engine + settings top-right; two top-level tabs
  * (Editor / Sequencer, issue #28). The Editor mirrors Novation Components: a row
  * of control glyphs (name above, current assignment below), a wide left column
- * with the full behaviour/assignment mappings, and a thin scrollable bank list
+ * with the full behavior/assignment mappings, and a thin scrollable bank list
  * on the right (issue #30). Templates and setups are one and the same — importing
  * a template merges its parameters into the current setup (issue #27).
  */
@@ -93,8 +93,21 @@
     if ($('#chan-status')) refreshChanStatus();
 
     renderLibrary(); // the Templates / Sessions column beside the tabs (#77)
+    renderBanks();   // the Banks column docked on the right (Editor only)
     if (ui.view === 'sequencer') { const host = $('#sequencer-body'); if (host && global.SLMK.sequencerUI) global.SLMK.sequencerUI.render(host); return; }
     renderEditor();
+  }
+
+  // The Banks column is a full-height right dock. It only appears in the Editor
+  // view for tabs that actually have banks (Encoders / Buttons); otherwise the
+  // column collapses so the editor uses the full width.
+  function renderBanks() {
+    const col = $('#banks-col'); if (!col) return;
+    col.innerHTML = '';
+    const wrap = document.querySelector('.app-cols');
+    const banks = ui.view === 'editor' ? bankList() : null;
+    if (banks) { col.appendChild(banks); if (wrap) wrap.classList.add('with-banks'); }
+    else if (wrap) wrap.classList.remove('with-banks');
   }
 
   // #77: the left library column lives beside the tabs and shows Templates in the
@@ -140,10 +153,10 @@
     });
     layout.appendChild(glyphRow);
 
-    const banks = bankList();                                                   // thin scrollable bank list (right) — null when the control has no banks (#78)
-    const cols = el('div', { className: 'comp-cols' + (banks ? '' : ' no-banks') });
+    // Banks now live in the right dock (renderBanks); the editor body is just the
+    // glyph row + the grouped inspector.
+    const cols = el('div', { className: 'comp-cols no-banks' });
     cols.appendChild(inspector(controls[ui.sel] || null)); // wide left column (grouped sections, #80)
-    if (banks) cols.appendChild(banks);
     layout.appendChild(cols);
     host.appendChild(layout);
   }
@@ -206,25 +219,24 @@
   function bankList() {
     if (!hasBanks(ui.tab)) return null;
     const aside = el('aside', { className: 'bank-list panel' });
-    aside.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
+    const head = el('div', { className: 'bl-head' });
+    head.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
+    // "Add" sits at the top-right of the column, mirroring the library's "New".
+    const add = el('button', { className: 'btn primary lib-new' }, 'Add');
+    head.appendChild(add);
+    aside.appendChild(head);
     const list = el('div', { className: 'bl-scroll' });
     const item = (label, active, on) => { const b = el('button', { className: 'bl-item' + (active ? ' active' : '') }, label); b.addEventListener('click', on); return b; };
 
     if (ui.tab === 'rotary') {
+      add.addEventListener('click', () => { snapshot(); ui.knobBank = S.addKnobBank(model); ui.sel = null; render(); });
       model.knobBanks.forEach((_, i) => list.appendChild(item('Knob bank ' + (i + 1), i === ui.knobBank, () => { ui.knobBank = i; ui.sel = null; render(); })));
-      const add = el('button', { className: 'bl-add' }, '+ Add bank'); add.addEventListener('click', () => { snapshot(); ui.knobBank = S.addKnobBank(model); ui.sel = null; render(); }); aside.append(list, add); return aside;
-    }
-    if (ui.tab === 'buttons') {
+    } else { // buttons
+      add.addEventListener('click', () => { snapshot(); ui.buttonBank = S.addButtonBank(model); ui.sel = null; render(); });
       model.buttonBanks.forEach((_, i) => list.appendChild(item(i === 0 ? 'Mute / Solo (fixed)' : 'Bank ' + i, i === ui.buttonBank, () => { ui.buttonBank = i; ui.sel = null; render(); })));
-      const add = el('button', { className: 'bl-add' }, '+ Add bank'); add.addEventListener('click', () => { snapshot(); ui.buttonBank = S.addButtonBank(model); ui.sel = null; render(); }); aside.append(list, add); return aside;
     }
-    if (ui.tab === 'pads') {
-      list.appendChild(item('Pad Hit', ui.padMode === 'hits', () => { ui.padMode = 'hits'; ui.sel = null; render(); }));
-      list.appendChild(item('Pad Pressure', ui.padMode === 'pressures', () => { ui.padMode = 'pressures'; ui.sel = null; render(); }));
-      aside.appendChild(list); return aside;
-    }
-    list.appendChild(item('All ' + (TABS.find((t) => t.key === ui.tab) || {}).label, true, () => {}));
-    aside.appendChild(list); return aside;
+    aside.appendChild(list);
+    return aside;
   }
 
   function summary(a) {
@@ -246,7 +258,7 @@
   const BIT_DEPTH_CLASSES = { knob: true, fader: true, button: true, footswitch: true, pad_pressure: true, sustain: true, pitch: true, mod: true, expression: false, keys: false, pad_hit: false };
 
   // Wide left column: the selected control's mappings, grouped into Name/Enabled,
-  // Behaviour and Assignment section boxes with three-column rows (#80).
+  // Behavior and Assignment section boxes with three-column rows (#80).
   function inspector(ctrl) {
     const panel = el('aside', { className: 'comp-insp panel' });
     if (!ctrl) { panel.appendChild(el('p', { className: 'hint' }, 'Select a control above to edit it.')); return panel; }
@@ -295,33 +307,33 @@
       if (o.cls === 'pad_hit') rows.push(row(cell('Vel min', num(o, 'vel_min', 0, 127)), cell('Vel max', num(o, 'vel_max', 0, 127)), cell('Vel curve', sel(o, 'vel_curve', S.VEL_CURVES))));
       return sec(title || 'Assignment', rows, enableObj);
     }
-    function behaviourSection(o) {
+    function behaviorSection(o) {
       if (o.cls === 'knob') {
-        return sec('Behaviour', [
+        return sec('Behavior', [
           row(cell('Resolution', num(o, 'resolution', 0, 16383)), cell('Mode', sel(o, 'mode', S.KNOB_MODES)), cell('Step', num(o, 'step', 0, 127))),
           row(cell('Bank paging', sel(o, 'combined', S.COMBINED)), empty(), empty()),
         ]);
       }
-      // switch behaviour: dropdown | action (push/release) | step (inc/dec) + wrap/pair
+      // switch behavior: dropdown | action (push/release) | step (inc/dec) + wrap/pair
       const rows = [row(
-        cell('Behaviour', sel(o, 'behavior', S.BEHAVIORS)),
+        cell('Behavior', sel(o, 'behavior', S.BEHAVIORS)),
         o.behavior === 'Momentary' ? empty() : cell('Action', sel(o, 'action', ['On Push', 'On Release'])),
         o.behavior === 'Inc/Dec' ? cell('Step', num(o, 'step_size', 1, 127)) : empty(),
       )];
       if (o.behavior === 'Inc/Dec') { const wp = row(cellChk('Wrap', chk(o, 'wrap')), cellChk('Pair', chk(o, 'pair')), empty()); rows.push(wp); }
-      return sec('Behaviour', rows);
+      return sec('Behavior', rows);
     }
     const cellChk = (label, node) => { const c = el('div', { className: 'insp-cell insp-cell-chk' }); const lab = el('label', {}); lab.append(node, document.createTextNode(' ' + label)); c.appendChild(lab); return c; };
 
     // ---- title ----
     panel.appendChild(el('div', { className: 'insp-title' }, (a.name || a.cls) + (a.fixed ? '  (fixed)' : '')));
 
-    // ---- fixed Mute/Solo: colour only ----
+    // ---- fixed Mute/Solo: color only ----
     if (a.colorOnly) {
-      panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its colour is editable.'));
+      panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its color is editable.'));
       const c = el('input', { type: 'color', value: a.led.idle });
       c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); pushLeds(); });
-      const box = el('div', { className: 'insp-sec' }); box.appendChild(cell('Colour', c)); panel.appendChild(box);
+      const box = el('div', { className: 'insp-sec' }); box.appendChild(cell('Color', c)); panel.appendChild(box);
       return panel;
     }
 
@@ -330,7 +342,7 @@
       // independently enable-able. Hit and Pressure share the name.
       const pressure = model.pads.pressures[ctrl.index];
       panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9, [pressure])), empty(), empty())]));
-      panel.appendChild(behaviourSection(a));
+      panel.appendChild(behaviorSection(a));
       panel.appendChild(assignment(a, 'Assignment (Hit)', a));
       panel.appendChild(assignment(pressure, 'Assignment (Pressure)', pressure));
       panel.appendChild(ledSection(a));
@@ -338,31 +350,31 @@
     }
 
     // ---- Name / Enabled ----
-    panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9)), cell('Enabled', chk(a, 'enabled')), empty())]));
-    // ---- Behaviour (encoders + switches) ----
-    if (a.cls === 'knob' || isSwitch(a.cls)) panel.appendChild(behaviourSection(a));
+    panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9)), cellChk('Enabled', chk(a, 'enabled')), empty())]));
+    // ---- Behavior (encoders + switches) ----
+    if (a.cls === 'knob' || isSwitch(a.cls)) panel.appendChild(behaviorSection(a));
     // ---- Assignment ----
     panel.appendChild(assignment(a));
-    // ---- LED colour ----
+    // ---- LED color ----
     panel.appendChild(ledSection(a));
     return panel;
 
-    // LED colour section (kept from the previous inspector, in a section box).
+    // LED color section (kept from the previous inspector, in a section box).
     function ledSection(o) {
       const ledWrap = el('div', { className: 'insp-sec insp-color' });
       const field = (lbl, node) => { const f = el('div', { className: 'insp-cell' }, [el('label', {}, lbl), node]); return f; };
       if (o.colorMode === 'value') {
-        ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
+        ledWrap.appendChild(el('h4', {}, 'LED color (brightness tracks value)'));
         const c = el('input', { type: 'color', value: o.led.idle });
         c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
-        ledWrap.appendChild(row(field('Colour', c)));
+        ledWrap.appendChild(row(field('Color', c)));
       } else if (o.cls === 'knob') {
-        ledWrap.appendChild(el('h4', {}, 'Knob glyph colour'));
+        ledWrap.appendChild(el('h4', {}, 'Knob glyph color'));
         const c = el('input', { type: 'color', value: o.led.idle });
         c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
-        ledWrap.appendChild(row(field('Colour', c)));
+        ledWrap.appendChild(row(field('Color', c)));
       } else {
-        ledWrap.appendChild(el('h4', {}, 'LED colour'));
+        ledWrap.appendChild(el('h4', {}, 'LED color'));
         const states = hasPressureLed(o.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
         const cells = states.map((s) => { const c = el('input', { type: 'color', value: o.led[s] === '#000000' ? '#000000' : o.led[s] }); c.addEventListener('input', () => { o.led[s] = c.value; render(); pushLeds(); }); return field(s[0].toUpperCase() + s.slice(1), c); });
         ledWrap.appendChild(row.apply(null, cells));
@@ -453,7 +465,32 @@
     if ($('#pack-export')) $('#pack-export').addEventListener('click', exportPack);
     if ($('#pack-export-sessions')) $('#pack-export-sessions').addEventListener('click', exportSessions);
     initChannelBar();
+    initDropZone();
     global.SLMK.studioState = { getModel: () => model };
+  }
+
+  // Drag-and-drop file loading: drop a .syx (template), .json (setup) or pack
+  // anywhere on the window and it's routed to the matching importer.
+  function routeFile(file) {
+    const name = (file.name || '').toLowerCase();
+    if (name.endsWith('.json')) return loadJson(file);
+    if (name.endsWith('.slmkiiipack') || name.endsWith('.zip')) return importPack(file);
+    if (name.endsWith('.syx')) return importTemplate(file);
+    // Unknown extension — sniff the first byte: F0 = SysEx template, { = JSON.
+    const r = new FileReader();
+    r.onload = () => { const b = new Uint8Array(r.result); if (b[0] === 0xF0) importTemplate(file); else if (b[0] === 0x7B || b[0] === 0x20 || b[0] === 0x0A || b[0] === 0x09) loadJson(file); else setStatus('Unrecognized file: ' + file.name, 'warn'); };
+    r.readAsArrayBuffer(file.slice(0, 8));
+  }
+  function initDropZone() {
+    if (!document.body) return;
+    const overlay = el('div', { className: 'drop-overlay', id: 'drop-overlay' }, 'Drop a .syx, .json or pack file to load');
+    document.body.appendChild(overlay);
+    let depth = 0;
+    const hasFiles = (e) => e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1;
+    window.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; overlay.classList.add('show'); });
+    window.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+    window.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) overlay.classList.remove('show'); });
+    window.addEventListener('drop', (e) => { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; overlay.classList.remove('show'); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) routeFile(f); });
   }
 
   // ---- menu bar (File / Edit dropdowns) ----

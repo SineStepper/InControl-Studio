@@ -100,7 +100,7 @@ O.applyKnob(ms, freshPattern(), 'tempo', 5, +4, 0, false); eq(ms.metronome.silen
 // chance / swing render as percentages
 eq(O.columns(seq(), freshPattern(), 'chance', 0)[0].bottom, '100%', 'chance shows a percentage');
 eq(O.columns(seq(), freshPattern(), 'tempo', 0)[1].bottom, '50%', 'swing shows a percentage');
-eq(O.columns(seq(), freshPattern(), 'tempo', 0)[2].top, 'Swing Sync Rate', 'tempo knob 3 labelled Swing Sync Rate');
+eq(O.columns(seq(), freshPattern(), 'tempo', 0)[2].top, 'Swing Sync Rate', 'tempo knob 3 labeled Swing Sync Rate');
 
 // ---- Soft LEDs / arrows / pattern pads ----
 const leds = O.softLeds('gate');
@@ -133,7 +133,7 @@ eq(O.patternStrip(2, { from: 1, to: 4 }, 8), '-+#++---', '#66 pattern strip: cur
 eq(O.patternStrip(0, null, 8), '#-------', '#66 with no chain only the current pattern is marked');
 eq(O.patternStrip(5, { from: 5, to: 7 }, 8), '-----#++', '#66 current inside the chain shows as # not +');
 
-// #68 average colour of a set of LED colours (ignores black/blank)
+// #68 average color of a set of LED colors (ignores black/blank)
 eq(O.avgColor(['#ff0000', '#0000ff']), '#800080', '#68 avgColor averages red+blue to purple');
 eq(O.avgColor(['#ffffff', '#000000', '']), '#ffffff', '#68 avgColor ignores black and blanks');
 eq(O.avgColor([]), '#000000', '#68 avgColor of nothing is black');

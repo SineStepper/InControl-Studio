@@ -3,7 +3,7 @@
  *
  * Translates resolved InControl input (which control moved, and by how much)
  * into outgoing MIDI per the current model / bank / channel, drives per-state
- * LED colours, and runs the navigation state machine (bank paging, channel).
+ * LED colors, and runs the navigation state machine (bank paging, channel).
  * No MIDI I/O or DOM here — the runtime (studio-runtime.js) wires this to ports,
  * so every rule below is unit-testable.
  */
@@ -20,7 +20,7 @@
       channel: (model.global && model.global.channel) || 1,
       template: (model.global && model.global.template) || 1,
       padMode: 'sequencer', // 'sequencer' (pads drive the step/pattern grid) | 'pads' (instrument, via Grid)
-      toggle: {}, // key -> bool, for Toggle behaviour
+      toggle: {}, // key -> bool, for Toggle behavior
       inc: {}, // key -> current value, for Inc/Dec
       held: {}, // key -> bool, for LED pressed state
       acc: {}, // key -> accumulated value, for endless-encoder knobs

@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /*
- * bridge.js — SL MkIII "colour + custom mapping" bridge.
+ * bridge.js — SL MkIII "color + custom mapping" bridge.
  *
- * The SL MkIII only shows custom LED colours in InControl mode, where every
+ * The SL MkIII only shows custom LED colors in InControl mode, where every
  * control sends a *fixed* MIDI message. This bridge:
- *   1. re-asserts your colour layout on the InControl output port (and keeps it
+ *   1. re-asserts your color layout on the InControl output port (and keeps it
  *      warm on an interval so it survives pad presses / mode changes), and
  *   2. remaps the fixed InControl input messages to whatever you want, emitting
  *      them on a virtual MIDI port your DAW / synth can listen to.
  *
- * Result: your colours AND your mappings, live — without custom firmware.
+ * Result: your colors AND your mappings, live — without custom firmware.
  * Put the unit in InControl mode before running.
  *
  * Usage:
@@ -39,7 +39,7 @@ function loadConfig(file) {
     throw new Error('Config not found: ' + file + '\nCopy config.example.json to config.json and edit it.');
   }
   const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
-  // Colours may be inline, or reference a file exported by the browser tool.
+  // Colors may be inline, or reference a file exported by the browser tool.
   if (typeof cfg.colors === 'string') {
     const cf = path.isAbsolute(cfg.colors) ? cfg.colors : path.join(path.dirname(file), cfg.colors);
     const doc = JSON.parse(fs.readFileSync(cf, 'utf8'));
@@ -79,7 +79,7 @@ function main() {
   console.log('InControl input :', inp.name);
   console.log('InControl output:', slOut.name);
   console.log('Virtual output  :', virt.name, virt.virtual === false ? '(existing port)' : '(created)');
-  console.log('Colours         :', layout.length, 'LEDs · keep-alive', keepAliveMs + 'ms');
+  console.log('Colors         :', layout.length, 'LEDs · keep-alive', keepAliveMs + 'ms');
   console.log('Mappings        :', Object.keys(mappings).length, 'controls');
   console.log('\nRunning. Make sure the SL MkIII is in InControl mode. Ctrl+C to stop.\n');
 

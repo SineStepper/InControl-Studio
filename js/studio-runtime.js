@@ -3,7 +3,7 @@
  *
  * Listens to the SL MkIII InControl input, resolves each control, runs it
  * through the engine per the current model/bank/channel, sends the resulting
- * MIDI to a destination port, and pushes per-state LED colours back to the SL.
+ * MIDI to a destination port, and pushes per-state LED colors back to the SL.
  * Handles the navigation buttons (bank paging, channel) too.
  *
  * A browser can't create a virtual port, so the destination is an existing port
@@ -68,10 +68,10 @@
   // Knob Layout object indices (Programmer's Guide "Knob Layout"):
   //   text:  0 = row above icon, 2 = row below icon
   //   value: 0 = the knob value shown on the icon (0-127)
-  //   rgb:   1 = knob icon line colour
+  //   rgb:   1 = knob icon line color
   const send = (msg) => midi.sendToOutput(st.slOutId, msg);
   // Put the SL screens into knob layout and show the current bank's names, graphic
-  // knobs (value arc), value numbers and per-knob colours.
+  // knobs (value arc), value numbers and per-knob colors.
   function refreshKnobScreens() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
@@ -81,23 +81,23 @@
     const mask = (st.rt.knobBank || 0) + ':' + bank.map((a) => (a && a.enabled ? 1 : 0)).join('');
     if (st.lastKnobMask !== mask) { send(sysex.screenLayout(0)); send(sysex.screenLayout(1)); st.lastKnobMask = mask; }
     else send(sysex.screenLayout(1)); // Knob Layout
-    const cur = sysex.hexTo7bit(partColor());              // the selected Part's colour
+    const cur = sysex.hexTo7bit(partColor());              // the selected Part's color
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
       const enabled = !!(a && a.enabled);
       // A DISABLED knob shows nothing on its screen — no title, glyph or value —
       // just its Part label at the bottom (#75). Only enabled knobs get the name,
-      // Part-colour bar, glyph colour and value.
+      // Part-color bar, glyph color and value.
       send(sysex.screenText(i, 0, enabled ? (a.name || 'Knob ' + (i + 1)) : ''));
       send(sysex.screenRgb(i, 0, enabled ? cur.r : 0, enabled ? cur.g : 0, enabled ? cur.b : 0)); // top bar, enabled only (#68)
       if (enabled) {
-        const hex = (a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph colour
+        const hex = (a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph color
         const { r, g, b } = sysex.hexTo7bit(hex);
-        send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
+        send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) color — customisable per knob (#12)
         sendKnobValue(i);
       }
       // Each column's bottom label names Part i+1; underline it with THAT Part's
-      // colour, and highlight (full colour) the currently-selected Part, others
+      // color, and highlight (full color) the currently-selected Part, others
       // dimmed (#68). We only get one RGB per object, so bright vs dim stands in
       // for highlight vs underline.
       const sel = (i + 1) === st.activeChannel;
@@ -106,20 +106,20 @@
       send(sysex.screenRgb(i, 2, bar.r, bar.g, bar.b));
       send(sysex.screenText(i, 3, partLabel(i)));          // part label hugging the bottom edge (#58/#65)
     }
-    refreshCentreScreen();
+    refreshCenterScreen();
     refreshPatternStrip(true); // 5th screen TOP edge: the 8-pattern chain strip (#66)
     refresh5thScreen(true);    // 5th screen bottom: transient value / part-name overlay (#69)
   }
-  // The 5th screen is protocol column 8 (the centre notification screen). Object
+  // The 5th screen is protocol column 8 (the center notification screen). Object
   // map, deduced from hardware feedback:
-  //   obj 0  text = knob-bank name (row above the part name); colour = LEFT edge bar
+  //   obj 0  text = knob-bank name (row above the part name); color = LEFT edge bar
   //   obj 1  text = part name
-  //   obj 2  text = "Mute" / button-bank name (right, top);   colour = RIGHT-TOP bar
-  //   obj 3  text = "Solo" (right, bottom);                   colour = RIGHT-BOTTOM bar
+  //   obj 2  text = "Mute" / button-bank name (right, top);   color = RIGHT-TOP bar
+  //   obj 3  text = "Solo" (right, bottom);                   color = RIGHT-BOTTOM bar
   //   obj 4  text = the 8-pattern chain strip on the VERY TOP edge (full width)
   //   obj 5  text = transient overlay (knob/fader value, or paged-to Part names)
   const S5 = 8, S5_OVERLAY = 5;
-  // Very-top-edge pattern strip on the centre screen, via the notification command
+  // Very-top-edge pattern strip on the center screen, via the notification command
   // (the property text objects have no row above obj 0). '#' current/playing,
   // '+' chained, '-' unchained (#66). Change-detected so it isn't re-sent per tick.
   function refreshPatternStrip(force) {
@@ -167,8 +167,8 @@
     send(sysex.screenValue(index, 0, v));          // graphic-knob glyph value
     send(sysex.screenText(index, 1, String(v)));   // value shown above the glyph, below the name (#12)
   }
-  // Average LED colour of the top (or bottom) row of 8 buttons in the current
-  // button-bank page — for the centre screen's right-edge bars (#68).
+  // Average LED color of the top (or bottom) row of 8 buttons in the current
+  // button-bank page — for the center screen's right-edge bars (#68).
   function buttonRowAvg(bottomRow) {
     const bank = (st.rt && st.rt.buttonBank) || 0;
     const off = bottomRow ? 8 : 0;
@@ -177,14 +177,14 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // 5th screen (column 8) text + edge colour bars. On this screen an object's TEXT
-  // and its COLOUR bar render in regions offset by one — the colour beside a row's
+  // 5th screen (column 8) text + edge color bars. On this screen an object's TEXT
+  // and its COLOR bar render in regions offset by one — the color beside a row's
   // text comes from the object ONE ABOVE it. So:
   //   TEXT:  obj 0 knob bank, obj 1 part name, obj 2 "Mute"/bank, obj 3 "Solo"
-  //   COLOUR: obj 0 LEFT edge, obj 1 RIGHT-TOP bar, obj 2 RIGHT-BOTTOM bar
+  //   COLOR: obj 0 LEFT edge, obj 1 RIGHT-TOP bar, obj 2 RIGHT-BOTTOM bar
   // i.e. the RIGHT-TOP bar (beside the "Mute" text on obj 2) is set on obj 1, and
   // the RIGHT-BOTTOM bar (beside "Solo" on obj 3) is set on obj 2.
-  function refreshCentreScreen() {
+  function refreshCenterScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
     const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
@@ -193,7 +193,7 @@
     const topAvg = sysex.hexTo7bit(buttonRowAvg(false)); // top button row (Mute on the fixed bank)
     const botAvg = sysex.hexTo7bit(buttonRowAvg(true));  // bottom button row (Solo on the fixed bank)
     send(sysex.screenText(8, 0, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // above the part name
-    send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // LEFT edge bar = selected Part colour
+    send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // LEFT edge bar = selected Part color
     send(sysex.screenText(8, 1, name));                                   // part name
     send(sysex.screenRgb(8, 1, topAvg.r, topAvg.g, topAvg.b));            // RIGHT-TOP bar (beside "Mute" on obj 2)
     send(sysex.screenText(8, 2, bank === 0 ? 'Mute' : 'Btns ' + (bank + 1))); // right, top
@@ -535,7 +535,7 @@
   }
   // Paint the 16 above-fader soft buttons (ids 12-27) for the current button bank:
   // bank 0 is the fixed Mute/Solo bank; banks ≥1 show that bank's own button
-  // colours so paging actually changes what's lit (#31).
+  // colors so paging actually changes what's lit (#31).
   function refreshButtonArea() {
     const bank = (st.rt && st.rt.buttonBank) || 0;
     if (bank === 0) return refreshMuteSolo();
@@ -548,20 +548,20 @@
   function toggleMute(ch) { if (st.mute.has(ch)) st.mute.delete(ch); else st.mute.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.mute.has(ch) ? 'mute ' : 'unmute ') + ch); }
   function toggleSolo(ch) { if (st.solo.has(ch)) st.solo.delete(ch); else st.solo.add(ch); silenceInaudible(); refreshMuteSolo(); notify(); log((st.solo.has(ch) ? 'solo ' : 'unsolo ') + ch); }
 
-  // ---- Channel / instrument select (Soft 1-8 below the screens), in Part colours ----
+  // ---- Channel / instrument select (Soft 1-8 below the screens), in Part colors ----
   function refreshChannelLeds() {
     const m = model(); const tracks = (m && m.sequencer && m.sequencer.tracks) || [];
     const PART = SEQ().PART_COLORS;
     for (let i = 0; i < 8; i++) {
-      const color = (tracks[i] && tracks[i].color) || PART[i % 8]; // rainbow Part colours, not a blue default (#42)
-      ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : opts().scaleColor(color, 0.4)); // active white, others dim part colour
+      const color = (tracks[i] && tracks[i].color) || PART[i % 8]; // rainbow Part colors, not a blue default (#42)
+      ledHex(4 + i, (i + 1) === st.activeChannel ? '#ffffff' : opts().scaleColor(color, 0.4)); // active white, others dim part color
     }
   }
   // When leaving a Part, send note-off (on the origin channel) for every
   // physically-held key so it stops on the old Part rather than hanging (#64). If
   // the sustain pedal is down, the destination synth holds the note despite the
   // note-off, so a sustained note keeps ringing until the pedal is released — which
-  // is exactly the requested behaviour. Clears the note-origin map for those notes
+  // is exactly the requested behavior. Clears the note-origin map for those notes
   // so a later physical release doesn't fire a stale off.
   function releaseHeldNotesOnSwitch() {
     if (!st.destId || !st.heldKeys.size) return;
@@ -592,7 +592,7 @@
     st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
     refreshChannelLeds();
     if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
-    refreshArrowLeds(); refreshKnobScreens(); refreshKeyGuide(); // key guide follows the Part colour (#51)
+    refreshArrowLeds(); refreshKnobScreens(); refreshKeyGuide(); // key guide follows the Part color (#51)
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('channel ' + ch);
   }
@@ -610,7 +610,7 @@
     return st.channelRt[ch];
   }
 
-  // ---- Colour helpers (issue #12: dim resting, white/bright active) ----
+  // ---- Color helpers (issue #12: dim resting, white/bright active) ----
   const dim = (hex) => opts().scaleColor(hex, 0.28);
   function blackout() { for (let id = 0; id <= 67; id++) ledHex(id, '#000000'); } // all LEDs off (#12: nothing lit unless stated)
   const PRESS = '#f0f0f0'; // near-white press feedback
@@ -623,7 +623,7 @@
     ledHex(34, '#000000');                                     // Fast Forward — unlit
     ledHex(33, '#000000');                                     // Rewind — unlit
   }
-  // Function buttons: resting colours per #12 (white on press handled separately).
+  // Function buttons: resting colors per #12 (white on press handled separately).
   const FUNC_REST = { Duplicate: [66, dim('#00ff00')], Clear: [67, dim('#ff0000')], Grid: [64, dim('#ffffff')], 'Track Left': [30, dim('#0000ff')], 'Track Right': [31, dim('#0000ff')] };
   function refreshFunctionLeds() {
     Object.keys(FUNC_REST).forEach((k) => ledHex(FUNC_REST[k][0], FUNC_REST[k][1]));
@@ -638,11 +638,11 @@
 
   // ---- Keybed light guide (RGB LED-SysEx method) ----
   // Keys are lit with the same RGB LED command as every other LED, at ids
-  // 54 + (note - KEY_BASE_NOTE), giving EXACT colours. Ids 54-67 are shared with
+  // 54 + (note - KEY_BASE_NOTE), giving EXACT colors. Ids 54-67 are shared with
   // the fader (54-61) and function (62-67) LEDs, so we skip that range to avoid
   // clobbering them — the light guide covers notes 50-96 (ids 68-114). Idle = the
-  // current Part's colour (#51); playing = green (#48), auditioned/held = red
-  // (#49), pressed = white (#50); releasing reverts to the Part colour.
+  // current Part's color (#51); playing = green (#48), auditioned/held = red
+  // (#49), pressed = white (#50); releasing reverts to the Part color.
   const KEY_GREEN = '#00ff00', KEY_RED = '#ff0000', KEY_WHITE = '#ffffff';
   const KEY_BASE_NOTE = 36, KEY_LO = 36, KEY_HI = 96;
   const keyIdle = () => { const t = curTrack(); return (t && t.color) || SEQ().PART_COLORS[(st.gridTrack || 0) % 8]; };
@@ -652,13 +652,13 @@
     if (id < 68 || id > 114) return; // skip the fader/function LED collision zone (ids 54-67)
     ledHex(id, hex);
   }
-  // Paint the whole light guide in the current Part's colour (idle state, #51).
+  // Paint the whole light guide in the current Part's color (idle state, #51).
   function refreshKeyGuide() { const c = keyIdle(); for (let nt = KEY_LO; nt <= KEY_HI; nt++) lightKey(nt, c); }
   const keyPlay = (note, on) => lightKey(note, on ? KEY_GREEN : keyIdle());     // #48
   const keyAudition = (note, on) => lightKey(note, on ? KEY_RED : keyIdle());   // #49
   const keyPressed = (note, on) => lightKey(note, on ? KEY_WHITE : keyIdle());  // #50
 
-  // ---- Press feedback (#5/#12): note pads show part colour (dim/bright), other buttons flash white ----
+  // ---- Press feedback (#5/#12): note pads show part color (dim/bright), other buttons flash white ----
   function pressFlash(group, index, pressed) {
     if (group === 'pad') { // instrument-mode note pad: dim part idle, bright part pressed (#12)
       ledHex(38 + index, pressed ? opts().lighten(partColor(), 0.3) : dim(partColor()));
@@ -667,7 +667,7 @@
     if (pressed) { const id = ledIdFor(group, index); if (id != null) ledHex(id, PRESS); }
     else restoreLed(group, index);
   }
-  // Instrument-mode (Grid) note pads at rest: dim part colour (#12).
+  // Instrument-mode (Grid) note pads at rest: dim part color (#12).
   function refreshNotePads() { const c = partColor(); for (let i = 0; i < 16; i++) ledHex(38 + i, dim(c)); }
   function ledIdFor(group, index) {
     if (group === 'pad') return 38 + index;
@@ -684,7 +684,7 @@
   }
 
   const partColor = () => { const t = curTrack(); return (t && t.color) || '#3bd0ff'; };
-  // Colour of a specific Part (0-based track index), for per-Part screen labels (#68).
+  // Color of a specific Part (0-based track index), for per-Part screen labels (#68).
   const partColorOf = (i) => { const m = model(); const t = m && m.sequencer && m.sequencer.tracks[i]; return (t && t.color) || SEQ().PART_COLORS[i % 8]; };
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
@@ -700,16 +700,16 @@
       const has = SEQ().stepHasNotes(p, i);
       const inRange = i >= lo && i <= hi;
       let hex, beh = 'solid';
-      if (has) hex = inRange ? color : '#ff0000';           // used step: bright part colour (red if outside start/end, #14)
-      else hex = dim(color);                                 // empty step: dim part colour (#12)
+      if (has) hex = inRange ? color : '#ff0000';           // used step: bright part color (red if outside start/end, #14)
+      else hex = dim(color);                                 // empty step: dim part color (#12)
       if (st.optionsMenu === 'pattern' && st.optionsMode && i === p.start) hex = '#ffd000'; // start step yellow (#14)
       if (i === head) { hex = '#ffffff'; if (!playing) beh = 'pulse'; } // current step: white playing, white-pulse stopped (#12)
       ledHex(38 + i, hex, beh);
     }
   }
-  // Patterns view (#4/#7): the 16 pads show/select the 8 patterns in the part colour.
+  // Patterns view (#4/#7): the 16 pads show/select the 8 patterns in the part color.
   // Part mode (#17): the two pad rows show two Parts' patterns (top = partTop,
-  // bottom = partTop+1), each row in its Part colour; up/down pages the Parts.
+  // bottom = partTop+1), each row in its Part color; up/down pages the Parts.
   function refreshPatternPads() {
     const m = model(); const tracks = m && m.sequencer && m.sequencer.tracks; if (!tracks) return;
     for (let row = 0; row < 2; row++) {
@@ -762,7 +762,7 @@
   // step when one is selected (bright = note, dim = empty), else light-orange.
   function refreshOptionLeds() {
     ledHex(65, st.optionsMode ? '#ffffff' : dim('#ffffff')); // Options button dim / bright in options
-    if (!st.optionsMode) { refreshChannelLeds(); return; } // restore part-colour buttons when leaving options
+    if (!st.optionsMode) { refreshChannelLeds(); return; } // restore part-color buttons when leaving options
     const leds = opts().softLeds(st.optionsMenu);
     Object.keys(leds).forEach((k) => ledHex(4 + Number(k), leds[k]));
     if (st.selStep != null) {
@@ -798,18 +798,18 @@
       send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name (blank if unused)
       if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph ONLY where there's a real value (#6)
       send(sysex.screenText(i, 1, c ? (c.bottom || '') : ''));    // reading above the icon: number / % / gate "N ###"
-      // Each menu button's screen shows its label with a colour bar below it, in
-      // that menu's fixed colour (Velocity red, Gate green, Chance orange, Tempo
+      // Each menu button's screen shows its label with a color bar below it, in
+      // that menu's fixed color (Velocity red, Gate green, Chance orange, Tempo
       // white, Pattern dark blue) — and NO bar where there's no label (#68 revised).
-      // obj 3's colour renders in the row below its text (same one-object offset as
-      // the centre screen), i.e. between the label and its soft button.
+      // obj 3's color renders in the row below its text (same one-object offset as
+      // the center screen), i.e. between the label and its soft button.
       const mk = opts().menuForButton(i);
       send(sysex.screenText(i, 3, opts().menuLabelForButton(i))); // menu label (hugging the bottom edge)
       const barHex = mk ? (mk === 'pattern' ? '#000080' : opts().MENUS[mk].color) : '#000000';
       const bar = sysex.hexTo7bit(barHex);
-      send(sysex.screenRgb(i, 3, bar.r, bar.g, bar.b));           // per-menu colour bar (black = none where no label)
+      send(sysex.screenRgb(i, 3, bar.r, bar.g, bar.b));           // per-menu color bar (black = none where no label)
     }
-    // Centre screen: step page at the top (#6).
+    // Center screen: step page at the top (#6).
     send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
     send(sysex.screenText(8, 2, menu ? menu.label : ''));
   }
@@ -837,10 +837,10 @@
   }
   function scheduleSurface() { if (surfaceTimer == null) surfaceTimer = raf(flushSurface); }
   // Coalesce only where a frame clock exists (browser/Electron); send straight
-  // through otherwise (Node tests) so behaviour stays synchronous and testable.
+  // through otherwise (Node tests) so behavior stays synchronous and testable.
   function queueFaderLed(index, value) { if (!global.requestAnimationFrame) return refreshFaderLed(index, value); pendingFaderLed.set(index, value); scheduleSurface(); }
   function queueKnobValue(index) { if (!global.requestAnimationFrame) return sendKnobValue(index); pendingKnobVal.add(index); scheduleSurface(); }
-  // Repaint the whole control surface (used after an on-screen change like a Part colour).
+  // Repaint the whole control surface (used after an on-screen change like a Part color).
   function refreshSurface() {
     if (!st.running || !st.slOutId) return;
     if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
@@ -891,7 +891,7 @@
     if (isOn) { const ch = trackChan(); st.noteChan.set(note, ch); sendMusic(st.destId, [0x90 | ch, note & 0x7f, vel & 0x7f]); }
     else if (isOff) { const ch = st.noteChan.has(note) ? st.noteChan.get(note) : trackChan(); st.noteChan.delete(note); sendMusic(st.destId, [0x80 | ch, note & 0x7f, 0]); }
     else sendMusic(st.destId, rechannel(bytes, trackChan()));
-    if (isOn || isOff) keyPressed(note, isOn); // pressed keys light white, revert to Part colour on release (#50)
+    if (isOn || isOff) keyPressed(note, isOn); // pressed keys light white, revert to Part color on release (#50)
     if (isOn) {
       st.heldKeys.set(note, vel);
       // Micro-step entry: in options mode, hold a micro-step button + play keys to
@@ -1128,7 +1128,7 @@
     }
 
     const navAction = engine.NAV_MAP[ev.control];
-    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); if (/knobBank/.test(navAction)) refreshKnobScreens(); else { if (/buttonBank/.test(navAction)) refreshButtonArea(); refreshCentreScreen(); } refreshArrowLeds(); log('⇄ ' + ev.control); } return; }
+    if (navAction) { if (ev.value > 0) { engine.nav(st.rt, navAction); if (/knobBank/.test(navAction)) refreshKnobScreens(); else { if (/buttonBank/.test(navAction)) refreshButtonArea(); refreshCenterScreen(); } refreshArrowLeds(); log('⇄ ' + ev.control); } return; }
     if (!c) return;
 
     // Pad in the step sequencer: hold-pad + keys note entry, clear/duplicate, audition
@@ -1163,7 +1163,7 @@
     if (c.group === 'knob') queueKnobValue(c.index); // show adjustment on the SL screens (coalesced #22)
     if (c.group === 'fader') queueFaderLed(c.index, ev.value); // LED brightness tracks value (#2), coalesced (#22)
     // While adjusting a knob or fader, briefly show its value on the 5th screen's
-    // bottom half, tinted the control's own colour (#69).
+    // bottom half, tinted the control's own color (#69).
     if ((c.group === 'knob' || c.group === 'fader') && !st.optionsMode) {
       const a = c.group === 'knob' ? (st.rt.model.knobBanks[st.rt.knobBank] || [])[c.index] : st.rt.model.faders[c.index];
       const val = c.group === 'knob' ? engine.knobDisplay(st.rt, c.index) : ev.value;
@@ -1182,7 +1182,7 @@
     st.rt = runtimeForChannel(st.activeChannel);
     blackout(); // clear every LED so nothing overlaps (#12)
     refreshKnobScreens();
-    if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads(); // pads show grid or dim part colour (#7/#12)
+    if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads(); // pads show grid or dim part color (#7/#12)
     refreshSceneLeds();
     refreshArrowLeds();
     refreshOptionLeds();
@@ -1190,7 +1190,7 @@
     refreshTransport();
     refreshButtonArea();
     refreshChannelLeds();
-    refreshKeyGuide(); // light the keybed in the current Part's colour (#51)
+    refreshKeyGuide(); // light the keybed in the current Part's color (#51)
     for (let i = 0; i < 8; i++) refreshFaderLed(i, 0); // faders start dim (value unknown until moved)
     st.rt.channel = st.activeChannel;
     st.unsub = midi.subscribeInput(st.slInId, onMsg);

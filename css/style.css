@@ -337,29 +337,33 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .insp-cell-chk label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
 .insp-color h4 { margin: 0 0 10px; }
 
-.bank-list { padding: 12px; }
-.bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 8px; }
-.bl-scroll { display: flex; flex-direction: column; gap: 4px; max-height: 360px; overflow: auto; }
-.bl-item { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+.bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.bl-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+.bl-item { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 8px 10px; font: inherit; font-size: 12px; cursor: pointer; }
 .bl-item:hover { border-color: var(--accent); }
 .bl-item.active { background: var(--accent); color: #06122b; border-color: transparent; font-weight: 600; }
-.bl-add { margin-top: 8px; width: 100%; background: none; color: var(--accent); border: 1px dashed var(--line); border-radius: 7px; padding: 7px; font: inherit; font-size: 12px; cursor: pointer; }
-.bl-add:hover { border-color: var(--accent); }
 
 /* ===================== Library columns (#32 / #33 / #77) =============== */
-/* #77: the Templates/Sessions library is a left sidebar BESIDE the tabs. */
-.app-cols { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; padding: 0 16px; }
-.app-main { min-width: 0; }
-.library-col { margin-top: 12px; min-width: 0; }
-@media (max-width: 900px) { .app-cols { grid-template-columns: 1fr; } }
+/* The Templates/Sessions library (left) and Banks (right) are full-height docks
+   flush to the screen edges, not floating panels. The centre scrolls on its own. */
+.app-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 0; align-items: stretch; padding: 0; }
+.app-cols.with-banks { grid-template-columns: 240px minmax(0, 1fr) 240px; }
+.app-main { min-width: 0; min-height: 0; overflow: auto; }
+.library-col { min-width: 0; min-height: 0; height: 100%; display: flex; border-right: 1px solid var(--line); }
+.banks-col { min-width: 0; min-height: 0; height: 100%; display: flex; border-left: 1px solid var(--line); }
+.banks-col:empty { display: none; }
+@media (max-width: 900px) {
+  .app-cols, .app-cols.with-banks { grid-template-columns: 1fr; }
+  .library-col, .banks-col { height: auto; border: none; }
+}
 .seq-main { min-width: 0; }
 
-.lib-col { padding: 12px; position: sticky; top: 12px; }
-.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.lib-col, .bank-list { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px; background: var(--panel); border: none; }
+.lib-head, .bl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-shrink: 0; }
 .lib-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .lib-new { padding: 5px 9px; font-size: 12px; }
-.lib-sort { width: 100%; margin-bottom: 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; font-size: 12px; }
-.lib-scroll { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.lib-sort { width: 100%; margin-bottom: 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 5px 7px; font-size: 12px; flex-shrink: 0; }
+.lib-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
 .lib-item { border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); padding: 7px 8px; display: flex; flex-direction: column; gap: 5px; }
 .lib-item.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .lib-item > .lib-name { text-align: left; background: none; border: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
@@ -382,3 +386,29 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
   transition: opacity .18s ease, transform .18s ease; box-shadow: 0 8px 30px rgba(0,0,0,.4);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===================== Full-height app shell ========================== */
+/* The studio view fills the viewport so the side docks can be full height and
+   the centre column scrolls on its own. */
+#view-studio.view.active { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+#view-studio > .menubar, #view-studio > .status-bar, #view-studio > .pack-bar { flex-shrink: 0; }
+@media (max-width: 900px) {
+  #view-studio.view.active { height: auto; overflow: visible; }
+}
+
+/* ===================== Flat UI: no rounded corners ==================== */
+*, *::before, *::after { border-radius: 0 !important; }
+/* the small brand/status indicators are dots, not corners — keep them round */
+.brand .dot, .brand-mini .dot { border-radius: 50% !important; }
+
+/* ============ Uniform control widths (text / number / select) ========= */
+/* Every text box, value box and dropdown fills its cell so they all line up to
+   the same width instead of sizing to their content. */
+.insp-cell input, .insp-cell select,
+.comp-insp input:not([type=color]), .comp-insp select,
+.settings-inner input:not([type=checkbox]), .settings-inner select { width: 100%; box-sizing: border-box; }
+.settings-inner .field { align-items: stretch; }
+
+/* ===================== Drag-and-drop file loading ==================== */
+.drop-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; text-align: center; padding: 24px; background: rgba(6, 7, 8, .74); color: var(--text); font-size: 18px; font-weight: 600; box-shadow: inset 0 0 0 3px var(--accent); pointer-events: none; }
+.drop-overlay.show { display: flex; }

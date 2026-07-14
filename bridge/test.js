@@ -19,7 +19,7 @@ eq(leds.ledRgb(38, 127, 0, 0, 'solid'),
 eq(leds.hexTo7bit('#ff0000'), { r: 127, g: 0, b: 0 }, 'hexTo7bit red');
 eq(leds.buildLayout({ 'Pad 1': { hex: '#00ff00', behavior: 'pulse' } })[0],
   [0xf0, 0x00, 0x20, 0x29, 0x02, 0x0a, 0x01, 0x03, 38, 0x03, 0, 127, 0, 0xf7],
-  'buildLayout resolves name -> LED id and pulse behaviour');
+  'buildLayout resolves name -> LED id and pulse behavior');
 eq(leds.buildLayout({ '46': { hex: '#0000ff' } })[0].slice(8, 13),
   [46, 0x01, 0, 0, 127], 'buildLayout accepts numeric LED ids (browser export)');
 

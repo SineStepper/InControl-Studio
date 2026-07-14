@@ -4,10 +4,10 @@ This documents the template dump format that Novation Components saves and
 transmits — reverse-engineered from real exports and **verified by bit-exact
 round-trip** (decode → re-encode reproduces the original file byte-for-byte).
 
-> **Bottom line on colours:** templates store control **mappings**, not LED
-> colours. The User Guide is explicit: *"A Template contains mapping data for:
+> **Bottom line on colors:** templates store control **mappings**, not LED
+> colors. The User Guide is explicit: *"A Template contains mapping data for:
 > 16 Rotary Knobs, 16 Pads (both hit and pressure), 8 Faders, 16 Buttons…"*.
-> No RGB/palette colour field is present. See "Colour analysis" below.
+> No RGB/palette color field is present. See "Color analysis" below.
 
 ## Container
 
@@ -86,27 +86,27 @@ counts):
 | 45–60   | 16    | Pads — hit         | 15, 22, 29         |
 | 61–76   | 16    | Pads — pressure    | 16                 |
 
-## Colour analysis
+## Color analysis
 
 - Across two independent templates, every value byte that isn't a label or a
   CC/note number is **`0x7F` (127)** — i.e. the control's **maximum value**.
   A histogram of the whole body shows only: `0x00` padding, printable ASCII
   labels, small CC/note numbers, record flags (`01`), and `0x7F`. There are **no
-  varied colour-palette values and no RGB triples** with real colours.
+  varied color-palette values and no RGB triples** with real colors.
 - The two files differ only in labels and CC/note numbers — never in the `7F`
   value bytes.
-- This matches Components' behaviour (no template LED-colour UI) and the User
+- This matches Components' behavior (no template LED-color UI) and the User
   Guide's description of template contents.
 
-**Conclusion:** LED colours are not part of the template. Custom LED colours are
+**Conclusion:** LED colors are not part of the template. Custom LED colors are
 only controllable *live* via the InControl SysEx API ([PROTOCOL.md](PROTOCOL.md)).
 The **Template Editor** tab ([../index.html#template](../index.html#template))
-edits the template's *mappings* and, for LED-bearing controls, assigns colours
-that are applied live (via Live Colours / the Bridge) rather than stored in the
+edits the template's *mappings* and, for LED-bearing controls, assigns colors
+that are applied live (via Live Colors / the Bridge) rather than stored in the
 file.
 
 > The full per-field byte layout (message type, channel, CC/Note, value range,
-> button/pad behaviour, velocity, knob resolution) is implemented in
+> button/pad behavior, velocity, knob resolution) is implemented in
 > [`../js/sltemplate.js`](../js/sltemplate.js), a JS port of the proven
 > [`inno/slmkiii`](https://github.com/inno/slmkiii) library; it round-trips both
 > sample templates bit-exact.
@@ -115,14 +115,14 @@ file.
 
 Both open questions were settled on hardware:
 
-1. **Editing template bytes does not change LED colour.** A rainbow probe that
+1. **Editing template bytes does not change LED color.** A rainbow probe that
    wrote distinct values to every pad's value bytes (offsets 15/22/29), exported
    with a valid recomputed CRC and imported into Components, produced **no**
-   colour change on the unit.
+   color change on the unit.
 2. **Live RGB SysEx only affects LEDs in InControl view.** Sending the
    `…02 0A 01 03…` LED command while the unit is on a plain template does
    nothing; the LEDs only respond in InControl mode.
 
-**Therefore:** custom LED colours are strictly an InControl-mode, live feature.
+**Therefore:** custom LED colors are strictly an InControl-mode, live feature.
 They cannot be baked into a template or shown in standalone template mode. Use
-the [Live Colours tab](../index.html#customizer) in InControl view.
+the [Live Colors tab](../index.html#customizer) in InControl view.

@@ -3,7 +3,7 @@
 Written after the autonomous stretch that brought the InControl-mode app to
 near-parity with the SL MkIII standalone sequencer (checked against the User
 Guide and Programmer's Guide). Everything below is either a decision I need from
-you or a known follow-up — the implemented behaviour is summarised in
+you or a known follow-up — the implemented behavior is summarised in
 `docs/SEQUENCER-CONTROL.md`.
 
 ## Questions for you
@@ -14,13 +14,13 @@ you or a known follow-up — the implemented behaviour is summarised in
 2. **Session persistence of the new fields.** *(You said yes — here's where it
    stands.)* The `.syx`/pack format stores notes, velocity, gate, tie, chance,
    pattern length/direction/sync, tempo, swing and channel bit-exact. The app's
-   **`.json` setup files now persist everything** (Part colour, chains, per-track
+   **`.json` setup files now persist everything** (Part color, chains, per-track
    swing, micro-steps, automation) — so nothing is lost if you Save/Load setups
    in the app. What's still missing is writing those into the **hardware
    `.syx`/pack** format.
 
    From analysing the 64 factory sessions I found: the byte I earlier thought
-   might be Part colour (`0x117+track*0x2d98`) is actually just the track index
+   might be Part color (`0x117+track*0x2d98`) is actually just the track index
    (always 0-7), and the chain byte (`0x119+track*0x2d98`) holds the chain
    **span** (to−from) but the chain **start**, the stored **active pattern**,
    and the micro-step/swing/automation locations aren't pinned. I won't write
@@ -29,9 +29,9 @@ you or a known follow-up — the implemented behaviour is summarised in
    what it contains, starting from an Init session with one note on Track 1 /
    Pattern 1 / step 1 unless noted:
 
-   - **Part colour:** recolour Track 1 to a distinctive colour, Track 2 to a
-     different one (Templates view → select Part → coloured pad). Two captures,
-     or one with several Parts recoloured.
+   - **Part color:** recolor Track 1 to a distinctive color, Track 2 to a
+     different one (Templates view → select Part → colored pad). Two captures,
+     or one with several Parts recolored.
    - **Pattern chain:** (a) chain patterns **3→5** on Track 1; (b) chain **2→2**
      only (single) vs a 1→4 chain. These pin the chain start + span + how the
      active pattern is stored.
@@ -77,7 +77,7 @@ you or a known follow-up — the implemented behaviour is summarised in
   gate is still rounded to sixths.
 - **Scale note-quantise** (snap/filter/display) could hook into `onKeys` /
   `recordNoteOn` once Scales is wanted.
-- **On-screen pages.** The app has Live Colours, InControl Studio (7 control
+- **On-screen pages.** The app has Live Colors, InControl Studio (7 control
   tabs + Sequencer) and Bridge. Dedicated on-screen Patterns/Automation pages
   would mirror the hardware but aren't essential since the surface is
   hardware-first.

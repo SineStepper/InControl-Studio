@@ -90,8 +90,8 @@ single-field captures).
 Analysis of the 64 factory sessions (per-track header at `0x110 + track*0x2d98`):
 
 - `0x117 + track*0x2d98` is always the **track index** (0-7) in every factory
-  session — a Part identifier, **not** a recolourable colour field. So Part
-  colour can't be read from here; it needs a capture with recoloured Parts.
+  session — a Part identifier, **not** a recolorable color field. So Part
+  color can't be read from here; it needs a capture with recolored Parts.
 - `0x119 + track*0x2d98` is **0** with no chain and equals the **chain span**
   (`to - from`) otherwise (0,1,2,3,7 seen; the single ground-truth chain 1→2
   gave 1). The chain **start** position isn't yet located, and neither is the
@@ -102,7 +102,7 @@ Analysis of the 64 factory sessions (per-track header at `0x110 + track*0x2d98`)
 
 Because none of these can be pinned without controlled captures, `writeSequence`
 still touches only the confirmed fields, so session round-trips stay bit-exact.
-The app's own **`.json` setup files do persist all of these** (colour, chain,
+The app's own **`.json` setup files do persist all of these** (color, chain,
 per-track swing, micro-steps, automation); only the hardware `.syx`/pack format
 is pending. See `docs/QUESTIONS-AND-IDEAS.md` for the exact captures needed.
 
