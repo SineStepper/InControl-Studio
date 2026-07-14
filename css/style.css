@@ -296,20 +296,18 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 
 /* Components-style editor layout (#30) */
 .comp-layout { padding: 14px 18px 22px; display: flex; flex-direction: column; gap: 16px; }
-/* Always an 8-up grid so every control's box is the same size regardless of how
-   many the tab has — wheels (2), pedals (3) and aftertouch (1) just fill fewer
-   columns and align left rather than stretching to fill the row. */
-.glyph-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }
-@media (max-width: 1100px) { .glyph-row { grid-template-columns: repeat(4, 1fr); } }
+/* Small fixed-size control boxes that don't stretch to fill the window — they
+   wrap onto the next row as needed and align left. */
+.glyph-row { display: grid; grid-template-columns: repeat(auto-fill, 66px); gap: 8px; justify-content: start; }
 /* #80: the control-select buttons are square. */
-.glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; color: var(--muted); cursor: pointer; overflow: hidden; }
+.glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
 .glyph-cell.off { opacity: .55; }
 .glyph-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
-.glyph-cell::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, transparent); }
-.gc-name { font-size: 11px; font-weight: 600; text-align: center; line-height: 1.05; }
-.gc-sub { font-size: 9.5px; opacity: .8; text-align: center; }
-.glyph { width: 40px; height: 40px; color: var(--accent); }
+.glyph-cell::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c, transparent); }
+.gc-name { font-size: 9px; font-weight: 600; text-align: center; line-height: 1.05; }
+.gc-sub { font-size: 8px; opacity: .8; text-align: center; }
+.glyph { width: 26px; height: 26px; color: var(--accent); }
 .glyph-cell.off .glyph { color: var(--muted); }
 .glyph svg { width: 100%; height: 100%; display: block; }
 
@@ -329,32 +327,33 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .insp-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 10px; }
 .insp-row:last-child { margin-bottom: 0; }
 @media (max-width: 700px) { .insp-row { grid-template-columns: 1fr; } }
-.insp-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.insp-cell > label { color: var(--muted); font-size: 11px; }
-.insp-cell input[type=number], .insp-cell input[type=text], .insp-cell select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; width: 100%; min-width: 0; }
-.insp-cell input[type=color] { width: 100%; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
-.insp-cell-chk { flex-direction: row; align-items: center; }
-.insp-cell-chk label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+/* Labels sit to the LEFT of every input; text, value, dropdown and colour boxes
+   all share the same width (the flexible remainder of the cell). */
+.insp-cell { display: flex; flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+.insp-cell > label { width: 66px; flex-shrink: 0; color: var(--muted); font-size: 11px; line-height: 1.15; }
+.insp-cell input[type=number], .insp-cell input[type=text], .insp-cell select { flex: 1; width: auto; background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 6px 8px; font-size: 13px; min-width: 0; }
+.insp-cell input[type=color] { flex: 1; width: auto; height: 30px; border: 1px solid var(--line); background: none; cursor: pointer; padding: 2px; }
+.insp-cell-chk > label { width: auto; flex-shrink: 1; display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
 .insp-color h4 { margin: 0 0 10px; }
 
 .bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-.bl-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
-.bl-item { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 8px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+/* Banks bar: a horizontal strip directly under the control boxes. */
+.bank-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bank-bar .bl-title { margin-right: 2px; }
+.bl-item { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font: inherit; font-size: 12px; cursor: pointer; }
 .bl-item:hover { border-color: var(--accent); }
 .bl-item.active { background: var(--accent); color: #06122b; border-color: transparent; font-weight: 600; }
+.bl-add { padding: 7px 14px; }
 
 /* ===================== Library columns (#32 / #33 / #77) =============== */
 /* The Templates/Sessions library (left) and Banks (right) are full-height docks
    flush to the screen edges, not floating panels. The centre scrolls on its own. */
 .app-cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 0; align-items: stretch; padding: 0; }
-.app-cols.with-banks { grid-template-columns: 240px minmax(0, 1fr) 240px; }
 .app-main { min-width: 0; min-height: 0; overflow: auto; }
 .library-col { min-width: 0; min-height: 0; height: 100%; display: flex; border-right: 1px solid var(--line); }
-.banks-col { min-width: 0; min-height: 0; height: 100%; display: flex; border-left: 1px solid var(--line); }
-.banks-col:empty { display: none; }
 @media (max-width: 900px) {
-  .app-cols, .app-cols.with-banks { grid-template-columns: 1fr; }
-  .library-col, .banks-col { height: auto; border: none; }
+  .app-cols { grid-template-columns: 1fr; }
+  .library-col { height: auto; border: none; }
 }
 .seq-main { min-width: 0; }
 
