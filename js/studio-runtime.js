@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null, patternStripTimer: null, notifyBusy: false };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
 
@@ -130,6 +130,16 @@
     st.lastPatternStrip = str;
     send(sysex.screenNotify(str, ''));
   }
+  // The SL auto-dismisses notifications after ~1s, so re-assert the pattern strip
+  // on a timer to keep it on screen. It yields while options mode owns the screens
+  // or while another notification has taken over the area (st.notifyBusy).
+  function startPatternKeepAlive() {
+    stopPatternKeepAlive();
+    st.patternStripTimer = setInterval(() => {
+      if (st.running && !st.optionsMode && !st.notifyBusy) refreshPatternStrip(true);
+    }, 800);
+  }
+  function stopPatternKeepAlive() { if (st.patternStripTimer) { clearInterval(st.patternStripTimer); st.patternStripTimer = null; } }
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
     if (st.screen5) { // a transient overlay owns the bottom row right now
@@ -1196,6 +1206,7 @@
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;
+    startPatternKeepAlive(); // keep the pattern-strip notification from timing out
     $('#se-start').textContent = 'Stop engine';
     $('#se-start').classList.add('running');
     log('Engine started — SL MkIII must be in InControl mode.');
@@ -1203,6 +1214,7 @@
   function stop() {
     if (st.unsub) { st.unsub(); st.unsub = null; }
     if (st.keysUnsub) { st.keysUnsub(); st.keysUnsub = null; }
+    stopPatternKeepAlive();
     st.running = false;
     $('#se-start').textContent = 'Start engine';
     $('#se-start').classList.remove('running');
