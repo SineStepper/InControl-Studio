@@ -410,8 +410,34 @@
   }
   function newSetup() { snapshot(); model = S.newModel(); ui.knobBank = 0; ui.buttonBank = 1; ui.sel = null; syncName(); render(); pushLeds(); setStatus('New setup.', 'ok'); }
 
+  // Restore work saved in this browser (templates / sessions / imported .syx /
+  // sequencer), then keep it saved as you edit. Opt-out + clear live in Settings.
+  function initPersist() {
+    const P = global.SLMK.persist; if (!P) return;
+    try {
+      const saved = P.loadModelJSON();
+      if (saved) { model = S.fromJSON(saved); relinkTemplate(); ui.knobBank = 0; ui.buttonBank = Math.min(1, model.buttonBanks.length - 1); ui.sel = null; }
+    } catch (e) { /* corrupt/incompatible save — fall back to the fresh default model */ }
+    P.startAutosave(() => S.toJSON(model), {
+      onQuota: () => setStatus('Browser storage is full — auto-save paused. Use File ▸ Save to keep a copy.', 'warn'),
+    });
+    // Settings: "Save my work in this browser" toggle + "Clear saved data".
+    const cb = $('#se-persist');
+    if (cb) {
+      cb.checked = P.enabled();
+      cb.addEventListener('change', () => {
+        P.setEnabled(cb.checked);
+        if (cb.checked) { P.saveModel(S.toJSON(model)); setStatus('Your work will be saved in this browser.', 'ok'); }
+        else setStatus('Saved data cleared; auto-save off.', 'ok');
+      });
+    }
+    const clr = $('#se-clear');
+    if (clr) clr.addEventListener('click', () => { P.clearAll(); if (P.enabled()) P.saveModel(S.toJSON(model)); setStatus('Cleared this browser’s saved data.', 'ok'); });
+  }
+
   function init() {
     if (!$('#view-editor')) return;
+    initPersist();
     syncName();
     render();
     initMenus();
