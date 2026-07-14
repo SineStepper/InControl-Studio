@@ -290,8 +290,9 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .menu-pop button:hover, .menu-item:hover { background: var(--panel-2); }
 .menu-sep { height: 1px; background: var(--line); margin: 5px 4px; }
 
-.status-bar { display: flex; align-items: center; gap: 12px; padding: 5px 16px; background: var(--bg); border-bottom: 1px solid var(--line); min-height: 26px; }
+.status-bar { display: flex; align-items: center; gap: 12px; padding: 4px 16px; background: var(--bg); border-bottom: 1px solid var(--line); min-height: 26px; }
 .status-bar .spacer { flex: 1; }
+.status-bar .btn { padding: 3px 12px; }
 
 /* top-level tabs (Editor / Sequencer, #28) */
 .main-tabs { display: flex; gap: 4px; padding: 10px 16px 0; background: var(--bg); }
