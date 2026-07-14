@@ -87,6 +87,37 @@ while auditioning/holding a step) but it is **off by default** for this reason;
 enable it with `SLMK.studioRuntime.setKeyGuide(true)` to experiment (base note
 `LOW_NOTE` in `studio-runtime.js`). The colour editor omits the keybed entirely.
 
+## Screens (InControl notification API)
+
+The eight column screens (below the knobs) are addressed 0–7; the small centre
+screen is column 8. Set a **layout** first, then set **properties** on the
+objects within each column.
+
+```
+Layout:    F0 00 20 29 02 0A 01 01 <layout> F7          # 0 empty, 1 knob, 2 box
+Property:  F0 00 20 29 02 0A 01 02 <col> <type> <obj> <data…> F7
+```
+
+| Property `type` | Meaning | Data |
+| --------------- | ------- | ---- |
+| `01` | Text  | 7-bit ASCII, ≤9 chars, NUL-terminated |
+| `03` | Value | one byte 0–127 (drives the knob arc) |
+| `04` | RGB   | `<R> <G> <B>`, 0–127 each |
+
+**Objects within a column** (knob layout):
+
+| `obj` | Position | Used for |
+| ----- | -------- | -------- |
+| `0` | Top row  | knob name (text) / top-bar colour |
+| `1` | Knob icon | the value arc (value) + its number (text) + icon colour (RGB) |
+| `2` | Below the knob | text / bottom-bar colour |
+| `3` | Bottom edge | the lowest text row (labels hug the bottom here) |
+
+This app tints the top (`obj 0`) and bottom (`obj 2`) bars in the current
+Part's colour — the active menu's colour in options mode — for at-a-glance
+colour coding, keeps Part labels on the bottom row (`obj 3`), and draws a live
+two-row playhead graphic across the 5th screen's lower half (`obj 2`/`obj 3`).
+
 ## Device inquiry (identify the unit)
 
 Standard MIDI Device Inquiry works:

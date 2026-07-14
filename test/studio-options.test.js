@@ -119,4 +119,13 @@ Q.toggleStepNote(chordP, 0, 64, 89, 6); // step 0 has velocities 25 and 89
 O.applyKnob(seq(), chordP, 'velocity', 0, +1, 0, false); // nudge up from the max (89)
 eq(chordP.steps[0].notes.map((x) => x.velocity), [90, 90], 'both notes snap to 90 (max 89 +1)');
 
+// #66 two-row step graphic: playhead '#', note steps 'o', empty '-'
+const sbp = Q.newPattern();
+Q.toggleStepNote(sbp, 0, 60, 100, 6); // step 1 has a note
+Q.toggleStepNote(sbp, 10, 62, 100, 6); // step 11 has a note
+const bars = O.stepBars(sbp, 4); // playhead on step 5 (index 4)
+eq(bars[0], 'o---#---', '#66 steps 1-8 row: note on 1, playhead on 5');
+eq(bars[1], '--o-----', '#66 steps 9-16 row: note on 11');
+eq(O.stepBars(sbp, -1)[0], 'o-------', '#66 stopped (head -1) shows no playhead marker');
+
 console.log('\n' + n + ' assertions passed');

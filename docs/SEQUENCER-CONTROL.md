@@ -26,6 +26,15 @@ logic in `js/studio-options.js`.
   (1-8). Selecting a channel moves the sequencer track to match, routes
   `default`-channel controls to that channel, and swaps in that channel's
   **assigned template** if one is set (Studio → "Per-channel instruments" bar).
+- **Per-Part control values (#60):** every Part has its **own** control state —
+  knob (endless-encoder) values, button toggles, inc/dec counters — so switching
+  Parts never drags the previous Part's knob values along. Bank/pad-mode position
+  carries over so paging still feels continuous.
+- **Held notes on Part switch (#64):** changing Parts while holding a key sends a
+  note-off on the note's **origin** channel so it can't hang on the wrong Part. If
+  the **sustain pedal** is down the destination synth holds the note (so it keeps
+  ringing until you release the pedal), and the pedal follows whichever Part is
+  selected — exactly like a hardware multitimbral part switch.
 - **Soft 9-24** (the 16 buttons above the faders) are the fixed **Mute/Solo**
   bank: Soft 9-16 = Mute 1-8, Soft 17-24 = Solo 1-8. They send no MIDI of their
   own — only their colour is editable (Mute orange, Solo light blue by default).
@@ -54,6 +63,9 @@ pressed, unless stated below.**
   dim white — all flash white when pressed.
 - **Up/down arrows** (Pads, Screen, Right-Soft) light only when there's somewhere
   to go; Screen Up/Down mirror Pads Up/Down (pattern paging).
+- **Metronome grid flash (Grid, id 64):** the **downbeat** (first beat of the
+  pattern/bar — the accented click) flashes **green**; the other beats flash
+  **yellow** (#61).
 - **Faders/wheels** have no idle/pressed state — LED brightness tracks value.
 - Every change is pushed to the SL MkIII automatically (no refresh button).
 - **Keybed light guide** (SysEx ids 54-114): **off by default.** The

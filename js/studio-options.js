@@ -136,6 +136,21 @@
     return list[clamp(i + delta, 0, list.length - 1)];
   }
 
+  // A two-row, 8-char-per-row "graphic" of a pattern's 16 steps for the SL column
+  // screens (#66): the currently-playing step (`head`, 0-15, or -1 when stopped) is
+  // marked '#', steps that hold notes 'o', and empty steps '-'. Row 0 = steps 1-8,
+  // row 1 = steps 9-16, so the two rows together fill the bottom half of a screen.
+  function stepBars(pattern, head) {
+    const rows = ['', ''];
+    const steps = (pattern && pattern.steps) || [];
+    for (let i = 0; i < 16; i++) {
+      const s = steps[i];
+      const has = s && s.notes && s.notes.length;
+      rows[i >> 3] += (i === head ? '#' : (has ? 'o' : '-'));
+    }
+    return rows;
+  }
+
   // A "small white box" for the gate readout (0-5 of them = the ⅙-step remainder).
   // The SL screen text is 7-bit ASCII, so we use the most box-like printable glyph.
   const boxes = (n) => Array(Math.max(0, Math.min(5, n)) + 1).join('#');
@@ -258,7 +273,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studioOptions = {
     MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
-    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, dim, scaleColor, valueColor, lighten,
+    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, stepBars, dim, scaleColor, valueColor, lighten,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
 })(typeof window !== 'undefined' ? window : globalThis);
