@@ -140,12 +140,12 @@
     });
     layout.appendChild(glyphRow);
 
-    // Banks sit directly under the control boxes (Encoders / Buttons only).
+    // Banks sit to the RIGHT of the inspector, matching its height (Encoders /
+    // Buttons only); other tabs have no banks so the inspector spans full width.
     const banks = bankList();
-    if (banks) layout.appendChild(banks);
-
-    const cols = el('div', { className: 'comp-cols no-banks' });
+    const cols = el('div', { className: 'comp-cols' + (banks ? '' : ' no-banks') });
     cols.appendChild(inspector(controls[ui.sel] || null)); // grouped inspector (#80)
+    if (banks) cols.appendChild(banks);
     layout.appendChild(cols);
     host.appendChild(layout);
   }
@@ -207,21 +207,25 @@
   const hasBanks = (tab) => tab === 'rotary' || tab === 'buttons';
   function bankList() {
     if (!hasBanks(ui.tab)) return null;
-    // A horizontal bar sitting under the control boxes: the bank chooser + Add.
-    const bar = el('div', { className: 'bank-bar' });
-    bar.appendChild(el('span', { className: 'bl-title' }, 'Banks'));
-    const item = (label, active, on) => { const b = el('button', { className: 'bl-item' + (active ? ' active' : '') }, label); b.addEventListener('click', on); return b; };
+    // A vertical column beside the inspector: Banks title + Add, then the list.
+    const aside = el('aside', { className: 'bank-list panel' });
+    const head = el('div', { className: 'bl-head' });
+    head.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
     const add = el('button', { className: 'btn primary bl-add' }, 'Add');
+    head.appendChild(add);
+    aside.appendChild(head);
+    const list = el('div', { className: 'bl-scroll' });
+    const item = (label, active, on) => { const b = el('button', { className: 'bl-item' + (active ? ' active' : '') }, label); b.addEventListener('click', on); return b; };
 
     if (ui.tab === 'rotary') {
-      model.knobBanks.forEach((_, i) => bar.appendChild(item('Knob bank ' + (i + 1), i === ui.knobBank, () => { ui.knobBank = i; ui.sel = null; render(); })));
+      model.knobBanks.forEach((_, i) => list.appendChild(item('Knob bank ' + (i + 1), i === ui.knobBank, () => { ui.knobBank = i; ui.sel = null; render(); })));
       add.addEventListener('click', () => { snapshot(); ui.knobBank = S.addKnobBank(model); ui.sel = null; render(); });
     } else { // buttons
-      model.buttonBanks.forEach((_, i) => bar.appendChild(item(i === 0 ? 'Mute / Solo (fixed)' : 'Bank ' + i, i === ui.buttonBank, () => { ui.buttonBank = i; ui.sel = null; render(); })));
+      model.buttonBanks.forEach((_, i) => list.appendChild(item(i === 0 ? 'Mute / Solo (fixed)' : 'Bank ' + i, i === ui.buttonBank, () => { ui.buttonBank = i; ui.sel = null; render(); })));
       add.addEventListener('click', () => { snapshot(); ui.buttonBank = S.addButtonBank(model); ui.sel = null; render(); });
     }
-    bar.appendChild(add);
-    return bar;
+    aside.appendChild(list);
+    return aside;
   }
 
   function summary(a) {

@@ -312,7 +312,9 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .glyph-cell.off .glyph { color: var(--muted); }
 .glyph svg { width: 100%; height: 100%; display: block; }
 
-.comp-cols { display: grid; grid-template-columns: 1fr 220px; gap: 18px; align-items: start; }
+/* Inspector on the left, Banks column on the right (same width as the library
+   column, stretched to the inspector's height). */
+.comp-cols { display: grid; grid-template-columns: 1fr 240px; gap: 18px; align-items: stretch; }
 .comp-cols.no-banks { grid-template-columns: 1fr; } /* #78 no Banks column for single-set controls */
 @media (max-width: 900px) { .comp-cols { grid-template-columns: 1fr; } }
 .comp-insp .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
@@ -338,9 +340,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .insp-color h4 { margin: 0 0 10px; }
 
 .bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-/* Banks bar: a horizontal strip directly under the control boxes. */
-.bank-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.bank-bar .bl-title { margin-right: 2px; }
+.bl-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 4px; overflow: auto; }
 .bl-item { text-align: left; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); padding: 7px 12px; font: inherit; font-size: 12px; cursor: pointer; }
 .bl-item:hover { border-color: var(--accent); }
 .bl-item.active { background: var(--accent); color: #06122b; border-color: transparent; font-weight: 600; }
@@ -358,7 +358,9 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 }
 .seq-main { min-width: 0; }
 
-.lib-col, .bank-list { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px; background: var(--panel); border: none; }
+.lib-col { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px; background: var(--panel); border: none; }
+/* Banks column beside the inspector — a panel that fills the row height. */
+.bank-list { min-height: 0; display: flex; flex-direction: column; padding: 12px; }
 .lib-head, .bl-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; flex-shrink: 0; }
 .lib-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .lib-new { padding: 5px 9px; font-size: 12px; }
