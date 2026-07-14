@@ -532,7 +532,7 @@ ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
 ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
-ok(stxt(8, 3) != null && stxt(8, 4) != null, '#66 the step/chain animation is on the 5th screen (column 8, objs 3 & 4)');
+ok(stxt(8, 0) != null && stxt(8, 0).length === 8, '#66 the 8-pattern chain strip is on the 5th screen TOP edge (column 8, obj 0)');
 st.running = false;
 
 // --- centre screen: three stable rows; button label tinted the (stable) button
@@ -544,12 +544,12 @@ mark = sent.length;
 RT.refreshSurface();
 const cscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8);
 const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
-ok(ctxt(2) === 'Mute Solo', 'centre screen row 3 labels the Mute/Solo bank');
-ok(ctxt(0) === 'Part 1', 'centre screen row 1 shows the Part name exactly once');
+ok(ctxt(1) === 'Part 1', '5th screen shows the Part name (row below the pattern strip) exactly once');
+ok(ctxt(3) === 'Mute Solo', '5th screen labels the Mute/Solo bank');
 const cRgb = (obj) => cscr.find((m) => m.bytes[9] === 0x04 && m.bytes[10] === obj);
-const muteBar = cRgb(2);
+const muteBar = cRgb(3);
 ok(muteBar && muteBar.bytes[11] > muteBar.bytes[13], 'button label is tinted the mute colour (orange: R > B), not the Part colour');
-ok(!cRgb(0) && !cRgb(1), 'centre screen Part name / knob-bank rows are NOT tinted the Part colour (no per-Part colour change)');
+ok(!cRgb(1) && !cRgb(2), '5th screen Part name / knob-bank rows are NOT tinted the Part colour (no per-Part colour change)');
 
 // --- #68 knob screen top bar only appears for ENABLED knobs ---
 model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
@@ -565,8 +565,8 @@ Object.assign(model.knobBanks[0][0], { message_type: 'CC', cc: 74, start: 0, end
 st.channelRt = {}; RT.handleControl(CC(0x33 + 0, 127));
 mark = sent.length;
 RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
-const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8 && m.bytes[9] === 0x01 && (m.bytes[10] === 3 || m.bytes[10] === 4));
-ok(v5.length > 0, '#69 turning a knob writes a value overlay onto the 5th screen (column 8 bottom half)');
+const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8 && m.bytes[9] === 0x01 && (m.bytes[10] === 4 || m.bytes[10] === 5));
+ok(v5.length > 0, '#69 turning a knob writes a value overlay onto the 5th screen bottom half (column 8, objs 4/5)');
 st.screen5 = null; st.running = false;
 
 console.log('\n' + n + ' integration assertions passed');

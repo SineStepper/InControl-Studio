@@ -136,6 +136,24 @@
     return list[clamp(i + delta, 0, list.length - 1)];
   }
 
+  // A one-row "graphic" of a track's 8 patterns for the top edge of the 5th screen
+  // (#66, revised): the current/playing pattern is '#', chained patterns (members
+  // of the active chain, other than the current one) are '+' (filled), and
+  // unchained patterns are '-' (unfilled). The whole strip is drawn in white, so
+  // per-character colour isn't needed — the glyphs carry the three states.
+  function patternStrip(active, chain, count) {
+    const n = count || 8;
+    const lo = chain ? Math.min(chain.from, chain.to) : -1;
+    const hi = chain ? Math.max(chain.from, chain.to) : -1;
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      if (i === active) s += '#';                 // current / playing — white
+      else if (chain && i >= lo && i <= hi) s += '+'; // chained — filled box
+      else s += '-';                              // unchained — unfilled box
+    }
+    return s;
+  }
+
   // A two-row, 8-char-per-row "graphic" of a pattern's 16 steps for the SL column
   // screens (#66): the currently-playing step (`head`, 0-15, or -1 when stopped) is
   // marked '#', steps that hold notes 'o', and empty steps '-'. Row 0 = steps 1-8,
@@ -285,7 +303,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.studioOptions = {
     MENUS, MENU_ORDER, MENU_BUTTONS, MICROSTEP_BUTTONS, LIGHT_ORANGE, DIRECTIONS, SYNC_ORDER, SYNC_DISPLAY,
-    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, stepBars, avgColor, dim, scaleColor, valueColor, lighten,
+    menuForButton, menuLabelForButton, applyKnob, columns, softLeds, arrowLeds, patternPadLeds, stepBars, patternStrip, avgColor, dim, scaleColor, valueColor, lighten,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.SLMK.studioOptions;
 })(typeof window !== 'undefined' ? window : globalThis);

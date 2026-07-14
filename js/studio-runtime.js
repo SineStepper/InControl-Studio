@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -91,30 +91,37 @@
       send(sysex.screenText(i, 3, partLabel(i)));          // part label hugging the bottom edge (#58/#65)
     }
     refreshCentreScreen();
-    refresh5thScreen(true); // 5th screen bottom half: step graphic / value / part names (#66/#69)
+    refreshPatternStrip(true); // 5th screen TOP edge: the 8-pattern chain strip (#66)
+    refresh5thScreen(true);    // 5th screen bottom: transient value / part-name overlay (#69)
   }
-  // The bottom half of the 5th screen (column 8, objects 3 & 4) is a shared info
-  // area. Priority: a transient overlay wins while it's active (a knob/fader value
-  // being adjusted, or the two Part names on a Patterns-view page change, #69);
-  // otherwise it shows the selected Part's playing-step / chained-pattern graphic
-  // (#66). The 5th screen is protocol column 8 (the centre notification screen).
-  const S5 = 8, S5_TOP = 3, S5_BOT = 4; // 5th screen + its two bottom-half text rows
+  // The 5th screen is protocol column 8 (the centre notification screen). Its
+  // TOP edge (object 0) is a full-width strip of the selected Part's 8 patterns
+  // (#66); the two rows of its BOTTOM half (objects 4 & 5) are a transient overlay
+  // for a knob/fader value being adjusted or the two Part names on a Patterns-view
+  // page change (#69).
+  const S5 = 8, S5_STRIP = 0, S5_TOP = 4, S5_BOT = 5;
+  // Top-edge pattern strip: filled boxes for chained patterns, white for the
+  // current/playing one, unfilled for the rest — drawn in white (#66).
+  function refreshPatternStrip(force) {
+    if (!st.slOutId || !sysex || st.optionsMode) return;
+    const t = curTrack(); if (!t) return;
+    const str = opts().patternStrip(t.activePattern, t.chain, SEQ().PATTERNS);
+    if (!force && st.lastPatternStrip === str) return;
+    st.lastPatternStrip = str;
+    send(sysex.screenText(S5, S5_STRIP, str));
+    send(sysex.screenRgb(S5, S5_STRIP, 127, 127, 127)); // white
+  }
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
-    if (st.screen5) { // an overlay owns the area right now
+    if (st.screen5) { // a transient overlay owns the bottom half right now
       send(sysex.screenText(S5, S5_TOP, st.screen5.top || ''));
       send(sysex.screenText(S5, S5_BOT, st.screen5.bottom || ''));
       const c = sysex.hexTo7bit(st.screen5.color || '#ffffff');
       send(sysex.screenRgb(S5, S5_TOP, c.r, c.g, c.b));
-      return;
+    } else if (force) { // no overlay: clear the bottom half
+      send(sysex.screenText(S5, S5_TOP, ''));
+      send(sysex.screenText(S5, S5_BOT, ''));
     }
-    const p = gridPattern(); if (!p) return;
-    const head = (seqIsPlaying() && st.seqRt && st.seqRt.pos[st.gridTrack]) ? st.seqRt.pos[st.gridTrack].pad : -1;
-    if (!force && st.lastStepScreen === head) return;
-    st.lastStepScreen = head;
-    const rows = opts().stepBars(p, head);
-    send(sysex.screenText(S5, S5_TOP, rows[0]));
-    send(sysex.screenText(S5, S5_BOT, rows[1]));
   }
   // Show a transient two-line overlay on the 5th screen's bottom half, then revert
   // to the step graphic after `ms` (#69). `color` tints the top line. Only repaints
@@ -154,22 +161,21 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // 5th screen (protocol column 8) top rows: Part name, knob bank name, button
-  // bank name. Its bottom half (objects 3 & 4) is the chained-pattern / step
-  // animation, owned by refresh5thScreen(). Only the button-bank label is tinted,
-  // with the stable BUTTON colour (mute orange), so nothing here changes colour as
-  // Parts change.
+  // 5th screen (protocol column 8) text rows below the top pattern strip (object
+  // 0): Part name, knob bank name, button bank name. Only the button-bank label is
+  // tinted, with the stable BUTTON colour (mute orange), so nothing here changes
+  // colour as Parts change. Object 0 is the pattern strip (refreshPatternStrip),
+  // objects 4 & 5 are the transient overlay (refresh5thScreen).
   function refreshCentreScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
     const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
     const bank = (st.rt.buttonBank || 0);
-    send(sysex.screenText(8, 0, name));                                   // row 1: part name
-    send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // row 2: knob bank
-    send(sysex.screenText(8, 2, bank === 0 ? 'Mute Solo' : 'Btns ' + (bank + 1))); // row 3: button bank
+    send(sysex.screenText(8, 1, name));                                   // row: part name
+    send(sysex.screenText(8, 2, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // row: knob bank
+    send(sysex.screenText(8, 3, bank === 0 ? 'Mute Solo' : 'Btns ' + (bank + 1))); // row: button bank
     const bc = sysex.hexTo7bit(bank === 0 ? '#ff6a00' : buttonRowAvg(false)); // stable button colour
-    send(sysex.screenRgb(8, 2, bc.r, bc.g, bc.b));
-    // rows 3 & 4 (the bottom half) are drawn by refresh5thScreen() — the animation.
+    send(sysex.screenRgb(8, 3, bc.r, bc.g, bc.b));
   }
 
   // ---- sequencer clock / transport ----
@@ -349,7 +355,7 @@
       const head = st.seqRt.pos[st.gridTrack] ? st.seqRt.pos[st.gridTrack].pad : -1;
       if (head !== st.lastGridHead) { st.lastGridHead = head; refreshGrid(); }
     }
-    if (!st.optionsMode) refresh5thScreen(); // animate the 5th-screen step graphic as the head moves (#66)
+    if (!st.optionsMode) refreshPatternStrip(); // update the 5th-screen pattern strip as the chain advances (#66)
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
 
@@ -412,7 +418,7 @@
     // No MIDI Stop (FC) to the SL either — see seqPlay (#34).
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     panicAllChannels(); // Stop also sends All-Notes-Off to every channel so nothing hangs (#59)
-    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (!st.optionsMode) refresh5thScreen(true); } // clear the 5th-screen playhead marker (#66)
+    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (!st.optionsMode) refreshPatternStrip(true); } // chain reset to its first pattern -> repaint the strip (#66/#70)
     notify();
   }
   const seqIsPlaying = () => !!st.clock;
@@ -1069,7 +1075,7 @@
         else { sel = { activePattern: col, chain: null }; log((instant ? 'pattern ' : 'queued pattern ') + (col + 1)); }
         if (instant) { t.activePattern = sel.activePattern; t.chain = sel.chain; t.pending = null; }
         else t.pending = sel;
-        refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify();
+        refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); else refreshPatternStrip(); notify();
       } else if (ev.value === 0) { st.heldPatterns.delete(c.index); }
       return;
     }
