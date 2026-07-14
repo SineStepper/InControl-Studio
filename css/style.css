@@ -9,6 +9,11 @@
   --ok: #4fe0a6;
   --warn: #ffc55a;
   --radius: 10px;
+  /* Control-box size + the derived editing-box width (8 boxes across). */
+  --glyph-size: 80px;
+  --glyph-gap: 8px;
+  --edit-w: calc(8 * var(--glyph-size) + 7 * var(--glyph-gap));
+  --zoom: 1.3; /* whole-UI scale, like browser zoom */
 }
 :root[data-theme="light"] {
   --bg: #eef1f5;
@@ -263,8 +268,12 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 /* ============================ MENU-BAR LAYOUT (#30) ==================== */
 .menubar {
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
-  gap: 14px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+  gap: 14px; padding: 3px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
 }
+/* Half-height menu bar: shrink the interactive controls' vertical size. */
+.menubar .btn, .menubar .menu-btn { padding-top: 3px; padding-bottom: 3px; }
+.menubar select { padding-top: 2px; padding-bottom: 2px; }
+.menubar .icon-btn { width: 28px; height: 28px; font-size: 15px; }
 .mb-left { display: flex; align-items: center; gap: 4px; }
 .mb-center { display: flex; align-items: center; gap: 8px; justify-self: center; flex-wrap: wrap; }
 .mb-right { display: flex; align-items: center; gap: 10px; justify-self: end; }
@@ -299,7 +308,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 /* Small fixed-size control boxes on a fixed 8-column grid — knobs 1-8 on one
    row, buttons/pads 1-8 on top and 9-16 below. They keep their size and align
    left instead of stretching to fill the window. */
-.glyph-row { display: grid; grid-template-columns: repeat(8, 80px); gap: 8px; justify-content: start; }
+.glyph-row { display: grid; grid-template-columns: repeat(8, var(--glyph-size)); gap: var(--glyph-gap); justify-content: start; }
 /* #80: the control-select buttons are square. */
 .glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
@@ -312,11 +321,13 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .glyph-cell.off .glyph { color: var(--muted); }
 .glyph svg { width: 100%; height: 100%; display: block; }
 
-/* Inspector on the left, Banks column on the right (same width as the library
-   column, stretched to the inspector's height). */
-.comp-cols { display: grid; grid-template-columns: 1fr 240px; gap: 18px; align-items: stretch; }
-.comp-cols.no-banks { grid-template-columns: 1fr; } /* #78 no Banks column for single-set controls */
-@media (max-width: 900px) { .comp-cols { grid-template-columns: 1fr; } }
+/* The editing box is exactly as wide as the 8-column glyph grid; the Banks
+   column sits to its right (same width as the library column, stretched to the
+   inspector's height) and simply disappears when the control has no banks. */
+.comp-cols { display: flex; gap: 18px; align-items: stretch; }
+.comp-insp { width: var(--edit-w); flex-shrink: 0; }
+.comp-cols .bank-list { width: 240px; flex-shrink: 0; }
+@media (max-width: 900px) { .comp-insp { width: 100%; } }
 .comp-insp .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .comp-insp .field > label { width: 92px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
 .comp-insp input[type=number], .comp-insp input[type=text], .comp-insp select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; }
@@ -390,12 +401,18 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ===================== Full-height app shell ========================== */
+/* Scale the whole UI to 130%, like setting the browser zoom to 130%. The shell
+   height is divided by the zoom so 100vh still maps to exactly one screen. */
+html { zoom: var(--zoom); }
 /* The studio view fills the viewport so the side docks can be full height and
    the centre column scrolls on its own. */
-#view-studio.view.active { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+#view-studio.view.active { display: flex; flex-direction: column; height: calc(100vh / var(--zoom)); overflow: hidden; }
 #view-studio > .menubar, #view-studio > .status-bar, #view-studio > .pack-bar { flex-shrink: 0; }
+/* Keep the status bar pinned to the bottom of the window regardless of size. */
+#view-studio > .status-bar { order: 5; border-top: 1px solid var(--line); border-bottom: none; }
 @media (max-width: 900px) {
   #view-studio.view.active { height: auto; overflow: visible; }
+  #view-studio > .status-bar { position: sticky; bottom: 0; }
 }
 
 /* ===================== Flat UI: no rounded corners ==================== */
