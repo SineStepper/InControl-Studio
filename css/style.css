@@ -296,9 +296,10 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 
 /* Components-style editor layout (#30) */
 .comp-layout { padding: 14px 18px 22px; display: flex; flex-direction: column; gap: 16px; }
-/* Small fixed-size control boxes that don't stretch to fill the window — they
-   wrap onto the next row as needed and align left. */
-.glyph-row { display: grid; grid-template-columns: repeat(auto-fill, 66px); gap: 8px; justify-content: start; }
+/* Small fixed-size control boxes on a fixed 8-column grid — knobs 1-8 on one
+   row, buttons/pads 1-8 on top and 9-16 below. They keep their size and align
+   left instead of stretching to fill the window. */
+.glyph-row { display: grid; grid-template-columns: repeat(8, 66px); gap: 8px; justify-content: start; }
 /* #80: the control-select buttons are square. */
 .glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 3px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
