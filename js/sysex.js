@@ -114,6 +114,12 @@
   }
   // Set an RGB colour property (type 4) on a column's object.
   function screenRgb(col, obj, r, g, b) { return HEADER.concat([0x02, col & 0x7f, 0x04, obj & 0x7f, clamp7(r), clamp7(g), clamp7(b), EOX]); }
+  // Centre-screen notification (command 0x04): up to two lines of 7-bit ASCII shown
+  // across the top of the centre screen. Each line is NUL-terminated.
+  function screenNotify(line1, line2) {
+    const enc = (s) => { const t = []; for (const ch of String(s || '').slice(0, 9)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00); return t; };
+    return HEADER.concat([0x04], enc(line1), enc(line2 || ''), [EOX]);
+  }
 
   global.SLMK = global.SLMK || {};
   global.SLMK.sysex = {
@@ -133,5 +139,6 @@
     screenValue,
     screenText,
     screenRgb,
+    screenNotify,
   };
 })(window);

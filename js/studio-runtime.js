@@ -102,16 +102,17 @@
   //   obj 3  text = "Solo" (right, bottom);                   colour = RIGHT-BOTTOM bar
   //   obj 4  text = the 8-pattern chain strip on the VERY TOP edge (full width)
   //   obj 5  text = transient overlay (knob/fader value, or paged-to Part names)
-  const S5 = 8, S5_STRIP = 4, S5_OVERLAY = 5;
-  // Very-top-edge pattern strip: '#' current/playing, '+' chained, '-' unchained (#66).
+  const S5 = 8, S5_OVERLAY = 5;
+  // Very-top-edge pattern strip on the centre screen, via the notification command
+  // (the property text objects have no row above obj 0). '#' current/playing,
+  // '+' chained, '-' unchained (#66). Change-detected so it isn't re-sent per tick.
   function refreshPatternStrip(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
     const t = curTrack(); if (!t) return;
     const str = opts().patternStrip(t.activePattern, t.chain, SEQ().PATTERNS);
     if (!force && st.lastPatternStrip === str) return;
     st.lastPatternStrip = str;
-    send(sysex.screenText(S5, S5_STRIP, str));
-    send(sysex.screenRgb(S5, S5_STRIP, 127, 127, 127)); // white (also makes the object render)
+    send(sysex.screenNotify(str, ''));
   }
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
@@ -776,20 +777,24 @@
       st.optScreenMenu = st.optionsMenu; st.optScreenLayout = 1;
     } else if (st.optScreenLayout !== 1) { send(sysex.screenLayout(1)); st.optScreenLayout = 1; }
     const menu = opts().MENUS[st.optionsMenu];
-    const mc = sysex.hexTo7bit((menu && menu.color) || '#ffffff'); // colour the screens in the active menu's colour (#63)
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
       send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name (blank if unused)
-      send(sysex.screenRgb(i, 0, mc.r, mc.g, mc.b));              // top bar in the menu colour (#63)
-      send(sysex.screenRgb(i, 2, mc.r, mc.g, mc.b));              // bottom bar in the menu colour (#63)
       if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph ONLY where there's a real value (#6)
       send(sysex.screenText(i, 1, c ? (c.bottom || '') : ''));    // reading above the icon: number / % / gate "N ###"
-      send(sysex.screenText(i, 3, opts().menuLabelForButton(i))); // bottom row (hugging the edge), above each button = the menu it selects (#57/#65)
+      // Each menu button's screen shows its label with a colour bar below it, in
+      // that menu's fixed colour (Velocity red, Gate green, Chance orange, Tempo
+      // white, Pattern dark blue) — and NO bar where there's no label (#68 revised).
+      // obj 3's colour renders in the row below its text (same one-object offset as
+      // the centre screen), i.e. between the label and its soft button.
+      const mk = opts().menuForButton(i);
+      send(sysex.screenText(i, 3, opts().menuLabelForButton(i))); // menu label (hugging the bottom edge)
+      const barHex = mk ? (mk === 'pattern' ? '#000080' : opts().MENUS[mk].color) : '#000000';
+      const bar = sysex.hexTo7bit(barHex);
+      send(sysex.screenRgb(i, 3, bar.r, bar.g, bar.b));           // per-menu colour bar (black = none where no label)
     }
     // Centre screen: step page at the top (#6).
     send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
-    send(sysex.screenRgb(8, 0, mc.r, mc.g, mc.b));
-    send(sysex.screenRgb(8, 2, mc.r, mc.g, mc.b));
     send(sysex.screenText(8, 2, menu ? menu.label : ''));
   }
   // Tempo / swing / sync changed while playing → retune the running clock in place

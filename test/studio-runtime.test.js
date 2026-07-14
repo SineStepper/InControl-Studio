@@ -90,6 +90,12 @@ function scrText(col, obj) { const m = scr6.find((x) => x.bytes[8] === col && x.
 ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
 ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
 ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
+// #68 each menu button's screen has a colour bar (obj 3) in its menu colour; none where there's no label
+const optRgb = (col) => scr6.find((m) => m.bytes[9] === 0x04 && m.bytes[8] === col && m.bytes[10] === 3);
+const velBar = optRgb(0); // Velocity -> red
+ok(velBar && velBar.bytes[11] > 0 && velBar.bytes[12] === 0 && velBar.bytes[13] === 0, '#68 Velocity menu bar is red (obj 3)');
+const emptyBar = optRgb(4); // no menu maps to soft button 5 -> no colour
+ok(!emptyBar || (emptyBar.bytes[11] === 0 && emptyBar.bytes[12] === 0 && emptyBar.bytes[13] === 0), '#68 a column with no menu label gets no colour bar');
 
 // #37 gate shows text (# boxes + number) but NO knob glyph, and the screen isn't blank
 mark = sent.length;
@@ -532,7 +538,9 @@ ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
 ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
-ok(stxt(8, 4) != null && stxt(8, 4).length === 8, '#66 the 8-pattern chain strip is on the 5th screen TOP edge (column 8, obj 4)');
+const notif = sent.slice(mark).find((m) => m.bytes[7] === 0x04);
+ok(notif, '#66 the 8-pattern chain strip is sent via the centre-screen notification command (0x04)');
+{ let s = ''; for (let i = 8; i < notif.bytes.length && notif.bytes[i] !== 0; i++) s += String.fromCharCode(notif.bytes[i]); ok(s.length === 8, '#66 the notification carries the 8-pattern strip'); }
 st.running = false;
 
 // --- 5th screen (column 8): knob bank / part name / Mute+Solo rows, with the
