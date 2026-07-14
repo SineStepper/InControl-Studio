@@ -288,7 +288,7 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .main-tabs { display: flex; gap: 4px; padding: 10px 16px 0; background: var(--bg); }
 .mtab { background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-bottom: none; border-radius: 10px 10px 0 0; padding: 9px 22px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .mtab:hover { color: var(--text); }
-.mtab.active { color: var(--text); background: var(--panel-2); border-color: var(--line); }
+.mtab.active { color: #06122b; background: var(--accent); border-color: transparent; }
 .mview { display: none; }
 .mview.active { display: block; }
 
@@ -299,7 +299,8 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .glyph-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }
 .glyph-row[data-count="1"], .glyph-row[data-count="2"], .glyph-row[data-count="3"] { grid-template-columns: repeat(4, minmax(0, 160px)); }
 @media (max-width: 1100px) { .glyph-row { grid-template-columns: repeat(4, 1fr); } }
-.glyph-cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 6px 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; color: var(--muted); cursor: pointer; overflow: hidden; }
+/* #80: the control-select buttons are square. */
+.glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
 .glyph-cell.off { opacity: .55; }
 .glyph-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -311,11 +312,28 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .glyph svg { width: 100%; height: 100%; display: block; }
 
 .comp-cols { display: grid; grid-template-columns: 1fr 220px; gap: 18px; align-items: start; }
+.comp-cols.no-banks { grid-template-columns: 1fr; } /* #78 no Banks column for single-set controls */
 @media (max-width: 900px) { .comp-cols { grid-template-columns: 1fr; } }
 .comp-insp .field { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
 .comp-insp .field > label { width: 92px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
 .comp-insp input[type=number], .comp-insp input[type=text], .comp-insp select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; }
 .comp-insp input[type=color] { width: 48px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
+
+/* Grouped inspector sections with three-column rows (#80) */
+.insp-sec { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.insp-sechead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.insp-sec h4 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.insp-enable { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.insp-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 10px; }
+.insp-row:last-child { margin-bottom: 0; }
+@media (max-width: 700px) { .insp-row { grid-template-columns: 1fr; } }
+.insp-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.insp-cell > label { color: var(--muted); font-size: 11px; }
+.insp-cell input[type=number], .insp-cell input[type=text], .insp-cell select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; width: 100%; min-width: 0; }
+.insp-cell input[type=color] { width: 100%; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
+.insp-cell-chk { flex-direction: row; align-items: center; }
+.insp-cell-chk label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+.insp-color h4 { margin: 0 0 10px; }
 
 .bank-list { padding: 12px; }
 .bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 8px; }
@@ -326,13 +344,13 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .bl-add { margin-top: 8px; width: 100%; background: none; color: var(--accent); border: 1px dashed var(--line); border-radius: 7px; padding: 7px; font: inherit; font-size: 12px; cursor: pointer; }
 .bl-add:hover { border-color: var(--accent); }
 
-/* ===================== Library columns (#32 / #33) ==================== */
-.editor-2col { display: grid; grid-template-columns: 240px 1fr; gap: 16px; padding: 14px 18px 22px; align-items: start; }
-.seq-2col { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
+/* ===================== Library columns (#32 / #33 / #77) =============== */
+/* #77: the Templates/Sessions library is a left sidebar BESIDE the tabs. */
+.app-cols { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; padding: 0 16px; }
+.app-main { min-width: 0; }
+.library-col { margin-top: 12px; min-width: 0; }
+@media (max-width: 900px) { .app-cols { grid-template-columns: 1fr; } }
 .seq-main { min-width: 0; }
-@media (max-width: 900px) { .editor-2col, .seq-2col { grid-template-columns: 1fr; } }
-/* the editor's inner comp-layout shouldn't re-pad now that the column wraps it */
-.editor-2col .comp-layout { padding: 0; }
 
 .lib-col { padding: 12px; position: sticky; top: 12px; }
 .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }

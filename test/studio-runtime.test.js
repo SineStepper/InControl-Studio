@@ -90,6 +90,12 @@ function scrText(col, obj) { const m = scr6.find((x) => x.bytes[8] === col && x.
 ok(scrText(0, 0) === 'Step 1', '#6 knob screen top says "Step 1"');
 ok(scr6.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 1 && m.bytes[11] === 127 && m.bytes[12] === 127 && m.bytes[13] === 127), '#6 velocity draws a white knob glyph (rgb 127,127,127 on obj 1)');
 ok(scrText(8, 2) === 'Velocity', '#6 centre screen names the menu at the bottom');
+// #68 each menu button's screen has a colour bar (obj 3) in its menu colour; none where there's no label
+const optRgb = (col) => scr6.find((m) => m.bytes[9] === 0x04 && m.bytes[8] === col && m.bytes[10] === 3);
+const velBar = optRgb(0); // Velocity -> red
+ok(velBar && velBar.bytes[11] > 0 && velBar.bytes[12] === 0 && velBar.bytes[13] === 0, '#68 Velocity menu bar is red (obj 3)');
+const emptyBar = optRgb(4); // no menu maps to soft button 5 -> no colour
+ok(!emptyBar || (emptyBar.bytes[11] === 0 && emptyBar.bytes[12] === 0 && emptyBar.bytes[13] === 0), '#68 a column with no menu label gets no colour bar');
 
 // #37 gate shows text (# boxes + number) but NO knob glyph, and the screen isn't blank
 mark = sent.length;
@@ -530,10 +536,15 @@ const stxt = (col, obj) => { const m = kscr.find((x) => x.bytes[8] === col && x.
 ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0), '#63 knob screen top bar gets an RGB colour (type 4, obj 0)');
 ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB colour (type 4, obj 2)');
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
-ok(stxt(4, 2) != null && stxt(4, 3) != null, '#66 5th screen (col 4) shows a two-row step graphic on objs 2 & 3');
+ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
+ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
+const notif = sent.slice(mark).find((m) => m.bytes[7] === 0x04);
+ok(notif, '#66 the 8-pattern chain strip is sent via the centre-screen notification command (0x04)');
+{ let s = ''; for (let i = 8; i < notif.bytes.length && notif.bytes[i] !== 0; i++) s += String.fromCharCode(notif.bytes[i]); ok(s.length === 8, '#66 the notification carries the 8-pattern strip'); }
 st.running = false;
 
-// --- #68/#69 centre screen: Mute/Solo two rows + edge colour bars ---
+// --- 5th screen (column 8): knob bank / part name / Mute+Solo rows, with the
+//     correct edge-bar colours (left = Part, right-top = top button row, right-bottom = bottom row) ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
 if (st.rt) st.rt.buttonBank = 0;
 RT.handleControl(CC(0x33 + 0, 127)); // Part 1
@@ -541,9 +552,17 @@ mark = sent.length;
 RT.refreshSurface();
 const cscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8);
 const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
-ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 centre screen shows Mute over Solo when the Mute/Solo bank is selected');
-ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 0), '#68 centre screen left column has a Part-colour bar (RGB obj 0)');
-ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 2) && cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 3), '#68 centre screen right edge has two colour bars (RGB objs 2 & 3)');
+ok(ctxt(1) === 'Part 1', '#69 5th screen row 1 (obj 1) is the Part name');
+ok(/^Knobs/.test(ctxt(0) || ''), '#69 the row above the part name (obj 0) is the knob bank, not the pattern strip');
+ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 the button-bank rows read "Mute" (obj 2) over "Solo" (obj 3)');
+// on this screen an object's colour bar renders one region below its text, so the
+// RIGHT-TOP bar (beside "Mute" on obj 2) is set on obj 1 and RIGHT-BOTTOM on obj 2.
+const cRgb = (obj) => cscr.find((m) => m.bytes[9] === 0x04 && m.bytes[10] === obj);
+const leftBar = cRgb(0), topBar = cRgb(1), botBar = cRgb(2);
+ok(leftBar && leftBar.bytes[11] > leftBar.bytes[13], '#68 LEFT edge bar (obj 0) is the selected Part colour (Part 1 red: R > B)');
+ok(topBar && topBar.bytes[11] > topBar.bytes[13], '#68 RIGHT-TOP bar (obj 1) is the mute row average (orange: R > B)');
+ok(botBar && botBar.bytes[13] > botBar.bytes[11], '#68 RIGHT-BOTTOM bar (obj 2) is the solo row average (blue: B > R)');
+ok(!cRgb(3), '#68 obj 3 gets no colour (its bar region is off-screen)');
 
 // --- #68 knob screen top bar only appears for ENABLED knobs ---
 model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
@@ -559,8 +578,8 @@ Object.assign(model.knobBanks[0][0], { message_type: 'CC', cc: 74, start: 0, end
 st.channelRt = {}; RT.handleControl(CC(0x33 + 0, 127));
 mark = sent.length;
 RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
-const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 4 && m.bytes[9] === 0x01 && (m.bytes[10] === 2 || m.bytes[10] === 3));
-ok(v5.length > 0, '#69 turning a knob writes an overlay onto the 5th screen (col 4 bottom half)');
+const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8 && m.bytes[9] === 0x01 && m.bytes[10] === 5);
+ok(v5.length > 0, '#69 turning a knob writes a value overlay onto the 5th screen bottom row (column 8, obj 5)');
 st.screen5 = null; st.running = false;
 
 console.log('\n' + n + ' integration assertions passed');

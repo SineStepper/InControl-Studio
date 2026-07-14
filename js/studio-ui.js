@@ -46,10 +46,10 @@
   }
 
   const TABS = [
-    { key: 'rotary', label: 'Rotary', kind: 'knob' }, { key: 'faders', label: 'Faders', kind: 'fader' },
+    { key: 'rotary', label: 'Encoders', kind: 'knob' }, { key: 'faders', label: 'Faders', kind: 'fader' },
     { key: 'buttons', label: 'Buttons', kind: 'button' }, { key: 'pads', label: 'Pads', kind: 'pad' },
     { key: 'wheels', label: 'Wheels', kind: 'wheel' }, { key: 'pedals', label: 'Pedals', kind: 'pedal' },
-    { key: 'keys', label: 'Keys', kind: 'key' },
+    { key: 'keys', label: 'Aftertouch', kind: 'key' },
   ];
   const kindForTab = (t) => (TABS.find((x) => x.key === t) || {}).kind || 'knob';
 
@@ -58,7 +58,7 @@
       case 'rotary': return model.knobBanks[ui.knobBank].map((a, i) => ({ ref: a, label: a.name || 'Knob ' + (i + 1) }));
       case 'faders': return model.faders.map((a, i) => ({ ref: a, label: a.name || 'Fader ' + (i + 1) }));
       case 'buttons': return model.buttonBanks[ui.buttonBank].map((a, i) => ({ ref: a, label: a.name || 'Button ' + (i + 1) }));
-      case 'pads': return model.pads[ui.padMode].map((a, i) => ({ ref: a, label: a.name || 'Pad ' + (i + 1) }));
+      case 'pads': return model.pads.hits.map((a, i) => ({ ref: a, label: a.name || 'Pad ' + (i + 1), index: i }));
       case 'wheels': return [{ ref: model.wheels.pitch, label: 'Pitch' }, { ref: model.wheels.mod, label: 'Mod' }];
       case 'pedals': return [{ ref: model.pedals.sustain, label: 'Sustain' }, { ref: model.pedals.footswitch, label: 'Footswitch' }, { ref: model.pedals.expression, label: 'Expression' }];
       case 'keys': return [{ ref: model.keys.aftertouch, label: 'Aftertouch' }];
@@ -92,8 +92,22 @@
 
     if ($('#chan-status')) refreshChanStatus();
 
+    renderLibrary(); // the Templates / Sessions column beside the tabs (#77)
     if (ui.view === 'sequencer') { const host = $('#sequencer-body'); if (host && global.SLMK.sequencerUI) global.SLMK.sequencerUI.render(host); return; }
     renderEditor();
+  }
+
+  // #77: the left library column lives beside the tabs and shows Templates in the
+  // Editor view, Sessions in the Sequencer view.
+  function renderLibrary() {
+    const col = $('#library-col'); if (!col) return;
+    col.innerHTML = '';
+    if (ui.view === 'sequencer') {
+      if (global.SLMK.sequencerUI && global.SLMK.sequencerUI.libraryColumn) col.appendChild(global.SLMK.sequencerUI.libraryColumn());
+    } else {
+      S.ensureTemplates(model);
+      col.appendChild(templateColumn());
+    }
   }
 
   function renderEditor() {
@@ -105,10 +119,6 @@
     const host = $('#editor-body'); if (!host) return;
     host.innerHTML = '';
     S.ensureTemplates(model);
-
-    // Two columns: the template library (left) + the Components-style editor (right).
-    const twoCol = el('div', { className: 'editor-2col' });
-    twoCol.appendChild(templateColumn());
 
     const controls = currentControls();
     if (ui.sel == null && controls.length) ui.sel = 0;
@@ -130,12 +140,12 @@
     });
     layout.appendChild(glyphRow);
 
-    const cols = el('div', { className: 'comp-cols' });
-    cols.appendChild(inspector(controls[ui.sel] ? controls[ui.sel].ref : null)); // wide left column
-    cols.appendChild(bankList());                                               // thin scrollable bank list (right)
+    const banks = bankList();                                                   // thin scrollable bank list (right) — null when the control has no banks (#78)
+    const cols = el('div', { className: 'comp-cols' + (banks ? '' : ' no-banks') });
+    cols.appendChild(inspector(controls[ui.sel] || null)); // wide left column (grouped sections, #80)
+    if (banks) cols.appendChild(banks);
     layout.appendChild(cols);
-    twoCol.appendChild(layout);
-    host.appendChild(twoCol);
+    host.appendChild(layout);
   }
 
   // Left column (#32): the template library. New Template + sorting at the top,
@@ -190,7 +200,11 @@
   // Thin scrollable list of banks / modes for the current tab (replaces the old
   // dropdown-with-arrows). Rotary & Buttons have multiple banks (+ Add); Pads
   // switch Hit/Pressure; single-set tabs just show one entry.
+  // Only Encoders and Buttons have real banks. Pads show Hit + Pressure in one
+  // inspector (#80), so they don't need a banks column either (#78).
+  const hasBanks = (tab) => tab === 'rotary' || tab === 'buttons';
   function bankList() {
+    if (!hasBanks(ui.tab)) return null;
     const aside = el('aside', { className: 'bank-list panel' });
     aside.appendChild(el('div', { className: 'bl-title' }, 'Banks'));
     const list = el('div', { className: 'bl-scroll' });
@@ -229,83 +243,132 @@
   const isSwitch = (cls) => cls === 'button' || cls === 'footswitch' || cls === 'pad_hit';
   const hasPressureLed = (cls) => cls === 'pad_hit' || cls === 'pad_pressure' || cls === 'keys';
 
-  // Wide left column: full behaviour + assignment mappings for the selected control.
-  function inspector(a) {
-    const panel = el('aside', { className: 'comp-insp panel' });
-    if (!a) { panel.appendChild(el('p', { className: 'hint' }, 'Select a control above to edit it.')); return panel; }
-    const field = (lbl, node) => { const f = el('div', { className: 'field' }, [el('label', {}, lbl)]); f.appendChild(node); return f; };
-    // every setter snapshots first (undo) and pushes LEDs so the SL updates live (#25)
-    const num = (k, min, max) => { const n = el('input', { type: 'number', min, max, value: a[k] }); n.addEventListener('change', () => { snapshot(); a[k] = Math.max(min, Math.min(max, parseInt(n.value, 10) || 0)); render(); pushLeds(); }); return n; };
-    const txt = (k, ml) => { const n = el('input', { type: 'text', value: a[k], maxLength: ml }); n.addEventListener('change', () => { snapshot(); a[k] = n.value; render(); pushLeds(); }); return n; };
-    const chk = (k) => { const n = el('input', { type: 'checkbox', checked: a[k] }); n.addEventListener('change', () => { snapshot(); a[k] = n.checked; render(); pushLeds(); }); return n; };
-    const sel = (k, opts) => { const n = el('select', {}); opts.forEach((o) => n.appendChild(el('option', { value: o, selected: o === a[k] }, o))); n.addEventListener('change', () => { snapshot(); a[k] = n.value; render(); pushLeds(); }); return n; };
+  const BIT_DEPTH_CLASSES = { knob: true, fader: true, button: true, footswitch: true, pad_pressure: true, sustain: true, pitch: true, mod: true, expression: false, keys: false, pad_hit: false };
 
+  // Wide left column: the selected control's mappings, grouped into Name/Enabled,
+  // Behaviour and Assignment section boxes with three-column rows (#80).
+  function inspector(ctrl) {
+    const panel = el('aside', { className: 'comp-insp panel' });
+    if (!ctrl) { panel.appendChild(el('p', { className: 'hint' }, 'Select a control above to edit it.')); return panel; }
+    const a = ctrl.ref;
+
+    // ---- bound field builders (each setter snapshots for undo + pushes LEDs, #25) ----
+    const num = (o, k, min, max) => { const n = el('input', { type: 'number', min, max, value: o[k] }); n.addEventListener('change', () => { snapshot(); o[k] = Math.max(min, Math.min(max, parseInt(n.value, 10) || 0)); render(); pushLeds(); }); return n; };
+    const txt = (o, k, ml, also) => { const n = el('input', { type: 'text', value: o[k], maxLength: ml }); n.addEventListener('change', () => { snapshot(); o[k] = n.value; if (also) also.forEach((x) => (x[k] = n.value)); render(); pushLeds(); }); return n; };
+    const chk = (o, k) => { const n = el('input', { type: 'checkbox', checked: !!o[k] }); n.addEventListener('change', () => { snapshot(); o[k] = n.checked; render(); pushLeds(); }); return n; };
+    const sel = (o, k, opts) => { const n = el('select', {}); opts.forEach((v) => n.appendChild(el('option', { value: v, selected: v === o[k] }, v))); n.addEventListener('change', () => { snapshot(); o[k] = n.value; render(); pushLeds(); }); return n; };
+    const chanSel = (o) => { const opts = ['default'].concat(Array.from({ length: 16 }, (_, i) => String(i + 1))); const n = el('select', {}); opts.forEach((v) => n.appendChild(el('option', { value: v, selected: String(o.channel) === v }, v === 'default' ? 'Default' : 'Ch ' + v))); n.addEventListener('change', () => { snapshot(); o.channel = n.value === 'default' ? 'default' : +n.value; }); return n; };
+
+    // ---- layout primitives ----
+    const cell = (label, node) => el('div', { className: 'insp-cell' }, node ? [el('label', {}, label), node] : []);
+    const empty = () => el('div', { className: 'insp-cell' });
+    const row = (...cells) => el('div', { className: 'insp-row' }, cells);
+    const sec = (title, rows, enableObj) => {
+      const s = el('div', { className: 'insp-sec' });
+      if (title || enableObj) {
+        const h = el('div', { className: 'insp-sechead' });
+        h.appendChild(el('h4', {}, title || ''));
+        if (enableObj) { const lab = el('label', { className: 'insp-enable' }); lab.append(chk(enableObj, 'enabled'), document.createTextNode('Enabled')); h.appendChild(lab); }
+        s.appendChild(h);
+      }
+      rows.filter(Boolean).forEach((r) => s.appendChild(r));
+      return s;
+    };
+    const msgCell = (o) => cell('Message', sel(o, 'message_type', S.MSG[o.cls]));
+    const numCell = (o) => { const nf = numberField(o.message_type); return nf ? cell(nf.label, num(o, nf.key, 0, 127)) : empty(); };
+    const bitRow = (o) => row(empty(), empty(), cell('Bit depth', sel(o, 'bit_depth', S.BIT_DEPTHS)));
+
+    // Assignment rows: message/number/channel, then a value/range row, then bit depth.
+    function valueRow(o) {
+      if (isSwitch(o.cls)) {
+        if (o.behavior === 'Toggle') return row(cell('On value', num(o, 'down_value', 0, 127)), cell('Off value', num(o, 'up_value', 0, 127)), empty());
+        if (o.behavior === 'Inc/Dec') return row(cell('From value', num(o, 'start', 0, 127)), cell('To value', num(o, 'end', 0, 127)), empty());
+        if (o.behavior === 'Trigger') return row(cell('Trigger value', num(o, 'down_value', 0, 127)), empty(), empty());
+        return row(cell('Down value', num(o, 'down_value', 0, 127)), cell('Up value', num(o, 'up_value', 0, 127)), empty()); // Momentary
+      }
+      const third = o.cls === 'knob' ? cell('Pivot', num(o, 'pivot', 0, 127)) : empty();
+      return row(cell('Start', num(o, 'start', 0, 16383)), cell('End', num(o, 'end', 0, 16383)), third);
+    }
+    function assignment(o, title, enableObj) {
+      const rows = [row(msgCell(o), numCell(o), cell('Channel', chanSel(o))), valueRow(o)];
+      if (BIT_DEPTH_CLASSES[o.cls]) rows.push(bitRow(o));
+      if (o.cls === 'pad_hit') rows.push(row(cell('Vel min', num(o, 'vel_min', 0, 127)), cell('Vel max', num(o, 'vel_max', 0, 127)), cell('Vel curve', sel(o, 'vel_curve', S.VEL_CURVES))));
+      return sec(title || 'Assignment', rows, enableObj);
+    }
+    function behaviourSection(o) {
+      if (o.cls === 'knob') {
+        return sec('Behaviour', [
+          row(cell('Resolution', num(o, 'resolution', 0, 16383)), cell('Mode', sel(o, 'mode', S.KNOB_MODES)), cell('Step', num(o, 'step', 0, 127))),
+          row(cell('Bank paging', sel(o, 'combined', S.COMBINED)), empty(), empty()),
+        ]);
+      }
+      // switch behaviour: dropdown | action (push/release) | step (inc/dec) + wrap/pair
+      const rows = [row(
+        cell('Behaviour', sel(o, 'behavior', S.BEHAVIORS)),
+        o.behavior === 'Momentary' ? empty() : cell('Action', sel(o, 'action', ['On Push', 'On Release'])),
+        o.behavior === 'Inc/Dec' ? cell('Step', num(o, 'step_size', 1, 127)) : empty(),
+      )];
+      if (o.behavior === 'Inc/Dec') { const wp = row(cellChk('Wrap', chk(o, 'wrap')), cellChk('Pair', chk(o, 'pair')), empty()); rows.push(wp); }
+      return sec('Behaviour', rows);
+    }
+    const cellChk = (label, node) => { const c = el('div', { className: 'insp-cell insp-cell-chk' }); const lab = el('label', {}); lab.append(node, document.createTextNode(' ' + label)); c.appendChild(lab); return c; };
+
+    // ---- title ----
     panel.appendChild(el('div', { className: 'insp-title' }, (a.name || a.cls) + (a.fixed ? '  (fixed)' : '')));
 
+    // ---- fixed Mute/Solo: colour only ----
     if (a.colorOnly) {
       panel.appendChild(el('p', { className: 'fineprint' }, (a.role === 'solo' ? 'Solo' : 'Mute') + ' — channel ' + a.channel + '. Sends no MIDI; only its colour is editable.'));
       const c = el('input', { type: 'color', value: a.led.idle });
       c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = SLMK.studioOptions.lighten(c.value, 0.5); render(); pushLeds(); });
-      panel.appendChild(field('Colour', c));
+      const box = el('div', { className: 'insp-sec' }); box.appendChild(cell('Colour', c)); panel.appendChild(box);
       return panel;
     }
-    panel.appendChild(field('Enabled', chk('enabled')));
-    panel.appendChild(field('Name', txt('name', 9)));
-    panel.appendChild(field('Message', sel('message_type', S.MSG[a.cls])));
-    const chOpts = ['default'].concat(Array.from({ length: 16 }, (_, i) => String(i + 1)));
-    const chSel = el('select', {}); chOpts.forEach((o) => chSel.appendChild(el('option', { value: o, selected: String(a.channel) === o }, o === 'default' ? 'Default' : 'Ch ' + o))); chSel.addEventListener('change', () => { snapshot(); a.channel = chSel.value === 'default' ? 'default' : +chSel.value; }); panel.appendChild(field('Channel', chSel));
 
-    const nf = numberField(a.message_type);
-    if (nf) panel.appendChild(field(nf.label, num(nf.key, 0, 127)));
+    if (ctrl.index != null && a.cls === 'pad_hit') {
+      // Pads (#80): one shared Name, then the Hit and Pressure assignments, each
+      // independently enable-able. Hit and Pressure share the name.
+      const pressure = model.pads.pressures[ctrl.index];
+      panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9, [pressure])), empty(), empty())]));
+      panel.appendChild(behaviourSection(a));
+      panel.appendChild(assignment(a, 'Assignment (Hit)', a));
+      panel.appendChild(assignment(pressure, 'Assignment (Pressure)', pressure));
+      panel.appendChild(ledSection(a));
+      return panel;
+    }
 
-    if (a.cls === 'knob') {
-      panel.appendChild(field('Mode', sel('mode', S.KNOB_MODES)));
-      panel.appendChild(field('Resolution', num('resolution', 0, 16383)));
-      panel.appendChild(field('Step', num('step', 0, 127)));
-      panel.appendChild(field('Pivot', num('pivot', 0, 127)));
-      panel.appendChild(field('Bank paging', sel('combined', S.COMBINED)));
-    }
-    if (isSwitch(a.cls)) panel.appendChild(field('Behaviour', sel('behavior', S.BEHAVIORS)));
-
-    if (isSwitch(a.cls)) {
-      panel.appendChild(field('Down value', num('down_value', 0, 127)));
-      panel.appendChild(field('Up value', num('up_value', 0, 127)));
-    } else {
-      panel.appendChild(field('Start', num('start', 0, 16383)));
-      panel.appendChild(field('End', num('end', 0, 16383)));
-      panel.appendChild(field('Bit depth', sel('bit_depth', S.BIT_DEPTHS)));
-    }
-    if (a.cls === 'pad_hit') {
-      panel.appendChild(field('Vel min', num('vel_min', 0, 127)));
-      panel.appendChild(field('Vel max', num('vel_max', 0, 127)));
-      panel.appendChild(field('Vel curve', sel('vel_curve', S.VEL_CURVES)));
-    }
-    if (a.cls === 'pad_pressure' && a.message_type === 'Poly Aftertouch') panel.appendChild(field('Note #', num('note', 0, 127)));
-
-    const ledWrap = el('div', { className: 'insp-color' });
-    const isKnob = a.cls === 'knob';
-    if (a.colorMode === 'value') {
-      ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
-      const c = el('input', { type: 'color', value: a.led.idle });
-      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = c.value; render(); pushLeds(); });
-      ledWrap.appendChild(field('Colour', c));
-    } else if (isKnob) {
-      // Knobs have no RGB ring — this is the on-screen knob-glyph colour (#12).
-      ledWrap.appendChild(el('h4', {}, 'Knob glyph colour'));
-      const c = el('input', { type: 'color', value: a.led.idle });
-      c.addEventListener('input', () => { a.led.idle = c.value; a.led.pressed = c.value; render(); pushLeds(); });
-      ledWrap.appendChild(field('Colour', c));
-    } else {
-      ledWrap.appendChild(el('h4', {}, 'LED colour'));
-      const states = hasPressureLed(a.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
-      states.forEach((s) => {
-        const c = el('input', { type: 'color', value: a.led[s] === '#000000' ? '#000000' : a.led[s] });
-        c.addEventListener('input', () => { a.led[s] = c.value; render(); pushLeds(); });
-        ledWrap.appendChild(field(s[0].toUpperCase() + s.slice(1), c));
-      });
-    }
-    panel.appendChild(ledWrap);
+    // ---- Name / Enabled ----
+    panel.appendChild(sec('', [row(cell('Name', txt(a, 'name', 9)), cell('Enabled', chk(a, 'enabled')), empty())]));
+    // ---- Behaviour (encoders + switches) ----
+    if (a.cls === 'knob' || isSwitch(a.cls)) panel.appendChild(behaviourSection(a));
+    // ---- Assignment ----
+    panel.appendChild(assignment(a));
+    // ---- LED colour ----
+    panel.appendChild(ledSection(a));
     return panel;
+
+    // LED colour section (kept from the previous inspector, in a section box).
+    function ledSection(o) {
+      const ledWrap = el('div', { className: 'insp-sec insp-color' });
+      const field = (lbl, node) => { const f = el('div', { className: 'insp-cell' }, [el('label', {}, lbl), node]); return f; };
+      if (o.colorMode === 'value') {
+        ledWrap.appendChild(el('h4', {}, 'LED colour (brightness tracks value)'));
+        const c = el('input', { type: 'color', value: o.led.idle });
+        c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
+        ledWrap.appendChild(row(field('Colour', c)));
+      } else if (o.cls === 'knob') {
+        ledWrap.appendChild(el('h4', {}, 'Knob glyph colour'));
+        const c = el('input', { type: 'color', value: o.led.idle });
+        c.addEventListener('input', () => { o.led.idle = c.value; o.led.pressed = c.value; render(); pushLeds(); });
+        ledWrap.appendChild(row(field('Colour', c)));
+      } else {
+        ledWrap.appendChild(el('h4', {}, 'LED colour'));
+        const states = hasPressureLed(o.cls) ? ['idle', 'pressed', 'pressure'] : ['idle', 'pressed'];
+        const cells = states.map((s) => { const c = el('input', { type: 'color', value: o.led[s] === '#000000' ? '#000000' : o.led[s] }); c.addEventListener('input', () => { o.led[s] = c.value; render(); pushLeds(); }); return field(s[0].toUpperCase() + s.slice(1), c); });
+        ledWrap.appendChild(row.apply(null, cells));
+      }
+      return ledWrap;
+    }
   }
 
   // ---- Edit menu: copy / cut / paste the selected control ----
@@ -494,12 +557,34 @@
     if (!pack) return;
     const i = +$('#pack-sessions-sel').value;
     const s = pack.sessions[i]; if (!s || !s.bytes) return;
+    snapshot();
     S.ensureSequencer(model);
     model.sequencer = global.SLMK.session.readSequence(s.bytes);
+    // #76: also bring the pack's templates into the library and map them onto the
+    // Parts (template N -> Part N), so loading a session sets up each Part's
+    // instrument too. Templates are de-duplicated by name across repeated loads.
+    const mapped = loadPackTemplatesToParts();
     packSessionSlot = i;
-    ui.view = 'sequencer'; render();
+    ui.view = 'sequencer'; render(); pushLeds();
     const notes = global.SLMK.session.sequenceHasNotes(s.bytes);
-    setStatus('Loaded session "' + (s.name || 'Session') + '" into the sequencer' + (notes ? '.' : ' (no notes).'), 'ok');
+    setStatus('Loaded session "' + (s.name || 'Session') + '" into the sequencer' + (notes ? '' : ' (no notes)') + (mapped ? ' — mapped ' + mapped + ' Part templates.' : '.'), 'ok');
+  }
+  // Import each pack template (once) into the library and map it to a Part in
+  // order (#76). Returns how many Parts were mapped.
+  function loadPackTemplatesToParts() {
+    if (!pack || !(pack.templates || []).length) return 0;
+    S.ensureTemplates(model);
+    let n = 0;
+    pack.templates.slice(0, 8).forEach((pt, i) => {
+      if (!pt.bytes) return;
+      let tpl; try { tpl = T.parse(Array.from(pt.bytes)); } catch (e) { return; }
+      const name = tpl.name || pt.name || ('Template ' + (i + 1));
+      const existing = (model.templates || []).find((t) => t.name === name);
+      const id = existing ? existing.id : S.addTemplate(model, { from: S.fromTemplate(tpl), name }).id;
+      S.mapTemplateToPart(model, id, i);
+      n++;
+    });
+    return n;
   }
   function exportPack() {
     if (!pack) return;
@@ -516,5 +601,10 @@
   function bodyFromSyx(bytes) {
     try { const tpl = T.parse(bytes); return new Uint8Array(T.toBody(tpl)); } catch (e) { return null; }
   }
+  // Exposed so the Sequencer UI's session column (rendered into the shared library
+  // sidebar, #77) can trigger a full re-render of the library + active view.
+  global.SLMK = global.SLMK || {};
+  global.SLMK.studioUI = { render };
+
   document.addEventListener('DOMContentLoaded', init);
 })(window);

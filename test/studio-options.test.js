@@ -128,6 +128,11 @@ eq(bars[0], 'o---#---', '#66 steps 1-8 row: note on 1, playhead on 5');
 eq(bars[1], '--o-----', '#66 steps 9-16 row: note on 11');
 eq(O.stepBars(sbp, -1)[0], 'o-------', '#66 stopped (head -1) shows no playhead marker');
 
+// #66 pattern strip: current '#', chained '+', unchained '-'
+eq(O.patternStrip(2, { from: 1, to: 4 }, 8), '-+#++---', '#66 pattern strip: current #, chained +, unchained -');
+eq(O.patternStrip(0, null, 8), '#-------', '#66 with no chain only the current pattern is marked');
+eq(O.patternStrip(5, { from: 5, to: 7 }, 8), '-----#++', '#66 current inside the chain shows as # not +');
+
 // #68 average colour of a set of LED colours (ignores black/blank)
 eq(O.avgColor(['#ff0000', '#0000ff']), '#800080', '#68 avgColor averages red+blue to purple');
 eq(O.avgColor(['#ffffff', '#000000', '']), '#ffffff', '#68 avgColor ignores black and blanks');

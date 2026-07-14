@@ -178,8 +178,10 @@
     }
     if (beh === 'Inc/Dec') {
       if (!pressed) return { out: [] };
-      const cur = (rt.inc[key] || 0) + 1;
-      rt.inc[key] = cur > 127 ? 0 : cur;
+      const step = a.step_size || 1;              // steps per press (#80)
+      let cur = (rt.inc[key] || 0) + step;
+      if (cur > 127) cur = a.wrap ? cur - 128 : 127; // wrap around or clamp (#80)
+      rt.inc[key] = cur;
       return { out: switchOut(a, rt.inc[key], rt), ledDirty: true };
     }
     return { out: [] };

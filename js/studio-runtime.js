@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
   const el = (t, p = {}, c = []) => { const n = document.createElement(t); Object.assign(n, p); (Array.isArray(c) ? c : [c]).forEach((x) => n.appendChild(typeof x === 'string' ? document.createTextNode(x) : x)); return n; };
@@ -67,64 +67,82 @@
   // knobs (value arc), value numbers and per-knob colours.
   function refreshKnobScreens() {
     if (!st.slOutId || !sysex || !st.rt) return;
-    send(sysex.screenLayout(1)); // Knob Layout
     const bank = st.rt.model.knobBanks[st.rt.knobBank] || [];
+    // When the set of enabled knobs changes, re-init the layout (0→1) to wipe any
+    // knob glyph left behind by a knob that was just disabled (#75); otherwise just
+    // (re)assert the knob layout without the flicker of a toggle.
+    const mask = (st.rt.knobBank || 0) + ':' + bank.map((a) => (a && a.enabled ? 1 : 0)).join('');
+    if (st.lastKnobMask !== mask) { send(sysex.screenLayout(0)); send(sysex.screenLayout(1)); st.lastKnobMask = mask; }
+    else send(sysex.screenLayout(1)); // Knob Layout
     const cur = sysex.hexTo7bit(partColor());              // the selected Part's colour
     for (let i = 0; i < 8; i++) {
       const a = bank[i];
       const enabled = !!(a && a.enabled);
-      send(sysex.screenText(i, 0, a ? (a.name || 'Knob ' + (i + 1)) : '')); // knob name at the top
-      // Bar of Part colour above the knob label — ONLY when the knob is enabled (#68).
-      send(sysex.screenRgb(i, 0, enabled ? cur.r : 0, enabled ? cur.g : 0, enabled ? cur.b : 0));
-      const hex = (a && a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph colour
-      const { r, g, b } = sysex.hexTo7bit(hex);
-      send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
-      sendKnobValue(i);
-      if (i === 4) continue; // 5th screen's bottom half is the info / step area (#66/#69) — drawn below
+      // A DISABLED knob shows nothing on its screen — no title, glyph or value —
+      // just its Part label at the bottom (#75). Only enabled knobs get the name,
+      // Part-colour bar, glyph colour and value.
+      send(sysex.screenText(i, 0, enabled ? (a.name || 'Knob ' + (i + 1)) : ''));
+      send(sysex.screenRgb(i, 0, enabled ? cur.r : 0, enabled ? cur.g : 0, enabled ? cur.b : 0)); // top bar, enabled only (#68)
+      if (enabled) {
+        const hex = (a.led && a.led.idle && a.led.idle !== '#000000') ? a.led.idle : partColor(); // knob glyph colour
+        const { r, g, b } = sysex.hexTo7bit(hex);
+        send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) colour — customisable per knob (#12)
+        sendKnobValue(i);
+      }
       // Each column's bottom label names Part i+1; underline it with THAT Part's
       // colour, and highlight (full colour) the currently-selected Part, others
       // dimmed (#68). We only get one RGB per object, so bright vs dim stands in
       // for highlight vs underline.
       const sel = (i + 1) === st.activeChannel;
       const bar = sysex.hexTo7bit(sel ? partColorOf(i) : opts().scaleColor(partColorOf(i), 0.4));
+      send(sysex.screenText(i, 2, ''));                    // clear obj 2 — the label used to live here (#65); leaving it set showed a duplicate label row
       send(sysex.screenRgb(i, 2, bar.r, bar.g, bar.b));
       send(sysex.screenText(i, 3, partLabel(i)));          // part label hugging the bottom edge (#58/#65)
     }
     refreshCentreScreen();
-    refresh5thScreen(true); // 5th screen bottom half: step graphic / value / part names (#66/#69)
+    refreshPatternStrip(true); // 5th screen TOP edge: the 8-pattern chain strip (#66)
+    refresh5thScreen(true);    // 5th screen bottom: transient value / part-name overlay (#69)
   }
-  // The bottom half of the 5th screen (column 4, objects 2 & 3) is a shared info
-  // area. Priority: a transient overlay wins while it's active (a knob/fader value
-  // being adjusted, or the two Part names on a Patterns-view page change, #69);
-  // otherwise it shows the selected Part's playing-step graphic (#66).
+  // The 5th screen is protocol column 8 (the centre notification screen). Object
+  // map, deduced from hardware feedback:
+  //   obj 0  text = knob-bank name (row above the part name); colour = LEFT edge bar
+  //   obj 1  text = part name
+  //   obj 2  text = "Mute" / button-bank name (right, top);   colour = RIGHT-TOP bar
+  //   obj 3  text = "Solo" (right, bottom);                   colour = RIGHT-BOTTOM bar
+  //   obj 4  text = the 8-pattern chain strip on the VERY TOP edge (full width)
+  //   obj 5  text = transient overlay (knob/fader value, or paged-to Part names)
+  const S5 = 8, S5_OVERLAY = 5;
+  // Very-top-edge pattern strip on the centre screen, via the notification command
+  // (the property text objects have no row above obj 0). '#' current/playing,
+  // '+' chained, '-' unchained (#66). Change-detected so it isn't re-sent per tick.
+  function refreshPatternStrip(force) {
+    if (!st.slOutId || !sysex || st.optionsMode) return;
+    const t = curTrack(); if (!t) return;
+    const str = opts().patternStrip(t.activePattern, t.chain, SEQ().PATTERNS);
+    if (!force && st.lastPatternStrip === str) return;
+    st.lastPatternStrip = str;
+    send(sysex.screenNotify(str, ''));
+  }
   function refresh5thScreen(force) {
     if (!st.slOutId || !sysex || st.optionsMode) return;
-    if (st.screen5) { // an overlay owns the area right now
-      send(sysex.screenText(4, 2, st.screen5.top || ''));
-      send(sysex.screenText(4, 3, st.screen5.bottom || ''));
+    if (st.screen5) { // a transient overlay owns the bottom row right now
+      send(sysex.screenText(S5, S5_OVERLAY, st.screen5.text || ''));
       const c = sysex.hexTo7bit(st.screen5.color || '#ffffff');
-      send(sysex.screenRgb(4, 2, c.r, c.g, c.b));
-      return;
+      send(sysex.screenRgb(S5, S5_OVERLAY, c.r, c.g, c.b));
+    } else if (force) { // no overlay: clear the row
+      send(sysex.screenText(S5, S5_OVERLAY, ''));
     }
-    const p = gridPattern(); if (!p) return;
-    const head = (seqIsPlaying() && st.seqRt && st.seqRt.pos[st.gridTrack]) ? st.seqRt.pos[st.gridTrack].pad : -1;
-    if (!force && st.lastStepScreen === head) return;
-    st.lastStepScreen = head;
-    const rows = opts().stepBars(p, head);
-    send(sysex.screenText(4, 2, rows[0]));
-    send(sysex.screenText(4, 3, rows[1]));
   }
-  // Show a transient two-line overlay on the 5th screen's bottom half, then revert
-  // to the step graphic after `ms` (#69). `color` tints the top line. Only repaints
-  // when the content actually changes, so a continuous knob/fader sweep doesn't
-  // flood the SL — it just keeps extending the revert timer.
-  function flash5thScreen(top, bottom, color, ms) {
-    const t = String(top || '').slice(0, 9), b = String(bottom || '').slice(0, 9), c = color || '#ffffff';
-    const changed = !st.screen5 || st.screen5.top !== t || st.screen5.bottom !== b || st.screen5.color !== c;
-    st.screen5 = { top: t, bottom: b, color: c };
+  // Show a transient overlay on the 5th screen's bottom row, tinted `color`, then
+  // clear it after `ms` (#69). Only repaints when the content changes, so a
+  // continuous knob/fader sweep doesn't flood the SL — it just extends the timer.
+  function flash5thScreen(text, color, ms) {
+    const t = String(text || '').slice(0, 9), c = color || '#ffffff';
+    const changed = !st.screen5 || st.screen5.text !== t || st.screen5.color !== c;
+    st.screen5 = { text: t, color: c };
     clearTimeout(st.screen5Timer);
-    st.screen5Timer = setTimeout(() => { st.screen5 = null; st.lastStepScreen = null; refresh5thScreen(true); }, ms || 900);
-    if (changed) { st.lastStepScreen = null; refresh5thScreen(true); }
+    st.screen5Timer = setTimeout(() => { st.screen5 = null; refresh5thScreen(true); }, ms || 900);
+    if (changed) refresh5thScreen(true);
   }
   // Label above Part button i+1: the template mapped to that Part, else its name (#58).
   function partLabel(i) {
@@ -152,26 +170,28 @@
     else { const b = (st.rt.model.buttonBanks && st.rt.model.buttonBanks[bank]) || []; for (let i = 0; i < 8; i++) { const a = b[off + i]; if (a && a.enabled && a.led) hexes.push(a.led.idle); } }
     return opts().avgColor(hexes);
   }
-  // Centre screen. Left column = the Part (name + knob bank), tinted the Part
-  // colour — the "left-side bar" (#63/#68). Right column = the button bank: the
-  // Mute/Solo bank shows "Mute" over "Solo" (#69); the two right-edge bars take
-  // the average colour of the top and bottom button rows of the current page (#68).
+  // 5th screen (column 8) text + edge colour bars. On this screen an object's TEXT
+  // and its COLOUR bar render in regions offset by one — the colour beside a row's
+  // text comes from the object ONE ABOVE it. So:
+  //   TEXT:  obj 0 knob bank, obj 1 part name, obj 2 "Mute"/bank, obj 3 "Solo"
+  //   COLOUR: obj 0 LEFT edge, obj 1 RIGHT-TOP bar, obj 2 RIGHT-BOTTOM bar
+  // i.e. the RIGHT-TOP bar (beside the "Mute" text on obj 2) is set on obj 1, and
+  // the RIGHT-BOTTOM bar (beside "Solo" on obj 3) is set on obj 2.
   function refreshCentreScreen() {
     if (!st.slOutId || !sysex || !st.rt) return;
     const t = curTrack();
     const name = (t && (t.name || 'Part ' + st.activeChannel)) || 'Part ' + st.activeChannel;
-    const pc = sysex.hexTo7bit(partColor());
     const bank = (st.rt.buttonBank || 0);
-    send(sysex.screenText(8, 0, name));                                   // left, top: part name
-    send(sysex.screenText(8, 1, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // left, bottom: knob bank
-    send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // left-side bar = Part colour
-    send(sysex.screenRgb(8, 1, pc.r, pc.g, pc.b));
-    if (bank === 0) { send(sysex.screenText(8, 2, 'Mute')); send(sysex.screenText(8, 3, 'Solo')); } // #69 two rows
-    else { send(sysex.screenText(8, 2, 'Btns ' + (bank + 1))); send(sysex.screenText(8, 3, '')); }
-    const topAvg = sysex.hexTo7bit(buttonRowAvg(false));                  // right edge, top bar
-    const botAvg = sysex.hexTo7bit(buttonRowAvg(true));                   // right edge, bottom bar
-    send(sysex.screenRgb(8, 2, topAvg.r, topAvg.g, topAvg.b));
-    send(sysex.screenRgb(8, 3, botAvg.r, botAvg.g, botAvg.b));
+    const pc = sysex.hexTo7bit(partColor());
+    const topAvg = sysex.hexTo7bit(buttonRowAvg(false)); // top button row (Mute on the fixed bank)
+    const botAvg = sysex.hexTo7bit(buttonRowAvg(true));  // bottom button row (Solo on the fixed bank)
+    send(sysex.screenText(8, 0, 'Knobs ' + ((st.rt.knobBank || 0) + 1))); // above the part name
+    send(sysex.screenRgb(8, 0, pc.r, pc.g, pc.b));                        // LEFT edge bar = selected Part colour
+    send(sysex.screenText(8, 1, name));                                   // part name
+    send(sysex.screenRgb(8, 1, topAvg.r, topAvg.g, topAvg.b));            // RIGHT-TOP bar (beside "Mute" on obj 2)
+    send(sysex.screenText(8, 2, bank === 0 ? 'Mute' : 'Btns ' + (bank + 1))); // right, top
+    send(sysex.screenRgb(8, 2, botAvg.r, botAvg.g, botAvg.b));            // RIGHT-BOTTOM bar (beside "Solo" on obj 3)
+    send(sysex.screenText(8, 3, bank === 0 ? 'Solo' : ''));               // right, bottom
   }
 
   // ---- sequencer clock / transport ----
@@ -351,7 +371,7 @@
       const head = st.seqRt.pos[st.gridTrack] ? st.seqRt.pos[st.gridTrack].pad : -1;
       if (head !== st.lastGridHead) { st.lastGridHead = head; refreshGrid(); }
     }
-    if (!st.optionsMode) refresh5thScreen(); // animate the 5th-screen step graphic as the head moves (#66)
+    if (!st.optionsMode) refreshPatternStrip(); // update the 5th-screen pattern strip as the chain advances (#66)
     st.stepCbs.forEach((cb) => { try { cb(); } catch (e) {} });
   }
 
@@ -414,7 +434,7 @@
     // No MIDI Stop (FC) to the SL either — see seqPlay (#34).
     if (st.seqRt) SEQ().stop(st.seqRt).forEach((e) => { if (st.destId) midi.sendToOutput(st.destId, [0x80 | e.channel, e.note & 0x7f, 0]); });
     panicAllChannels(); // Stop also sends All-Notes-Off to every channel so nothing hangs (#59)
-    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (!st.optionsMode) refresh5thScreen(true); } // clear the 5th-screen playhead marker (#66)
+    if (st.running) { refreshTransport(); if (st.rt.padMode === 'sequencer') refreshGrid(); if (!st.optionsMode) refreshPatternStrip(true); } // chain reset to its first pattern -> repaint the strip (#66/#70)
     notify();
   }
   const seqIsPlaying = () => !!st.clock;
@@ -452,7 +472,7 @@
     st.partTop = next;
     refreshPatternPads(); refreshArrowLeds();
     // Briefly show the two paged-to Part names (white) on the 5th screen (#69).
-    if (!st.optionsMode) flash5thScreen(partLabel(st.partTop), partLabel(st.partTop + 1), '#ffffff', 1400);
+    if (!st.optionsMode) flash5thScreen(partLabel(st.partTop) + ' ' + partLabel(st.partTop + 1), '#ffffff', 1400);
     notify(); log('parts ' + (st.partTop + 1) + '-' + (st.partTop + 2));
   }
   // Steps view: page which pattern the grid VIEWS, without changing what plays (#54).
@@ -766,20 +786,24 @@
       st.optScreenMenu = st.optionsMenu; st.optScreenLayout = 1;
     } else if (st.optScreenLayout !== 1) { send(sysex.screenLayout(1)); st.optScreenLayout = 1; }
     const menu = opts().MENUS[st.optionsMenu];
-    const mc = sysex.hexTo7bit((menu && menu.color) || '#ffffff'); // colour the screens in the active menu's colour (#63)
     for (let i = 0; i < 8; i++) {
       const c = cols[i];
       send(sysex.screenText(i, 0, c ? c.top : ''));               // top: "Step N" / parameter name (blank if unused)
-      send(sysex.screenRgb(i, 0, mc.r, mc.g, mc.b));              // top bar in the menu colour (#63)
-      send(sysex.screenRgb(i, 2, mc.r, mc.g, mc.b));              // bottom bar in the menu colour (#63)
       if (c && c.glyph) { send(sysex.screenValue(i, 0, c.glyphValue || 0)); send(sysex.screenRgb(i, 1, 127, 127, 127)); } // white knob glyph ONLY where there's a real value (#6)
       send(sysex.screenText(i, 1, c ? (c.bottom || '') : ''));    // reading above the icon: number / % / gate "N ###"
-      send(sysex.screenText(i, 3, opts().menuLabelForButton(i))); // bottom row (hugging the edge), above each button = the menu it selects (#57/#65)
+      // Each menu button's screen shows its label with a colour bar below it, in
+      // that menu's fixed colour (Velocity red, Gate green, Chance orange, Tempo
+      // white, Pattern dark blue) — and NO bar where there's no label (#68 revised).
+      // obj 3's colour renders in the row below its text (same one-object offset as
+      // the centre screen), i.e. between the label and its soft button.
+      const mk = opts().menuForButton(i);
+      send(sysex.screenText(i, 3, opts().menuLabelForButton(i))); // menu label (hugging the bottom edge)
+      const barHex = mk ? (mk === 'pattern' ? '#000080' : opts().MENUS[mk].color) : '#000000';
+      const bar = sysex.hexTo7bit(barHex);
+      send(sysex.screenRgb(i, 3, bar.r, bar.g, bar.b));           // per-menu colour bar (black = none where no label)
     }
     // Centre screen: step page at the top (#6).
     send(sysex.screenText(8, 0, menu && menu.perStep ? ('Steps ' + (st.stepPage ? '9-16' : '1-8')) : ''));
-    send(sysex.screenRgb(8, 0, mc.r, mc.g, mc.b));
-    send(sysex.screenRgb(8, 2, mc.r, mc.g, mc.b));
     send(sysex.screenText(8, 2, menu ? menu.label : ''));
   }
   // Tempo / swing / sync changed while playing → retune the running clock in place
@@ -1071,7 +1095,7 @@
         else { sel = { activePattern: col, chain: null }; log((instant ? 'pattern ' : 'queued pattern ') + (col + 1)); }
         if (instant) { t.activePattern = sel.activePattern; t.chain = sel.chain; t.pending = null; }
         else t.pending = sel;
-        refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); notify();
+        refreshPatternPads(); refreshArrowLeds(); if (st.optionsMode) refreshOptionScreens(); else refreshPatternStrip(); notify();
       } else if (ev.value === 0) { st.heldPatterns.delete(c.index); }
       return;
     }
@@ -1136,7 +1160,7 @@
     if ((c.group === 'knob' || c.group === 'fader') && !st.optionsMode) {
       const a = c.group === 'knob' ? (st.rt.model.knobBanks[st.rt.knobBank] || [])[c.index] : st.rt.model.faders[c.index];
       const val = c.group === 'knob' ? engine.knobDisplay(st.rt, c.index) : ev.value;
-      if (val != null) flash5thScreen((a && a.name) || (c.group === 'knob' ? 'Knob ' + (c.index + 1) : 'Fader ' + (c.index + 1)), String(val), (a && a.led && a.led.idle) || '#ffffff', 900);
+      if (val != null) flash5thScreen(String(val), (a && a.led && a.led.idle) || '#ffffff', 900);
     }
     if (c.group === 'pad') pressFlash('pad', c.index, ev.value > 0); // press-to-lighten in instrument mode (#5)
     else if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }
@@ -1188,10 +1212,27 @@
     $('#se-out').addEventListener('change', (e) => { st.slOutId = e.target.value; if (st.running) refreshSurface(); });
     $('#se-dest').addEventListener('change', (e) => (st.destId = e.target.value));
     if ($('#se-keys')) $('#se-keys').addEventListener('change', (e) => (st.keysInId = e.target.value));
-    $('#se-start').addEventListener('click', () => (st.running ? stop() : start()));
+    // Start button. Firefox only grants Web MIDI in response to a user gesture, so
+    // if we're not connected yet (its on-load auto-connect was blocked/denied),
+    // connect here — this click IS the gesture — then start (#81).
+    $('#se-start').addEventListener('click', () => {
+      if (st.running) { stop(); return; }
+      if (!midi.snapshot().connected) {
+        log('Connecting…');
+        midi.connect().then(() => { refreshPorts(); autoStart(); if (!st.running) start(); }).catch((e) => log('MIDI: ' + e.message));
+        return;
+      }
+      start();
+    });
     // Native MIDI (Electron) or Web MIDI: connect automatically, then auto-start.
     if (global.electronMIDI || (global.navigator && global.navigator.requestMIDIAccess)) {
       midi.connect().then(() => { refreshPorts(); autoStart(); }).catch((e) => log('MIDI: ' + e.message));
+    } else {
+      // Web MIDI isn't exposed at all — most often because the page is opened over
+      // file:// (Firefox needs a secure context). Tell the user up front (#81).
+      log((global.window && global.window.isSecureContext === false)
+        ? 'Web MIDI needs http://localhost or https:// — Firefox blocks it on file:// pages. Serve the folder (e.g. "npx serve .") and open the localhost URL.'
+        : 'Web MIDI is not available in this browser (use Chrome/Edge/Opera, or Firefox 108+ over https:// or localhost).');
     }
   }
   // Auto-start the engine once the SL MkIII input is detected (#8).

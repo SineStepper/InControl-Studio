@@ -89,4 +89,16 @@ const tpl = { name: 'T', sections: {
 const imp2 = S.fromTemplate(tpl);
 eq(imp2.knobBanks[0][0].message_type, 'Program Change', '#35 numeric Program Change survives import (not CC)');
 
+// ---- #74 imported knobs carry pivot / step / mode / bit depth ----
+const knobP = { enabled: true, message_type: 0, first_param: 10, channel: 1, from_value: 0, to_value: 127, name: 'K', pivot: 64, step: 3, relative: 1, eight_bit: 1, resolution: 616 };
+const tplP = { name: 'P', sections: {
+  knobs: [knobP].concat(Array.from({ length: 7 }, () => Object.assign({}, blankKnob))),
+  faders: [], buttons: [], pad_hits: [], pad_pressures: [], wheels: [], pedals: [], footswitches: [],
+} };
+const impP = S.fromTemplate(tplP).knobBanks[0][0];
+eq(impP.pivot, 64, '#74 imported knob keeps its pivot');
+eq(impP.step, 3, '#74 imported knob keeps its step');
+eq(impP.mode, 'Relative', '#74 imported knob relative flag -> Relative mode');
+eq(impP.bit_depth, '14-bit', '#74 imported knob eight_bit flag -> 14-bit');
+
 console.log('\n' + n + ' library assertions passed');

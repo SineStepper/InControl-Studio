@@ -89,9 +89,11 @@ enable it with `SLMK.studioRuntime.setKeyGuide(true)` to experiment (base note
 
 ## Screens (InControl notification API)
 
-The eight column screens (below the knobs) are addressed 0–7; the small centre
-screen is column 8. Set a **layout** first, then set **properties** on the
-objects within each column.
+The SL MkIII has **5 physical screens**: screens 1–4 sit under the knobs (two
+knobs + two Part labels each) and the 5th is the centre notification screen. In
+the protocol these are **9 columns** — columns 0–7 are the eight knob slots
+(two per physical screen 1–4) and **column 8 is the 5th screen**. Set a
+**layout** first, then set **properties** on the objects within each column.
 
 ```
 Layout:    F0 00 20 29 02 0A 01 01 <layout> F7          # 0 empty, 1 knob, 2 box
@@ -119,11 +121,21 @@ two-row playhead graphic across the 5th screen's lower half (`obj 2`/`obj 3`).
 Each column's bottom label is tinted its own Part's colour (the selected Part
 brighter); the knob-name top bar shows only when that knob is enabled.
 
-**Centre screen (column 8)** is treated as a 2×2 text grid: `obj 0`/`obj 1` =
-left column (Part name / knob bank, tinted the Part colour = the left-side bar),
-`obj 2`/`obj 3` = right column (button-bank info — "Mute"/"Solo" on the fixed
-bank — with the two right-edge bars taking the average colour of the top and
-bottom rows of the current button-bank page).
+**5th screen (column 8)** object map (deduced from hardware — text and colour
+of one object can render in different screen regions):
+
+| `obj` | Text | Colour bar |
+| ----- | ---- | ---------- |
+| `0` | knob-bank name (row above the part name) | **left edge** = selected Part colour |
+| `1` | Part name | — |
+| `2` | "Mute" / button-bank name (right, top) | **right-top edge** = avg of the top button row |
+| `3` | "Solo" (right, bottom) | **right-bottom edge** = avg of the bottom button row |
+| `4` | 8-pattern chain strip on the **very top edge** (full width) | — |
+| `5` | transient overlay (knob/fader value, or paged-to Part names) | tint = control colour |
+
+The pattern strip uses `#` = current/playing, `+` = chained, `-` = unchained.
+Per-character colour isn't possible (a text object takes one colour), so the
+strip distinguishes its three states by glyph.
 
 ## Device inquiry (identify the unit)
 
