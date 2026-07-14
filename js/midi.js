@@ -59,13 +59,17 @@
 
   async function connect() {
     if (!navigator.requestMIDIAccess) {
-      throw new Error(
-        'Web MIDI is not available in this browser. Use Chrome, Edge, Opera, or Firefox 108+ (grant the MIDI permission when prompted).'
-      );
+      // Firefox (108+) only exposes Web MIDI in a SECURE CONTEXT — it's undefined on
+      // a file:// page, which is the usual cause of "not available" there (Chrome is
+      // laxer and allows file://). Guide the user to serve it over localhost/HTTPS.
+      const insecure = typeof window !== 'undefined' && window.isSecureContext === false;
+      throw new Error(insecure
+        ? 'Web MIDI needs a secure context. Firefox blocks it on file:// pages — open InControl Studio over http://localhost or https:// instead (e.g. run "npx serve ." in this folder, then open the printed localhost URL).'
+        : 'Web MIDI is not available in this browser. Use Chrome, Edge, Opera, or Firefox 108+ served over https:// or http://localhost.');
     }
     // Firefox exposes Web MIDI (v108+) but only grants it in response to a user
-    // gesture and prompts for the sysex/MIDI permission — the engine's Start button
-    // provides that gesture (#81).
+    // gesture and prompts for the MIDI permission (a Site Permission Add-On over
+    // HTTPS; localhost is exempt) — the engine's Start button provides the gesture (#81).
     state.access = await navigator.requestMIDIAccess({ sysex: true });
     state.access.onstatechange = () => {
       // If our chosen port vanished, fall back to a default.

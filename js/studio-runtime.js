@@ -1227,6 +1227,12 @@
     // Native MIDI (Electron) or Web MIDI: connect automatically, then auto-start.
     if (global.electronMIDI || (global.navigator && global.navigator.requestMIDIAccess)) {
       midi.connect().then(() => { refreshPorts(); autoStart(); }).catch((e) => log('MIDI: ' + e.message));
+    } else {
+      // Web MIDI isn't exposed at all — most often because the page is opened over
+      // file:// (Firefox needs a secure context). Tell the user up front (#81).
+      log((global.window && global.window.isSecureContext === false)
+        ? 'Web MIDI needs http://localhost or https:// — Firefox blocks it on file:// pages. Serve the folder (e.g. "npx serve .") and open the localhost URL.'
+        : 'Web MIDI is not available in this browser (use Chrome/Edge/Opera, or Firefox 108+ over https:// or localhost).');
     }
   }
   // Auto-start the engine once the SL MkIII input is detected (#8).
