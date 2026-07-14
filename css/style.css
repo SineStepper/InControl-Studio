@@ -299,7 +299,8 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .glyph-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 10px; }
 .glyph-row[data-count="1"], .glyph-row[data-count="2"], .glyph-row[data-count="3"] { grid-template-columns: repeat(4, minmax(0, 160px)); }
 @media (max-width: 1100px) { .glyph-row { grid-template-columns: repeat(4, 1fr); } }
-.glyph-cell { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 10px 6px 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; color: var(--muted); cursor: pointer; overflow: hidden; }
+/* #80: the control-select buttons are square. */
+.glyph-cell { position: relative; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; color: var(--muted); cursor: pointer; overflow: hidden; }
 .glyph-cell.enabled { color: var(--text); }
 .glyph-cell.off { opacity: .55; }
 .glyph-cell.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -317,6 +318,22 @@ code { background: var(--panel-2); padding: 1px 5px; border-radius: 5px; font-si
 .comp-insp .field > label { width: 92px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
 .comp-insp input[type=number], .comp-insp input[type=text], .comp-insp select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; flex: 1; min-width: 0; }
 .comp-insp input[type=color] { width: 48px; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
+
+/* Grouped inspector sections with three-column rows (#80) */
+.insp-sec { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+.insp-sechead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.insp-sec h4 { margin: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.insp-enable { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.insp-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 10px; }
+.insp-row:last-child { margin-bottom: 0; }
+@media (max-width: 700px) { .insp-row { grid-template-columns: 1fr; } }
+.insp-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.insp-cell > label { color: var(--muted); font-size: 11px; }
+.insp-cell input[type=number], .insp-cell input[type=text], .insp-cell select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-size: 13px; width: 100%; min-width: 0; }
+.insp-cell input[type=color] { width: 100%; height: 30px; border: 1px solid var(--line); border-radius: 7px; background: none; cursor: pointer; padding: 2px; }
+.insp-cell-chk { flex-direction: row; align-items: center; }
+.insp-cell-chk label { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+.insp-color h4 { margin: 0 0 10px; }
 
 .bank-list { padding: 12px; }
 .bl-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 8px; }

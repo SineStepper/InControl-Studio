@@ -52,8 +52,10 @@
     // Knobs have no RGB ring; led.idle is the on-screen knob-glyph colour, which
     // the SL shows white by default (not black/unlit).
     if (cls === 'knob') Object.assign(base, { mode: 'Absolute', resolution: 616, step: 1, pivot: 0, combined: 'None', led: led('#ffffff', '#ffffff', '#000000') });
-    if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 127, up_value: 0 });
-    if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 127, up_value: 0, vel_min: 1, vel_max: 127, vel_curve: 'None' });
+    // Switches (buttons / footswitch / pad hits) carry the full behaviour set so
+    // the editor can expose Inc/Dec step / wrap / pair and the push/release action (#80).
+    if (cls === 'button' || cls === 'footswitch') Object.assign(base, { behavior: 'Momentary', down_value: 127, up_value: 0, action: 'On Push', step_size: 1, wrap: false, pair: false });
+    if (cls === 'pad_hit') Object.assign(base, { message_type: 'Note', behavior: 'Momentary', down_value: 127, up_value: 0, action: 'On Push', step_size: 1, wrap: false, pair: false, vel_min: 1, vel_max: 127, vel_curve: 'None' });
     if (cls === 'pad_pressure') Object.assign(base, { message_type: 'Poly Aftertouch' });
     return Object.assign(base, over || {});
   }
@@ -136,16 +138,17 @@
     // faders
     m.faders = T.faders.map((src, i) => { const a = make('fader', { name: src.name || 'Fader ' + (i + 1) }); mapCommon(a, src); a.cc = src.second_param || 0; return a; });
     // buttons -> fixed Mute/Send bank + imported bank
-    m.buttonBanks = [muteSendBank(), T.buttons.map((src, i) => { const a = make('button', { name: src.name || 'Button ' + (i + 1) }); mapCommon(a, src); a.cc = src.fourth_param || 0; a.note = src.third_param || 0; a.behavior = BEHAVIORS[src.behavior] || 'Momentary'; a.down_value = src.first_param & 0x7f; a.up_value = src.second_param & 0x7f; return a; })];
+    const mapSwitch = (a, src) => { a.behavior = BEHAVIORS[src.behavior] || 'Momentary'; a.down_value = src.first_param & 0x7f; a.up_value = src.second_param & 0x7f; a.action = src.action ? 'On Release' : 'On Push'; a.step_size = src.step || 1; a.wrap = !!src.wrap; a.pair = !!src.pair; };
+    m.buttonBanks = [muteSendBank(), T.buttons.map((src, i) => { const a = make('button', { name: src.name || 'Button ' + (i + 1) }); mapCommon(a, src); a.cc = src.fourth_param || 0; a.note = src.third_param || 0; mapSwitch(a, src); return a; })];
     // pads
-    m.pads.hits = T.pad_hits.map((src, i) => { const a = make('pad_hit', { name: src.name || 'Pad ' + (i + 1) }); mapCommon(a, src); a.note = src.third_param || 0; a.cc = src.fourth_param || 0; a.behavior = BEHAVIORS[src.behavior] || 'Momentary'; a.vel_max = src.max_velocity != null ? src.max_velocity : 127; a.vel_min = src.min_velocity != null ? src.min_velocity : 1; a.vel_curve = VEL_CURVES[src.range_method] || 'None'; return a; });
+    m.pads.hits = T.pad_hits.map((src, i) => { const a = make('pad_hit', { name: src.name || 'Pad ' + (i + 1) }); mapCommon(a, src); a.note = src.third_param || 0; a.cc = src.fourth_param || 0; mapSwitch(a, src); a.vel_max = src.max_velocity != null ? src.max_velocity : 127; a.vel_min = src.min_velocity != null ? src.min_velocity : 1; a.vel_curve = VEL_CURVES[src.range_method] || 'None'; return a; });
     m.pads.pressures = T.pad_pressures.map((src, i) => { const a = make('pad_pressure', { name: src.name || 'Pad ' + (i + 1) }); mapCommon(a, src); a.cc = src.second_param || 0; return a; });
     // wheels / pedals
     if (T.wheels[0]) { mapCommon(m.wheels.pitch, T.wheels[0]); m.wheels.pitch.cc = T.wheels[0].second_param || 0; }
     if (T.wheels[1]) { mapCommon(m.wheels.mod, T.wheels[1]); m.wheels.mod.cc = T.wheels[1].second_param || 0; }
     if (T.pedals[0]) { mapCommon(m.pedals.sustain, T.pedals[0]); m.pedals.sustain.cc = T.pedals[0].second_param || 0; }
     if (T.pedals[1]) { mapCommon(m.pedals.expression, T.pedals[1]); m.pedals.expression.cc = T.pedals[1].second_param || 0; }
-    if (T.footswitches[0]) { const src = T.footswitches[0]; mapCommon(m.pedals.footswitch, src); m.pedals.footswitch.cc = src.fourth_param || 0; m.pedals.footswitch.behavior = BEHAVIORS[src.behavior] || 'Momentary'; }
+    if (T.footswitches[0]) { const src = T.footswitches[0]; mapCommon(m.pedals.footswitch, src); m.pedals.footswitch.cc = src.fourth_param || 0; mapSwitch(m.pedals.footswitch, src); }
     m.name = tpl.name || 'Imported';
     return m;
   }
@@ -273,7 +276,7 @@
     const vc = (c) => Math.max(0, VEL_CURVES.indexOf(c));
     const faderRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), channel: a.channel, from_value: a.start | 0, to_value: a.end | 0, first_param: 0, second_param: a.cc | 0, lsb_index: 0 });
     const knobRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), first_param: a.cc | 0, lsb_index: 0, relative: a.mode === 'Relative' ? 1 : 0, eight_bit: a.bit_depth === '14-bit' ? 1 : 0, pivot: a.pivot | 0, step: a.step || 1, resolution: a.resolution || 616, channel: a.channel, from_value: a.start | 0, to_value: a.end | 0 });
-    const btnRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), behavior: beh(a.behavior), action: 0, first_param: a.down_value | 0, second_param: a.up_value | 0, step: 0, wrap: false, pair: false, channel: a.channel, third_param: a.note | 0, fourth_param: a.cc | 0, lsb_index: 0 });
+    const btnRec = (a) => ({ enabled: !!a.enabled, name: a.name || '', message_type: midx(a.message_type), behavior: beh(a.behavior), action: a.action === 'On Release' ? 1 : 0, first_param: a.down_value | 0, second_param: a.up_value | 0, step: a.step_size | 0, wrap: !!a.wrap, pair: !!a.pair, channel: a.channel, third_param: a.note | 0, fourth_param: a.cc | 0, lsb_index: 0 });
     const padRec = (a) => Object.assign(btnRec(a), { max_velocity: a.vel_max | 0, min_velocity: a.vel_min | 0, range_method: vc(a.vel_curve) });
     const pad16 = (arr) => { const o = arr.slice(0, 16); while (o.length < 16) o.push(make('knob')); return o; };
     const bbank = sm.buttonBanks[1] || sm.buttonBanks[0];
