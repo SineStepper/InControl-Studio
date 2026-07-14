@@ -75,6 +75,11 @@ const played = [];
 for (let k = 0; k < Q.SYNC['1/16'] * 8; k++) Q.onTick(crt, rng0).filter((e) => e.type === 'on').forEach((e) => played.push(e.note));
 eq(played, [60, 72, 60, 72], 'chain 0-1 alternates patterns 0 and 1');
 eq(ct.activePattern, 1, 'chain leaves activePattern on the last-played pattern');
+// #70: stopping rewinds a chained track to the first pattern of its chain, step 1
+Q.stop(crt);
+eq(ct.activePattern, 0, '#70 stop rewinds a chained track to the first pattern of its chain');
+eq(crt.pos[0].pad, ct.patterns[0].start || 0, '#70 stop positions a chained track at step 1 of that pattern');
+eq(crt.pos[0].counter, -1, '#70 stop resets the chained track step counter');
 
 // micro-steps: a note on micro-step 3 fires 3/6 of a step late
 const mseq = Q.newSequencer(); const mp = mseq.tracks[0].patterns[0];

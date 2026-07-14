@@ -26,6 +26,15 @@ logic in `js/studio-options.js`.
   (1-8). Selecting a channel moves the sequencer track to match, routes
   `default`-channel controls to that channel, and swaps in that channel's
   **assigned template** if one is set (Studio → "Per-channel instruments" bar).
+- **Per-Part control values (#60):** every Part has its **own** control state —
+  knob (endless-encoder) values, button toggles, inc/dec counters — so switching
+  Parts never drags the previous Part's knob values along. Bank/pad-mode position
+  carries over so paging still feels continuous.
+- **Held notes on Part switch (#64):** changing Parts while holding a key sends a
+  note-off on the note's **origin** channel so it can't hang on the wrong Part. If
+  the **sustain pedal** is down the destination synth holds the note (so it keeps
+  ringing until you release the pedal), and the pedal follows whichever Part is
+  selected — exactly like a hardware multitimbral part switch.
 - **Soft 9-24** (the 16 buttons above the faders) are the fixed **Mute/Solo**
   bank: Soft 9-16 = Mute 1-8, Soft 17-24 = Solo 1-8. They send no MIDI of their
   own — only their colour is editable (Mute orange, Solo light blue by default).
@@ -54,6 +63,19 @@ pressed, unless stated below.**
   dim white — all flash white when pressed.
 - **Up/down arrows** (Pads, Screen, Right-Soft) light only when there's somewhere
   to go; Screen Up/Down mirror Pads Up/Down (pattern paging).
+- **Metronome grid flash (Grid, id 64):** the **downbeat** (first beat of the
+  pattern/bar — the accented click) flashes **green**; the other beats flash
+  **yellow** (#61).
+- **Stop** rewinds every **chained** track to the first pattern of its chain,
+  step 1, so a restart begins the chain from the top (#70).
+- **5th screen (knob screen 5) bottom half** is a shared info area: normally the
+  selected Part's playhead graphic (#66); while a knob/fader is being adjusted it
+  briefly shows that control's value tinted its colour; on a Patterns-view page
+  change it briefly shows the two paged-to Part names in white (#69).
+- **Keybed light guide (#67):** the selected Part lights all keys its colour;
+  a key played on the keyboard lights **white**; auditioning a step's notes with
+  a pad lights those keys **red**. The lowest ~14 keys share LED ids with the
+  fader/function LEDs, so they stay dark to avoid clobbering those.
 - **Faders/wheels** have no idle/pressed state — LED brightness tracks value.
 - Every change is pushed to the SL MkIII automatically (no refresh button).
 - **Keybed light guide** (SysEx ids 54-114): **off by default.** The

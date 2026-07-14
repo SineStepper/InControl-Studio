@@ -484,4 +484,83 @@ const targetBeat24 = 8 * secPerTick; // (24-16) ticks ahead of the frozen audio-
 ok(clickTimes.some((t) => Math.abs(t - (targetBeat24 - 0.05)) < 1e-6), 'click is scheduled 50ms (audio latency) early, so it is heard on the beat');
 st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false; st.audioCtx = null; delete global.AudioContext;
 
+// --- #60 each Part keeps its OWN control values (separate runtimes) ---
+st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false; st.clock = null; st.seqRt = null;
+st.channelRt = {}; st.heldKeys.clear(); st.noteChan.clear();
+RT.handleControl(CC(0x33 + 0, 127)); // Part 1
+const rt1 = st.rt; rt1.acc['knob:0:0'] = 99;
+RT.handleControl(CC(0x33 + 1, 127)); // Part 2
+ok(st.rt !== rt1, '#60 each Part gets its own runtime');
+ok(st.rt.acc['knob:0:0'] === undefined, '#60 Part 2 does not inherit Part 1 knob value');
+RT.handleControl(CC(0x33 + 0, 127)); // back to Part 1
+ok(st.rt === rt1 && st.rt.acc['knob:0:0'] === 99, '#60 Part 1 keeps its own knob value across switches');
+
+// --- #64 held note stops on its ORIGIN channel when switching Parts ---
+st.channelRt = {}; st.heldKeys.clear(); st.noteChan.clear();
+RT.handleControl(CC(0x33 + 0, 127)); // Part 1 -> channel 1 (ch0)
+RT.handleKeys([0x90, 61, 100]);      // hold a note -> sounds on ch0, tracked
+mark = sent.length;
+RT.handleControl(CC(0x33 + 2, 127)); // switch to Part 3
+ok(sent.slice(mark).some((m) => m.id === 'dest' && m.bytes[0] === (0x80 | 0) && m.bytes[1] === 61), '#64 switching Parts sends note-off on the ORIGIN channel (ch1), not the new one');
+ok(st.heldKeys.size === 0, '#64 physically-held keys are cleared after the switch');
+st.heldKeys.clear(); st.noteChan.clear();
+
+// --- #61 downbeat flashes green on the grid LED, other beats yellow ---
+st.optionsMode = false; st.mute.clear(); st.solo.clear(); st.gridTrack = 0;
+model.sequencer.tracks[0].patterns[0] = SEQ.newPattern(); // 16 steps @ 1/16 -> 96 ticks/loop
+model.sequencer.metronome = { on: true, sound: 'Ping' }; st.audioCtx = null;
+st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
+const led64 = (mk) => { const m = sent.slice(mk).reverse().find((x) => x.bytes[7] === 0x03 && x.bytes[8] === 64); return m ? { r: m.bytes[10], g: m.bytes[11], b: m.bytes[12] } : null; };
+mark = sent.length; RT.tick(); // beatTick 0 = downbeat
+let g0 = led64(mark);
+ok(g0 && g0.r === 0 && g0.g > 0 && g0.b === 0, '#61 downbeat flashes green');
+for (let i = 0; i < 23; i++) RT.tick(); // advance to seqRt.tick = 24
+mark = sent.length; RT.tick(); // beatTick 24 = beat 2 (not a downbeat)
+let g1 = led64(mark);
+ok(g1 && g1.r > 0 && g1.g > 0 && g1.b === 0, '#61 non-downbeat beats flash yellow');
+st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false;
+
+// --- #63/#65/#66 knob screens: coloured bars, part label at the bottom, 5th-screen step graphic ---
+st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
+RT.handleControl(CC(0x33 + 0, 127)); // Part 1
+mark = sent.length;
+RT.refreshSurface();
+const kscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02);
+const stxt = (col, obj) => { const m = kscr.find((x) => x.bytes[8] === col && x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
+ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 0), '#63 knob screen top bar gets an RGB colour (type 4, obj 0)');
+ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2), '#63 knob screen bottom bar gets an RGB colour (type 4, obj 2)');
+ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
+ok(stxt(4, 2) != null && stxt(4, 3) != null, '#66 5th screen (col 4) shows a two-row step graphic on objs 2 & 3');
+st.running = false;
+
+// --- #68/#69 centre screen: Mute/Solo two rows + edge colour bars ---
+st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
+if (st.rt) st.rt.buttonBank = 0;
+RT.handleControl(CC(0x33 + 0, 127)); // Part 1
+mark = sent.length;
+RT.refreshSurface();
+const cscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8);
+const ctxt = (obj) => { const m = cscr.find((x) => x.bytes[9] === 0x01 && x.bytes[10] === obj); if (!m) return null; let s = ''; for (let i = 11; i < m.bytes.length && m.bytes[i] !== 0; i++) s += String.fromCharCode(m.bytes[i]); return s; };
+ok(ctxt(2) === 'Mute' && ctxt(3) === 'Solo', '#69 centre screen shows Mute over Solo when the Mute/Solo bank is selected');
+ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 0), '#68 centre screen left column has a Part-colour bar (RGB obj 0)');
+ok(cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 2) && cscr.some((m) => m.bytes[9] === 0x04 && m.bytes[10] === 3), '#68 centre screen right edge has two colour bars (RGB objs 2 & 3)');
+
+// --- #68 knob screen top bar only appears for ENABLED knobs ---
+model.knobBanks[0][0].enabled = true; model.knobBanks[0][1].enabled = false;
+mark = sent.length; RT.refreshSurface();
+const kbars = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[9] === 0x04 && m.bytes[10] === 0);
+const barAt = (col) => { const m = kbars.find((x) => x.bytes[8] === col); return m ? (m.bytes[11] || m.bytes[12] || m.bytes[13]) : 0; };
+ok(barAt(0) > 0, '#68 enabled knob (col 0) shows a Part-colour top bar');
+ok(barAt(1) === 0, '#68 disabled knob (col 1) shows no top bar (black)');
+model.knobBanks[0][1].enabled = true;
+
+// --- #69 adjusting a knob briefly shows its value on the 5th screen ---
+Object.assign(model.knobBanks[0][0], { message_type: 'CC', cc: 74, start: 0, end: 127, bit_depth: '7-bit', channel: 'default', mode: 'Absolute', step: 1, enabled: true, led: { idle: '#00ff00', pressed: '#fff' } });
+st.channelRt = {}; RT.handleControl(CC(0x33 + 0, 127));
+mark = sent.length;
+RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
+const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 4 && m.bytes[9] === 0x01 && (m.bytes[10] === 2 || m.bytes[10] === 3));
+ok(v5.length > 0, '#69 turning a knob writes an overlay onto the 5th screen (col 4 bottom half)');
+st.screen5 = null; st.running = false;
+
 console.log('\n' + n + ' integration assertions passed');

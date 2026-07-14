@@ -87,6 +87,44 @@ while auditioning/holding a step) but it is **off by default** for this reason;
 enable it with `SLMK.studioRuntime.setKeyGuide(true)` to experiment (base note
 `LOW_NOTE` in `studio-runtime.js`). The colour editor omits the keybed entirely.
 
+## Screens (InControl notification API)
+
+The eight column screens (below the knobs) are addressed 0–7; the small centre
+screen is column 8. Set a **layout** first, then set **properties** on the
+objects within each column.
+
+```
+Layout:    F0 00 20 29 02 0A 01 01 <layout> F7          # 0 empty, 1 knob, 2 box
+Property:  F0 00 20 29 02 0A 01 02 <col> <type> <obj> <data…> F7
+```
+
+| Property `type` | Meaning | Data |
+| --------------- | ------- | ---- |
+| `01` | Text  | 7-bit ASCII, ≤9 chars, NUL-terminated |
+| `03` | Value | one byte 0–127 (drives the knob arc) |
+| `04` | RGB   | `<R> <G> <B>`, 0–127 each |
+
+**Objects within a column** (knob layout):
+
+| `obj` | Position | Used for |
+| ----- | -------- | -------- |
+| `0` | Top row  | knob name (text) / top-bar colour |
+| `1` | Knob icon | the value arc (value) + its number (text) + icon colour (RGB) |
+| `2` | Below the knob | text / bottom-bar colour |
+| `3` | Bottom edge | the lowest text row (labels hug the bottom here) |
+
+This app tints the top (`obj 0`) and bottom (`obj 2`) bars for at-a-glance
+colour coding, keeps Part labels on the bottom row (`obj 3`), and draws a live
+two-row playhead graphic across the 5th screen's lower half (`obj 2`/`obj 3`).
+Each column's bottom label is tinted its own Part's colour (the selected Part
+brighter); the knob-name top bar shows only when that knob is enabled.
+
+**Centre screen (column 8)** is treated as a 2×2 text grid: `obj 0`/`obj 1` =
+left column (Part name / knob bank, tinted the Part colour = the left-side bar),
+`obj 2`/`obj 3` = right column (button-bank info — "Mute"/"Solo" on the fixed
+bank — with the two right-edge bars taking the average colour of the top and
+bottom rows of the current button-bank page).
+
 ## Device inquiry (identify the unit)
 
 Standard MIDI Device Inquiry works:
