@@ -348,13 +348,18 @@ const stopPanic = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.b
 ok(stopPanic.size === 16, '#59 Stop sends All-Notes-Off to all 16 channels (got ' + stopPanic.size + ')');
 st.running = false;
 
-// --- #17 Patterns view pages the Parts with Pads Up/Down ---
-st.padView = 'patterns'; st.partTop = 0; st.rt.padMode = 'sequencer';
-RT.handleControl(CC(0x56, 127)); // Pads Down -> next pair of Parts (by 2, #52)
-ok(st.partTop === 2, '#52 Pads Down pages the visible Parts by 2');
-RT.handleControl(CC(0x55, 127)); // Pads Up
-ok(st.partTop === 0, '#17 Pads Up pages Parts back');
-st.padView = 'steps';
+// --- #93 Patterns view: Pads Up/Down move the SELECTED Part one at a time,
+//     keeping the two-row layout and paging the pair only when needed ---
+st.padView = 'patterns'; st.partTop = 0; st.gridTrack = 0; st.activeChannel = 1; st.rt.padMode = 'sequencer';
+RT.handleControl(CC(0x56, 127)); // Pads Down: Part 1 -> Part 2 (same visible pair)
+ok(st.gridTrack === 1 && st.partTop === 0, '#93 down selects Part 2 without paging');
+RT.handleControl(CC(0x56, 127)); // Pads Down: Part 2 -> Part 3 (pages to the pair 3 & 4)
+ok(st.gridTrack === 2 && st.partTop === 2, '#93 down again pages to Parts 3-4 and selects Part 3');
+RT.handleControl(CC(0x55, 127)); // Pads Up: back to Part 2 (pair 1 & 2)
+ok(st.gridTrack === 1 && st.partTop === 0, '#93 up moves the selection back one Part');
+st.gridTrack = 7; st.activeChannel = 8; RT.handleControl(CC(0x56, 127)); // at the last Part, no wrap
+ok(st.gridTrack === 7, '#93 down at the last Part does not wrap');
+st.padView = 'steps'; st.gridTrack = 0; st.activeChannel = 1;
 
 // --- #53 switching view keeps the Part + auto-pages to what's playing ---
 st.gridTrack = 5; st.activeChannel = 6; st.partTop = 0; st.viewPattern = 3;
