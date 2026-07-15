@@ -134,5 +134,13 @@ for (let k = 0; k < 24 * 8; k++) Q.onTick(trt).filter((e) => e.type === 'on').fo
 ok(Math.max.apply(null, Array.from(seen)) <= 11, '#83 3/4 never plays a step past 12');
 tsig.signature = '4/4';
 eq(Q.barBounds(tsig, tsig.tracks[0].patterns[0]).end, 15, '#83 switching back to 4/4 restores the full range (non-destructive)');
+// #83 applySignature auto-fits start/end and coarsens the step rate so odd
+// signatures (5/4, 7/4, 9/8) fit the 16-pad grid and stay aligned with the bar.
+[['3/4', '1/16', 12], ['4/4', '1/16', 16], ['5/4', '1/8', 10], ['6/8', '1/16', 12], ['7/8', '1/16', 14], ['7/4', '1/8', 14], ['9/8', '1/8', 9]].forEach(([sig, rate, steps]) => {
+  const s = Q.newSequencer(); Q.applySignature(s, sig); const p = s.tracks[0].patterns[0];
+  eq([p.syncRate, p.start, p.end + 1], [rate, 0, steps], '#83 ' + sig + ' auto-fits to ' + steps + ' ' + rate + ' steps');
+  eq((p.end - p.start + 1) * Q.SYNC[p.syncRate], Q.sigBarTicks(sig), '#83 ' + sig + ' pattern loop == the bar (metronome stays aligned)');
+});
+ok(!Q.SIG_ORDER.includes('2/4') && Q.SIG_ORDER.includes('5/4') && Q.SIG_ORDER.includes('9/8'), '#83 signature list: 2/4 removed; 5/4 & 9/8 added');
 
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

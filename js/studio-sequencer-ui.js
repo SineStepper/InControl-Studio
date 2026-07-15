@@ -69,7 +69,7 @@
     bar.appendChild(el('label', { className: 'seq-f' }, ['Part color ', col]));
     bar.appendChild(selField('Swing', [['On', 'On'], ['Off', 'Off']], c.track.swing || 'On', (v) => { c.track.swing = v; }));
     // Time signature (#83): limits how many steps of the grid are usable.
-    bar.appendChild(selField('Signature', Q().SIG_ORDER.map((s) => [s, s]), c.m.sequencer.signature || '4/4', (v) => { c.m.sequencer.signature = v; if (RT()) RT().restartClock(); render(host); }));
+    bar.appendChild(selField('Signature', Q().SIG_ORDER.map((s) => [s, s]), c.m.sequencer.signature || '4/4', (v) => { Q().applySignature(c.m.sequencer, v); if (RT()) RT().restartClock(); render(host); }));
     main.appendChild(bar);
 
     // pattern settings
@@ -113,10 +113,11 @@
 
     // 16-step grid (2 rows of 8)
     const grid = el('div', { className: 'seq-grid' });
-    const spb = Q().stepsPerBar(c.m.sequencer); // steps the signature allows (#83)
+    const spb = Q().stepsPerBar(c.m.sequencer, c.pat); // steps the signature allows (#83)
     for (let i = 0; i < 16; i++) {
       const disabled = i >= spb; // steps beyond the time signature are unavailable
       const has = Q().stepHasNotes(c.pat, i);
+      // pads outside the start/end range go dark; beyond the signature they're off (#83)
       const inRange = !disabled && i >= Math.min(c.pat.start, c.pat.end) && i <= Math.max(c.pat.start, c.pat.end);
       const cell = el('button', { className: 'seq-step' + (has ? ' on' : '') + (selStep === i ? ' sel' : '') + (disabled ? ' disabled' : inRange ? '' : ' oob'), dataset: { step: i } });
       cell.appendChild(el('span', { className: 'ss-n' }, String(i + 1)));

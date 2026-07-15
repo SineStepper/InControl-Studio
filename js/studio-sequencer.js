@@ -23,19 +23,45 @@
   const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
   const STEPS = 16, TRACKS = 8, PATTERNS = 8;
 
-  // Time signature (#83): the number of 16th-note steps a bar occupies is
-  // numerator × (16 / denominator), capped at the 16-step grid. The signature is
-  // global (all tracks/patterns) and limits how many pads are usable.
-  const SIGNATURES = { '2/4': 8, '3/4': 12, '4/4': 16, '6/8': 12 };
-  const SIG_ORDER = ['2/4', '3/4', '4/4', '6/8'];
-  function stepsPerBar(seq) { return SIGNATURES[(seq && seq.signature) || '4/4'] || 16; }
-  // The effective [start,end] of a pattern once the signature cap is applied
-  // (non-destructive — the pattern keeps its own start/end).
+  // Time signature (#83). A bar lasts numerator × (96/denominator) ticks (24-PPQN,
+  // 96 = one whole note). The step grid shows exactly one bar: it keeps the
+  // pattern's own step rate when a bar fits in the 16 pads at it, and coarsens the
+  // rate (→ 1/8, → 1/4) when it wouldn't — so 5/4, 7/4 and 9/8 (which need >16
+  // sixteenth-steps) fit as eighth-note steps and stay aligned with the metronome.
+  const SIG_ORDER = ['3/4', '4/4', '5/4', '6/8', '7/8', '7/4', '9/8'];
+  function sigBarTicks(sig) { const m = /^(\d+)\/(\d+)$/.exec(sig || '4/4'); const num = m ? (+m[1] || 4) : 4, den = m ? (+m[2] || 4) : 4; return num * Math.round(96 / den); }
+  // The finest sync rate at which a signature's bar fits within 16 pads, + step count.
+  function sigGrid(sig) {
+    const bar = sigBarTicks(sig), rates = ['1/16', '1/8', '1/4'];
+    for (let i = 0; i < rates.length; i++) { const steps = Math.round(bar / SYNC[rates[i]]); if (steps <= 16) return { syncRate: rates[i], steps }; }
+    return { syncRate: '1/4', steps: 16 };
+  }
+  // How many pads a pattern uses under the current signature + its own sync rate.
+  function stepsPerBar(seq, pattern) {
+    const bar = sigBarTicks((seq && seq.signature) || '4/4');
+    const rate = (pattern && pattern.syncRate) || sigGrid((seq && seq.signature) || '4/4').syncRate;
+    return Math.min(16, Math.max(1, Math.round(bar / (SYNC[rate] || 6))));
+  }
   function barBounds(seq, p) {
-    const max = stepsPerBar(seq) - 1;
+    const max = stepsPerBar(seq, p) - 1;
     const end = Math.min(p.end == null ? max : p.end, max);
     const start = Math.min(p.start == null ? 0 : p.start, end);
     return { start, end };
+  }
+  // Apply a signature and auto-fit every pattern's step rate + start/end so the
+  // grid spans exactly one bar (#83): keep the pattern's rate when the bar fits at
+  // it, coarsen it when it doesn't, then set start=0 / end=last-step-of-the-bar.
+  function applySignature(seq, sig) {
+    seq.signature = sig;
+    const bar = sigBarTicks(sig);
+    seq.tracks.forEach((t) => t.patterns.forEach((p) => {
+      let rate = p.syncRate || '1/16';
+      if (Math.round(bar / (SYNC[rate] || 6)) > 16) rate = sigGrid(sig).syncRate; // coarsen only when needed
+      p.syncRate = rate;
+      p.start = 0;
+      p.end = Math.min(16, Math.round(bar / SYNC[rate])) - 1;
+    }));
+    return sigGrid(sig);
   }
 
   // Default Part colors (one per track), echoing the SL MkIII's colored Parts.
@@ -229,7 +255,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.sequencer = {
     PPQN, SYNC, SYNC_ORDER, DIRECTIONS, STEPS, TRACKS, PATTERNS, DEFAULT_NOTE, PART_COLORS,
-    SIGNATURES, SIG_ORDER, stepsPerBar, barBounds,
+    SIG_ORDER, sigBarTicks, sigGrid, stepsPerBar, barBounds, applySignature,
     newSequencer, newPattern, newTrack, makeSeqRuntime, stepIndexFor, gateTicks, onTick,
     start, stop, allNotesOff, toggleStepNote, toggleMicroNote, microHasNotes, stepHasNotes, clearStep, copyStep, clearPattern, copyPattern,
     setStepField, setStepChance, transposePattern,

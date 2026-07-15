@@ -116,8 +116,8 @@ main.single { grid-template-columns: 1fr 340px; }
 .seq-step.on { background: #123240; color: #cdefff; border-color: #2f6f8a; }
 .seq-step.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
 .seq-step.head { box-shadow: inset 0 0 0 3px #ffffff; }
-.seq-step.oob { opacity: .4; }
-.seq-step.disabled { opacity: .12; pointer-events: none; } /* beyond the time signature (#83) */
+.seq-step.oob { opacity: .18; } /* outside start/end — dark but still editable (#83) */
+.seq-step.disabled { opacity: .08; pointer-events: none; } /* beyond the time signature (#83) */
 .ss-n { font-size: 10px; opacity: .7; }
 .ss-note { font-size: 13px; font-weight: 600; }
 .seq-editor { max-width: 420px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
