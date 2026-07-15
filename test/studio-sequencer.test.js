@@ -141,6 +141,10 @@ eq(Q.barBounds(tsig, tsig.tracks[0].patterns[0]).end, 15, '#83 switching back to
   eq([p.syncRate, p.start, p.end + 1], [rate, 0, steps], '#83 ' + sig + ' auto-fits to ' + steps + ' ' + rate + ' steps');
   eq((p.end - p.start + 1) * Q.SYNC[p.syncRate], Q.sigBarTicks(sig), '#83 ' + sig + ' pattern loop == the bar (metronome stays aligned)');
 });
-ok(!Q.SIG_ORDER.includes('2/4') && Q.SIG_ORDER.includes('5/4') && Q.SIG_ORDER.includes('9/8'), '#83 signature list: 2/4 removed; 5/4 & 9/8 added');
+eq(Q.SIG_ORDER, ['4/4', '3/4', '6/8', '5/4', '7/4', '7/8', '9/8'], '#83 signature list order');
+// #83 every signature change resets the step rate: 5/4 (→1/8) back to 4/4 → 1/16
+const rs = Q.newSequencer();
+Q.applySignature(rs, '5/4'); eq(rs.tracks[0].patterns[0].syncRate, '1/8', '#83 5/4 sets rate 1/8');
+Q.applySignature(rs, '4/4'); eq(rs.tracks[0].patterns[0].syncRate, '1/16', '#83 back to 4/4 resets rate to 1/16');
 
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

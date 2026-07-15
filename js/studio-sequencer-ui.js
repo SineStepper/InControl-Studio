@@ -76,7 +76,7 @@
     const set = el('div', { className: 'seq-bar' });
     set.appendChild(selField('Sync', Q().SYNC_ORDER.map((s) => [s, s]), c.pat.syncRate, (v) => { c.pat.syncRate = v; if (RT()) RT().restartClock(); }));
     set.appendChild(selField('Direction', Q().DIRECTIONS.map((d) => [d, d]), c.pat.direction, (v) => { c.pat.direction = v; }));
-    const spbMax = Q().stepsPerBar(c.m.sequencer) - 1; // signature cap (#83)
+    const spbMax = Q().stepsPerBar(c.m.sequencer, c.pat) - 1; // signature cap (#83)
     set.appendChild(numField('Start', c.pat.start, 0, spbMax, (v) => { c.pat.start = v; render(host); }));
     set.appendChild(numField('End', c.pat.end, 0, spbMax, (v) => { c.pat.end = v; render(host); }));
     set.appendChild(el('button', { className: 'btn' }, 'Clear pattern')).addEventListener('click', () => { pushUndo(c.m); Q().clearPattern(c.pat); render(host); });
@@ -113,16 +113,13 @@
 
     // 16-step grid (2 rows of 8)
     const grid = el('div', { className: 'seq-grid' });
-    const spb = Q().stepsPerBar(c.m.sequencer, c.pat); // steps the signature allows (#83)
     for (let i = 0; i < 16; i++) {
-      const disabled = i >= spb; // steps beyond the time signature are unavailable
       const has = Q().stepHasNotes(c.pat, i);
-      // pads outside the start/end range go dark; beyond the signature they're off (#83)
-      const inRange = !disabled && i >= Math.min(c.pat.start, c.pat.end) && i <= Math.max(c.pat.start, c.pat.end);
-      const cell = el('button', { className: 'seq-step' + (has ? ' on' : '') + (selStep === i ? ' sel' : '') + (disabled ? ' disabled' : inRange ? '' : ' oob'), dataset: { step: i } });
+      const inRange = i >= Math.min(c.pat.start, c.pat.end) && i <= Math.max(c.pat.start, c.pat.end);
+      const cell = el('button', { className: 'seq-step' + (has ? ' on' : '') + (selStep === i ? ' sel' : '') + (inRange ? '' : ' oob'), dataset: { step: i } });
       cell.appendChild(el('span', { className: 'ss-n' }, String(i + 1)));
       cell.appendChild(el('span', { className: 'ss-note' }, has ? noteName(c.pat.steps[i].notes[0].note) + (c.pat.steps[i].notes.length > 1 ? '+' : '') : '·'));
-      if (!disabled) cell.addEventListener('click', (e) => {
+      cell.addEventListener('click', (e) => {
         selStep = i;
         if (e.shiftKey || e.metaKey) { pushUndo(c.m); Q().toggleStepNote(c.pat, i, Q().DEFAULT_NOTE, 100, 6); }
         render(host);

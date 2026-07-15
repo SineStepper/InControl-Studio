@@ -28,7 +28,7 @@
   // pattern's own step rate when a bar fits in the 16 pads at it, and coarsens the
   // rate (→ 1/8, → 1/4) when it wouldn't — so 5/4, 7/4 and 9/8 (which need >16
   // sixteenth-steps) fit as eighth-note steps and stay aligned with the metronome.
-  const SIG_ORDER = ['3/4', '4/4', '5/4', '6/8', '7/8', '7/4', '9/8'];
+  const SIG_ORDER = ['4/4', '3/4', '6/8', '5/4', '7/4', '7/8', '9/8'];
   function sigBarTicks(sig) { const m = /^(\d+)\/(\d+)$/.exec(sig || '4/4'); const num = m ? (+m[1] || 4) : 4, den = m ? (+m[2] || 4) : 4; return num * Math.round(96 / den); }
   // The finest sync rate at which a signature's bar fits within 16 pads, + step count.
   function sigGrid(sig) {
@@ -48,20 +48,15 @@
     const start = Math.min(p.start == null ? 0 : p.start, end);
     return { start, end };
   }
-  // Apply a signature and auto-fit every pattern's step rate + start/end so the
-  // grid spans exactly one bar (#83): keep the pattern's rate when the bar fits at
-  // it, coarsen it when it doesn't, then set start=0 / end=last-step-of-the-bar.
+  // Apply a signature and auto-fit every pattern so the grid spans exactly one bar
+  // (#83). Every signature change resets each pattern to the FINEST step rate that
+  // fits (1/16 where it can, coarser only when it must) and start=0 / end=last-
+  // step, so e.g. 5/4 (→1/8) then back to 4/4 resets the rate to 1/16.
   function applySignature(seq, sig) {
     seq.signature = sig;
-    const bar = sigBarTicks(sig);
-    seq.tracks.forEach((t) => t.patterns.forEach((p) => {
-      let rate = p.syncRate || '1/16';
-      if (Math.round(bar / (SYNC[rate] || 6)) > 16) rate = sigGrid(sig).syncRate; // coarsen only when needed
-      p.syncRate = rate;
-      p.start = 0;
-      p.end = Math.min(16, Math.round(bar / SYNC[rate])) - 1;
-    }));
-    return sigGrid(sig);
+    const g = sigGrid(sig);
+    seq.tracks.forEach((t) => t.patterns.forEach((p) => { p.syncRate = g.syncRate; p.start = 0; p.end = g.steps - 1; }));
+    return g;
   }
 
   // Default Part colors (one per track), echoing the SL MkIII's colored Parts.
