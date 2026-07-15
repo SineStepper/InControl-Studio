@@ -514,20 +514,27 @@ ok(sent.slice(mark).some((m) => m.id === 'dest' && m.bytes[0] === (0x80 | 0) && 
 ok(st.heldKeys.size === 0, '#64 physically-held keys are cleared after the switch');
 st.heldKeys.clear(); st.noteChan.clear();
 
-// --- #61 downbeat flashes green on the grid LED, other beats yellow ---
+// --- metronome grid flash: accent (downbeat) RED, other beats GREEN; 4/4 = quarter-note beats ---
 st.optionsMode = false; st.mute.clear(); st.solo.clear(); st.gridTrack = 0;
 model.sequencer.tracks[0].patterns[0] = SEQ.newPattern(); // 16 steps @ 1/16 -> 96 ticks/loop
-model.sequencer.metronome = { on: true, sound: 'Ping' }; st.audioCtx = null;
+model.sequencer.signature = '4/4'; model.sequencer.metronome = { on: true, sound: 'Ping' }; st.audioCtx = null;
 st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.clock = 1;
 const led64 = (mk) => { const m = sent.slice(mk).reverse().find((x) => x.bytes[7] === 0x03 && x.bytes[8] === 64); return m ? { r: m.bytes[10], g: m.bytes[11], b: m.bytes[12] } : null; };
 mark = sent.length; RT.tick(); // beatTick 0 = downbeat
 let g0 = led64(mark);
-ok(g0 && g0.r === 0 && g0.g > 0 && g0.b === 0, '#61 downbeat flashes green');
+ok(g0 && g0.r > 0 && g0.g === 0 && g0.b === 0, 'downbeat/accent flashes red');
 for (let i = 0; i < 23; i++) RT.tick(); // advance to seqRt.tick = 24
 mark = sent.length; RT.tick(); // beatTick 24 = beat 2 (not a downbeat)
 let g1 = led64(mark);
-ok(g1 && g1.r > 0 && g1.g > 0 && g1.b === 0, '#61 non-downbeat beats flash yellow');
-st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false;
+ok(g1 && g1.r === 0 && g1.g > 0 && g1.b === 0, 'non-downbeat beats flash green');
+// 6/8: eighth-note beats (12 ticks) and the accent falls on beat 1 of the bar (every 72 ticks)
+model.sequencer.signature = '6/8'; st.seqRt = SEQ.makeSeqRuntime(model.sequencer); st.seqRt.playing = true; st.seqRt.tick = 0; st.metro = null;
+mark = sent.length; RT.tick(); // tick 0 -> accent (red)
+let s0 = led64(mark); ok(s0 && s0.r > 0 && s0.g === 0 && s0.b === 0, '6/8 bar start flashes red');
+for (let i = 0; i < 11; i++) RT.tick(); // to tick 12 = an eighth-note beat, not the downbeat
+mark = sent.length; RT.tick(); let s1 = led64(mark);
+ok(s1 && s1.r === 0 && s1.g > 0 && s1.b === 0, '6/8 pulses on the eighth-note beat (12 ticks), green');
+model.sequencer.signature = '4/4'; st.clock = null; st.seqRt.playing = false; model.sequencer.metronome.on = false;
 
 // --- #63/#65/#66 knob screens: colored bars, part label at the bottom, 5th-screen step graphic ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;

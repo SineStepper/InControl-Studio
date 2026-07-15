@@ -311,6 +311,18 @@
   // Rebuild the audio context (after a latency-mode / output-device change).
   function resetAudio() { try { if (st.audioCtx && st.audioCtx.close) st.audioCtx.close(); } catch (e) {} st.audioCtx = null; st.metro = null; if (metroOn()) ensureAudio(); }
 
+  // Musical meter from the time signature (#83). The DENOMINATOR sets the beat
+  // unit — the metronome pulses once per beat, so /4 = quarter-note beats (24
+  // ticks), /8 = eighth-note beats (12 ticks), /16 = sixteenth (6). The NUMERATOR
+  // sets beats per bar; the accent falls on beat 1 (the downbeat). e.g. 6/8 = six
+  // eighth-note clicks per bar, first accented.
+  function meter() {
+    const seq = (st.seqRt && st.seqRt.seq) || (model() && model().sequencer);
+    const mm = /^(\d+)\/(\d+)$/.exec((seq && seq.signature) || '4/4');
+    const num = mm ? (+mm[1] || 4) : 4, den = mm ? (+mm[2] || 4) : 4;
+    const beatTicks = Math.max(1, Math.round(96 / den)); // 24-PPQN: 96 ticks = one whole note
+    return { num, den, beatTicks, barTicks: num * beatTicks };
+  }
   // Look-ahead scheduler: schedule every beat click whose audio time falls inside
   // the look-ahead window, at (predicted beat audio time − audio latency − extra
   // lead) so the sound is *heard* on the beat. Driven off the live (audioNow,
@@ -320,33 +332,33 @@
     const m = model(); const met = m.sequencer.metronome;
     if (met.silent) return; // "blink only": keep the grid flash, skip the audio click (#45)
     const ac = ensureAudio(); if (!ac) return;
-    const p = gridPattern(); if (!p) return;
     const tempo = m.sequencer.tempo || 120;
     const secPerTick = 60 / tempo / 24;
     const leadSec = ((st.audioLatencyMs || 0) + extraLeadMs()) / 1000; // how early to fire the oscillator
-    const pt = patternTicks(p);                                        // ticks per pattern loop (accent period)
+    const { beatTicks, barTicks } = meter();                          // beat unit + accent period from the signature
     const audioNow = ac.currentTime;
-    if (!st.metro || st.metro.tempo !== tempo) st.metro = { nextBeat: Math.ceil(curTick / 24) * 24, tempo }; // (re)anchor
+    // (re)anchor when tempo or the meter (beat unit) changes
+    if (!st.metro || st.metro.tempo !== tempo || st.metro.beatTicks !== beatTicks) st.metro = { nextBeat: Math.ceil(curTick / beatTicks) * beatTicks, tempo, beatTicks };
     const LOOK = Math.max(0.18, leadSec + 2 * secPerTick); // seconds of look-ahead
     // schedule all beats coming due within the window
     while ((st.metro.nextBeat - curTick) * secPerTick <= LOOK) {
       const beat = st.metro.nextBeat;
       const beatAudioTime = audioNow + (beat - curTick) * secPerTick; // when the beat is *heard*-target
       const when = Math.max(audioNow, beatAudioTime - leadSec);       // fire the osc this early
-      const accent = pt > 0 ? (((beat % pt) + pt) % pt) === 0 : (beat % 96 === 0);
+      const accent = (((beat % barTicks) + barTicks) % barTicks) === 0; // beat 1 = the downbeat accent
       playClick(ac, when, accent, met.sound || 'Ping');
-      st.metro.nextBeat += 24; // steady quarter-note pulse
+      st.metro.nextBeat += beatTicks; // one pulse per beat (follows the denominator)
     }
   }
-  // Grid LED flash on the *actual* beat (realtime), so the visual matches the grid.
-  // The downbeat (first beat of the pattern/bar — the accented click) flashes
-  // green; the other beats flash yellow (#61). The accent period matches the
-  // metronome's audio accent so the light and click agree.
+  // Grid LED flash on the *actual* beat (realtime), so the visual matches the
+  // sequencer. The downbeat (beat 1 of the bar — the accented click) flashes
+  // green; the other beats flash yellow (#61). Both the pulse rate and the accent
+  // follow the time signature, so the light and click agree (#83).
   function metronomeFlash(tick) {
-    if (!metroOn() || !st.slOutId || tick % 24 !== 0) return;
-    const p = gridPattern(); const pt = p ? patternTicks(p) : 96;
-    const downbeat = pt > 0 ? (((tick % pt) + pt) % pt) === 0 : (tick % 96 === 0);
-    ledHex(64, downbeat ? '#00ff00' : '#ffff00'); // downbeat green, other beats yellow (#61)
+    const { beatTicks, barTicks } = meter();
+    if (!metroOn() || !st.slOutId || tick % beatTicks !== 0) return;
+    const downbeat = (((tick % barTicks) + barTicks) % barTicks) === 0;
+    ledHex(64, downbeat ? '#ff0000' : '#00ff00'); // downbeat/accent red, other beats green
     clearTimeout(st.gridFlashTimer); st.gridFlashTimer = setTimeout(() => ledHex(64, dim('#ffffff')), 90);
   }
   function playClick(ac, when, accent, sound) {
