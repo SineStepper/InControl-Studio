@@ -367,7 +367,13 @@
     // gets maximum lead time. MIDI is always sent in realtime (never delayed).
     scheduleMetronome(beatTick);
     const events = SEQ().onTick(st.seqRt);
+    const recCh = st.recording ? (curTrack() ? (curTrack().channel - 1) & 0x0f : -1) : -1;
     events.forEach((e) => {
+      // While a note is still HELD during recording, don't let the sequencer's
+      // playback of that same pitch/channel emit its note-off — it would cut the
+      // live note you're holding (same note number, same channel). Hold as long as
+      // you like; the recorded gate is finalised on release (#82).
+      if (recCh === e.channel && st.recRef.has(e.note)) return;
       // Drop the sequencer's own echo of a note we just recorded + monitored live
       // this cycle, so the fresh note isn't heard twice (bug: double key on record).
       const ek = e.channel + ':' + e.note, until = st.recEcho.get(ek);
@@ -394,7 +400,7 @@
 
   // ---- Automation (record/replay control moves per pattern, up to 8 lanes) ----
   const autoKey = (group, index) => group + ':' + (group === 'knob' ? st.rt.knobBank : group === 'button' ? st.rt.buttonBank : 0) + ':' + index;
-  const patternTicks = (p) => (Math.abs((p.end || 0) - (p.start || 0)) + 1) * (SEQ().SYNC[p.syncRate] || 6);
+  const patternTicks = (p) => { const seq = (st.seqRt && st.seqRt.seq) || (model() && model().sequencer); const b = seq ? SEQ().barBounds(seq, p) : { start: p.start || 0, end: p.end || 0 }; return (Math.abs(b.end - b.start) + 1) * (SEQ().SYNC[p.syncRate] || 6); };
   function recordAutomation(group, index, bytes) {
     if (!st.recording || !seqIsPlaying() || !bytes || !bytes.length || !st.seqRt) return;
     const t = curTrack(); const p = t && t.patterns[t.activePattern]; if (!p) return;

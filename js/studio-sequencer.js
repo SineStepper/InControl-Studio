@@ -23,6 +23,21 @@
   const DIRECTIONS = ['Forward', 'Backwards', 'Ping-Pong', 'Random'];
   const STEPS = 16, TRACKS = 8, PATTERNS = 8;
 
+  // Time signature (#83): the number of 16th-note steps a bar occupies is
+  // numerator × (16 / denominator), capped at the 16-step grid. The signature is
+  // global (all tracks/patterns) and limits how many pads are usable.
+  const SIGNATURES = { '2/4': 8, '3/4': 12, '4/4': 16, '6/8': 12 };
+  const SIG_ORDER = ['2/4', '3/4', '4/4', '6/8'];
+  function stepsPerBar(seq) { return SIGNATURES[(seq && seq.signature) || '4/4'] || 16; }
+  // The effective [start,end] of a pattern once the signature cap is applied
+  // (non-destructive — the pattern keeps its own start/end).
+  function barBounds(seq, p) {
+    const max = stepsPerBar(seq) - 1;
+    const end = Math.min(p.end == null ? max : p.end, max);
+    const start = Math.min(p.start == null ? 0 : p.start, end);
+    return { start, end };
+  }
+
   // Default Part colors (one per track), echoing the SL MkIII's colored Parts.
   const PART_COLORS = ['#ff2d2d', '#ff8c00', '#ffd000', '#38d430', '#00c8c8', '#2b7bff', '#8a4bff', '#ff3bce'];
 
@@ -34,7 +49,7 @@
     return { channel: i + 1, activePattern: 0, color: PART_COLORS[i % 8], swing: 'On', chain: null, pending: null, patterns: Array.from({ length: PATTERNS }, newPattern) };
   }
   function newSequencer() {
-    return { tempo: 120, swing: 50, swingSync: '1/16', metronome: { on: false, sound: 'Ping' }, tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
+    return { tempo: 120, swing: 50, swingSync: '1/16', signature: '4/4', metronome: { on: false, sound: 'Ping' }, tracks: Array.from({ length: TRACKS }, (_, i) => newTrack(i)) };
   }
 
   // ---- playback runtime ----
@@ -110,7 +125,8 @@
         // changes will take effect when playback reaches the end of the Pattern").
         {
           const cur = track.patterns[track.activePattern];
-          const len = Math.abs((cur.end || 0) - (cur.start || 0)) + 1;
+          const cb = barBounds(rt.seq, cur);
+          const len = Math.abs(cb.end - cb.start) + 1;
           if (pstate.counter > 0 && pstate.counter % len === 0) {
             if (track.pending) {
               track.activePattern = track.pending.activePattern;
@@ -126,7 +142,8 @@
           }
         }
         const p2 = track.patterns[track.activePattern]; // may have changed at the boundary
-        const idx = stepIndexFor(pstate.counter, p2.start, p2.end, p2.direction, p2.shift, rng);
+        const b2 = barBounds(rt.seq, p2);
+        const idx = stepIndexFor(pstate.counter, b2.start, b2.end, p2.direction, p2.shift, rng);
         pstate.pad = idx;
         const step = p2.steps[idx];
         if (step && step.notes.length) {
@@ -212,6 +229,7 @@
   global.SLMK = global.SLMK || {};
   global.SLMK.sequencer = {
     PPQN, SYNC, SYNC_ORDER, DIRECTIONS, STEPS, TRACKS, PATTERNS, DEFAULT_NOTE, PART_COLORS,
+    SIGNATURES, SIG_ORDER, stepsPerBar, barBounds,
     newSequencer, newPattern, newTrack, makeSeqRuntime, stepIndexFor, gateTicks, onTick,
     start, stop, allNotesOff, toggleStepNote, toggleMicroNote, microHasNotes, stepHasNotes, clearStep, copyStep, clearPattern, copyPattern,
     setStepField, setStepChance, transposePattern,

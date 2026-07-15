@@ -122,4 +122,17 @@ const cat = {};
 for (let k = 0; k < Q.SYNC['1/16'] * 2; k++) Q.onTick(swrt, rng0).filter((e) => e.type === 'on').forEach((e) => (cat[e.note] = k));
 eq(cat[62], 6, '#39 with clockSwing, the off-beat note fires on its plain boundary (clock swings instead)');
 
+// #83 time signature: caps the usable step range (non-destructively) and playback
+const tsig = Q.newSequencer();
+eq(Q.stepsPerBar(tsig), 16, '#83 default 4/4 = 16 steps');
+tsig.signature = '3/4';
+eq(Q.stepsPerBar(tsig), 12, '#83 3/4 = 12 steps');
+eq(Q.barBounds(tsig, tsig.tracks[0].patterns[0]).end, 11, '#83 3/4 caps a full-length pattern end to 11');
+const tp = tsig.tracks[0].patterns[0]; tp.steps.forEach((s, i) => (s.notes = [{ note: 60 + i, velocity: 100, gate: 6 }]));
+const trt = Q.makeSeqRuntime(tsig); trt.playing = true; const seen = new Set();
+for (let k = 0; k < 24 * 8; k++) Q.onTick(trt).filter((e) => e.type === 'on').forEach((e) => seen.add(e.note - 60));
+ok(Math.max.apply(null, Array.from(seen)) <= 11, '#83 3/4 never plays a step past 12');
+tsig.signature = '4/4';
+eq(Q.barBounds(tsig, tsig.tracks[0].patterns[0]).end, 15, '#83 switching back to 4/4 restores the full range (non-destructive)');
+
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');

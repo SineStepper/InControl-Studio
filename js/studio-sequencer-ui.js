@@ -68,14 +68,17 @@
     col.addEventListener('input', () => { c.track.color = col.value; if (RT()) RT().refreshSurface(); render(host); });
     bar.appendChild(el('label', { className: 'seq-f' }, ['Part color ', col]));
     bar.appendChild(selField('Swing', [['On', 'On'], ['Off', 'Off']], c.track.swing || 'On', (v) => { c.track.swing = v; }));
+    // Time signature (#83): limits how many steps of the grid are usable.
+    bar.appendChild(selField('Signature', Q().SIG_ORDER.map((s) => [s, s]), c.m.sequencer.signature || '4/4', (v) => { c.m.sequencer.signature = v; if (RT()) RT().restartClock(); render(host); }));
     main.appendChild(bar);
 
     // pattern settings
     const set = el('div', { className: 'seq-bar' });
     set.appendChild(selField('Sync', Q().SYNC_ORDER.map((s) => [s, s]), c.pat.syncRate, (v) => { c.pat.syncRate = v; if (RT()) RT().restartClock(); }));
     set.appendChild(selField('Direction', Q().DIRECTIONS.map((d) => [d, d]), c.pat.direction, (v) => { c.pat.direction = v; }));
-    set.appendChild(numField('Start', c.pat.start, 0, 15, (v) => { c.pat.start = v; render(host); }));
-    set.appendChild(numField('End', c.pat.end, 0, 15, (v) => { c.pat.end = v; render(host); }));
+    const spbMax = Q().stepsPerBar(c.m.sequencer) - 1; // signature cap (#83)
+    set.appendChild(numField('Start', c.pat.start, 0, spbMax, (v) => { c.pat.start = v; render(host); }));
+    set.appendChild(numField('End', c.pat.end, 0, spbMax, (v) => { c.pat.end = v; render(host); }));
     set.appendChild(el('button', { className: 'btn' }, 'Clear pattern')).addEventListener('click', () => { pushUndo(c.m); Q().clearPattern(c.pat); render(host); });
     set.appendChild(el('button', { className: 'btn' }, 'Oct +')).addEventListener('click', () => { pushUndo(c.m); Q().transposePattern(c.pat, 12); render(host); });
     set.appendChild(el('button', { className: 'btn' }, 'Oct -')).addEventListener('click', () => { pushUndo(c.m); Q().transposePattern(c.pat, -12); render(host); });
@@ -110,13 +113,15 @@
 
     // 16-step grid (2 rows of 8)
     const grid = el('div', { className: 'seq-grid' });
+    const spb = Q().stepsPerBar(c.m.sequencer); // steps the signature allows (#83)
     for (let i = 0; i < 16; i++) {
+      const disabled = i >= spb; // steps beyond the time signature are unavailable
       const has = Q().stepHasNotes(c.pat, i);
-      const inRange = i >= Math.min(c.pat.start, c.pat.end) && i <= Math.max(c.pat.start, c.pat.end);
-      const cell = el('button', { className: 'seq-step' + (has ? ' on' : '') + (selStep === i ? ' sel' : '') + (inRange ? '' : ' oob'), dataset: { step: i } });
+      const inRange = !disabled && i >= Math.min(c.pat.start, c.pat.end) && i <= Math.max(c.pat.start, c.pat.end);
+      const cell = el('button', { className: 'seq-step' + (has ? ' on' : '') + (selStep === i ? ' sel' : '') + (disabled ? ' disabled' : inRange ? '' : ' oob'), dataset: { step: i } });
       cell.appendChild(el('span', { className: 'ss-n' }, String(i + 1)));
       cell.appendChild(el('span', { className: 'ss-note' }, has ? noteName(c.pat.steps[i].notes[0].note) + (c.pat.steps[i].notes.length > 1 ? '+' : '') : '·'));
-      cell.addEventListener('click', (e) => {
+      if (!disabled) cell.addEventListener('click', (e) => {
         selStep = i;
         if (e.shiftKey || e.metaKey) { pushUndo(c.m); Q().toggleStepNote(c.pat, i, Q().DEFAULT_NOTE, 100, 6); }
         render(host);

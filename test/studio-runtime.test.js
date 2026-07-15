@@ -377,7 +377,10 @@ RT.handleKeys([0x90, 72, 110]); // record C5 -> lands on the next step, monitore
 for (let i = 0; i < 88; i++) RT.tick(); // run out the rest of the 96-tick cycle
 const echoOns = sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 72 && m.bytes[2] > 0).length;
 ok(echoOns === 1, 'recorded note sounds once this cycle (live monitor only, no sequencer echo)');
-// after the cycle elapses, the note plays normally from the sequencer
+// release the held key so the recorded note is finalised — while a key is HELD the
+// sequencer must NOT re-emit that note (it would cut the live note being held, #82).
+RT.handleKeys([0x80, 72, 0]);
+// after the cycle elapses, the (now released) note plays normally from the sequencer
 mark = sent.length;
 for (let i = 0; i < 96; i++) RT.tick();
 const nextOns = sent.slice(mark).filter((m) => m.id === 'dest' && (m.bytes[0] & 0xf0) === 0x90 && m.bytes[1] === 72 && m.bytes[2] > 0).length;
