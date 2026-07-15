@@ -41,7 +41,7 @@
 
   // Time signature (#83): the canonical helpers live in the sequencer module.
   const SEQ = () => global.SLMK.sequencer;
-  const SIG_ORDER = ['3/4', '4/4', '5/4', '6/8', '7/8', '7/4', '9/8'];
+  const SIG_ORDER = ['4/4', '3/4', '6/8', '7/4', '7/8', '9/8'];
   const stepsPerBar = (seq, pattern) => SEQ().stepsPerBar(seq, pattern);
 
   // Soft-button index (0-based) -> menu key (the row below the screens, Soft 1-8).
