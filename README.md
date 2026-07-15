@@ -14,7 +14,8 @@ It's a single web/Electron app — **InControl Studio** — with two top-level t
   `.slmkiiipack` packs.
 - **Sequencer** — a step sequencer modelled on the SL MkIII's own (8 tracks ×
   8 patterns × 16 steps), with a **session library**, on-screen grid, transport,
-  and a look-ahead metronome. Plays back imported Components sessions.
+  selectable **time signatures** (the grid + metronome follow them), and a
+  look-ahead metronome. Plays back imported Components sessions.
 
 The whole surface — pads, soft buttons, knobs, screens, transport, Options mode —
 is driven live from the SL so you can work without looking at the computer. MIDI
@@ -129,6 +130,9 @@ controllable **live** via the InControl SysEx API — which is what this app doe
   back.
 - **Export `.syx`** — writes the active template back out as a Components
   template (bit-exact codec with recomputed CRC-32, so it re-imports cleanly).
+- **Drag & drop** a `.syx`, `.json` or pack onto the window to load it, and turn
+  on **Save my work in this browser** (⚙ settings) to keep your templates,
+  sessions and sequencer across reloads — stored locally, nothing uploaded.
 
 ## Bridge (optional, headless)
 
