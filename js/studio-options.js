@@ -39,10 +39,10 @@
   };
   const MENU_ORDER = ['velocity', 'gate', 'chance', 'tempo', 'pattern'];
 
-  // Time signature (#83): maps to how many 16th-note steps a bar/pattern uses.
-  const SIGNATURES = { '2/4': 8, '3/4': 12, '4/4': 16, '6/8': 12 };
-  const SIG_ORDER = ['2/4', '3/4', '4/4', '6/8'];
-  const stepsPerBar = (seq) => SIGNATURES[(seq && seq.signature) || '4/4'] || 16;
+  // Time signature (#83): the canonical helpers live in the sequencer module.
+  const SEQ = () => global.SLMK.sequencer;
+  const SIG_ORDER = ['3/4', '4/4', '5/4', '6/8', '7/8', '7/4', '9/8'];
+  const stepsPerBar = (seq, pattern) => SEQ().stepsPerBar(seq, pattern);
 
   // Soft-button index (0-based) -> menu key (the row below the screens, Soft 1-8).
   const MENU_BUTTONS = { 0: 'velocity', 1: 'gate', 2: 'chance', 3: 'tempo', 7: 'pattern' };
@@ -109,13 +109,13 @@
       if (knobIndex === 3) { const d = accumulate(seq, 'metOn', delta, 4); if (!d) return null; met.on = d > 0; return 'metronome ' + (met.on ? 'on' : 'off'); }        // #46 on/off
       if (knobIndex === 4) { const d = accumulate(seq, 'metSound', delta, 4); if (!d) return null; met.sound = cycleIndex(['Ping', 'Tick', 'Pop'], met.sound || 'Ping', d); return 'metro sound ' + met.sound; } // #47
       if (knobIndex === 5) { const d = accumulate(seq, 'metSilent', delta, 4); if (!d) return null; met.silent = d > 0; return 'metro ' + (met.silent ? 'blink only' : 'click'); } // #45 blink-only (no sound)
-      if (knobIndex === 6) { const d = accumulate(seq, 'signature', delta, 4); if (!d) return null; seq.signature = cycleIndex(SIG_ORDER, seq.signature || '4/4', d); return 'signature ' + seq.signature; } // #83 time signature
+      if (knobIndex === 6) { const d = accumulate(seq, 'signature', delta, 4); if (!d) return null; SEQ().applySignature(seq, cycleIndex(SIG_ORDER, seq.signature || '4/4', d)); return 'signature ' + seq.signature; } // #83 time signature (auto-fits start/end)
       return null;
     }
 
     if (menuKey === 'pattern') {
       // start/end are limited to the signature's step count (#83): e.g. 3/4 → 1-12.
-      const max = stepsPerBar(seq) - 1;
+      const max = stepsPerBar(seq, pattern) - 1;
       if (knobIndex === 0) { pattern.start = clamp((pattern.start || 0) + delta, 0, max); return 'start ' + pattern.start; }
       if (knobIndex === 1) { pattern.end = clamp((pattern.end == null ? max : pattern.end) + delta, 0, max); return 'end ' + pattern.end; }
       if (knobIndex === 2) { pattern.direction = cycleIndex(DIRECTIONS, pattern.direction, delta); return 'dir ' + pattern.direction; }
