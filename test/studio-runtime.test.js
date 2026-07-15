@@ -275,6 +275,16 @@ const rec = lastLed(32);
 ok(rec && rec.r > 60 && rec.g === 0, '#12 Record bright red when recording');
 st.recording = false; st.running = false;
 
+// --- #83: pads outside the pattern's start/end (e.g. beyond the time signature) are DARK on the SL ---
+st.running = true; st.padView = 'steps'; st.rt.padMode = 'sequencer'; st.gridTrack = 0; st.viewPattern = null;
+const gpat = model.sequencer.tracks[0].patterns[0]; gpat.start = 0; gpat.end = 9; // e.g. a 10-step 5/4 bar
+RT.refreshSurface();
+const inLast = lastLed(38 + 9), outFirst = lastLed(38 + 10), outLast = lastLed(38 + 15);
+ok(outFirst && outFirst.r === 0 && outFirst.g === 0 && outFirst.b === 0, '#83 pad just past End is dark on the SL');
+ok(outLast && outLast.r === 0 && outLast.g === 0 && outLast.b === 0, '#83 pad 16 (out of range) is dark on the SL');
+ok(inLast && (inLast.r || inLast.g || inLast.b), '#83 the last in-range pad is still lit');
+gpat.start = 0; gpat.end = 15; st.running = false;
+
 // --- #24 Screen Up/Down page knob banks ---
 global.SLMK.studio.addKnobBank(model); // now 2 knob banks
 st.rt.knobBank = 0; st.optionsMode = false;

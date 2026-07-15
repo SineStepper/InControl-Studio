@@ -728,8 +728,9 @@
       const has = SEQ().stepHasNotes(p, i);
       const inRange = i >= lo && i <= hi;
       let hex, beh = 'solid';
-      if (has) hex = inRange ? color : '#ff0000';           // used step: bright part color (red if outside start/end, #14)
-      else hex = dim(color);                                 // empty step: dim part color (#12)
+      if (!inRange) hex = '#000000';                         // outside start/end (e.g. beyond the time signature) -> blank/dark pad (#83)
+      else if (has) hex = color;                             // used in-range step: bright part color (#12)
+      else hex = dim(color);                                 // empty in-range step: dim part color (#12)
       if (st.optionsMenu === 'pattern' && st.optionsMode && i === p.start) hex = '#ffd000'; // start step yellow (#14)
       if (i === head) { hex = '#ffffff'; if (!playing) beh = 'pulse'; } // current step: white playing, white-pulse stopped (#12)
       ledHex(38 + i, hex, beh);
