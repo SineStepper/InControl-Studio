@@ -28,7 +28,7 @@
   // pattern's own step rate when a bar fits in the 16 pads at it, and coarsens the
   // rate (→ 1/8, → 1/4) when it wouldn't — so 5/4, 7/4 and 9/8 (which need >16
   // sixteenth-steps) fit as eighth-note steps and stay aligned with the metronome.
-  const SIG_ORDER = ['4/4', '3/4', '6/8', '7/4', '7/8', '9/8'];
+  const SIG_ORDER = ['4/4', '3/4', '6/8', '5/4', '7/4', '7/8', '9/8'];
   function sigBarTicks(sig) { const m = /^(\d+)\/(\d+)$/.exec(sig || '4/4'); const num = m ? (+m[1] || 4) : 4, den = m ? (+m[2] || 4) : 4; return num * Math.round(96 / den); }
   // The finest sync rate at which a signature's bar fits within 16 pads, + step count.
   function sigGrid(sig) {

@@ -141,6 +141,6 @@ eq(Q.barBounds(tsig, tsig.tracks[0].patterns[0]).end, 15, '#83 switching back to
   eq([p.syncRate, p.start, p.end + 1], [rate, 0, steps], '#83 ' + sig + ' auto-fits to ' + steps + ' ' + rate + ' steps');
   eq((p.end - p.start + 1) * Q.SYNC[p.syncRate], Q.sigBarTicks(sig), '#83 ' + sig + ' pattern loop == the bar (metronome stays aligned)');
 });
-eq(Q.SIG_ORDER, ['4/4', '3/4', '6/8', '7/4', '7/8', '9/8'], '#83 signature list order');
+eq(Q.SIG_ORDER, ['4/4', '3/4', '6/8', '5/4', '7/4', '7/8', '9/8'], '#83 signature list order');
 
 console.log('\nALL ' + n + ' SEQUENCER TESTS PASSED');
