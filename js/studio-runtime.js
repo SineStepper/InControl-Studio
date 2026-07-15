@@ -499,16 +499,18 @@
     if (st.optionsMode) refreshOptionScreens();
     notify(); log('pattern ' + (t.activePattern + 1));
   }
-  // Page the two visible Parts in Patterns view without changing the active Part
-  // (#17). Pages by 2 so the two visible rows never overlap across pages (#52).
+  // Move the SELECTED Part in Patterns view by one (#93). The two-row layout is
+  // kept, but the arrows step the selection Part-by-Part: down from Part 1 selects
+  // Part 2 (same visible pair), down again pages to the next pair (Parts 3 & 4) and
+  // selects the first of it, and so on. The visible pair is aligned to the
+  // selected Part so it's always on screen.
   function pagePart(dir) {
-    const next = st.partTop + dir * 2;
-    if (next < 0 || next > SEQ().TRACKS - 2) return; // clamp so two rows always fit (0,2,4,6)
-    st.partTop = next;
-    refreshPatternPads(); refreshArrowLeds();
-    // Briefly show the two paged-to Part names (white) on the 5th screen (#69).
-    if (!st.optionsMode) flash5thScreen(partLabel(st.partTop) + ' ' + partLabel(st.partTop + 1), '#ffffff', 1400);
-    notify(); log('parts ' + (st.partTop + 1) + '-' + (st.partTop + 2));
+    const next = Math.max(0, Math.min(SEQ().TRACKS - 1, st.gridTrack + dir));
+    if (next === st.gridTrack) return;
+    st.partTop = Math.min(SEQ().TRACKS - 2, next & ~1); // align the visible pair to the selected Part
+    selectChannel(next + 1);                            // move the selection (repaints the pattern pads)
+    if (!st.optionsMode) flash5thScreen(partLabel(next), '#ffffff', 1200); // show the selected Part
+    log('part ' + (next + 1) + ' selected');
   }
   // Steps view: page which pattern the grid VIEWS, without changing what plays (#54).
   function viewPatternPage(dir) {
@@ -742,18 +744,23 @@
   function refreshPatternPads() {
     const m = model(); const tracks = m && m.sequencer && m.sequencer.tracks; if (!tracks) return;
     for (let row = 0; row < 2; row++) {
-      const t = tracks[st.partTop + row];
+      const partIdx = st.partTop + row;
+      const t = tracks[partIdx];
+      // The selected Part's row is drawn bright; the other row is dimmed so it's
+      // obvious which Part is selected in Patterns view (#93).
+      const selected = partIdx === st.gridTrack;
+      const rowDim = (hex) => (selected ? hex : opts().scaleColor(hex, 0.3));
       for (let col = 0; col < 8; col++) {
         const pad = row * 8 + col;
         if (!t) { ledHex(38 + pad, '#000000'); continue; }
         const pend = t.pending;
-        if (pend && (col === pend.activePattern || (pend.chain && col >= pend.chain.from && col <= pend.chain.to))) { ledHex(38 + pad, '#ffffff', 'pulse'); continue; }
+        if (pend && (col === pend.activePattern || (pend.chain && col >= pend.chain.from && col <= pend.chain.to))) { ledHex(38 + pad, rowDim('#ffffff'), 'pulse'); continue; }
         const color = t.color || '#3bd0ff';
         let hex;
         if (col === t.activePattern) hex = '#ffffff';
         else if (t.chain && col >= t.chain.from && col <= t.chain.to) hex = opts().lighten(color, 0.4);
-        else hex = opts().scaleColor(color, 0.35);
-        ledHex(38 + pad, hex);
+        else hex = opts().scaleColor(color, selected ? 0.45 : 0.35);
+        ledHex(38 + pad, rowDim(hex));
       }
     }
   }
@@ -768,7 +775,7 @@
     // position (which the grid previews, #54).
     const viewIdx = st.viewPattern != null ? st.viewPattern : t.activePattern;
     const a = st.padView === 'patterns'
-      ? { up: st.partTop > 0, down: st.partTop < SEQ().TRACKS - 2 }
+      ? { up: st.gridTrack > 0, down: st.gridTrack < SEQ().TRACKS - 1 } // Part-by-Part selection (#93)
       : opts().arrowLeds(viewIdx, SEQ().PATTERNS);
     ledHex(0, a.up ? AR : '#000000');
     ledHex(1, a.down ? AR : '#000000');
