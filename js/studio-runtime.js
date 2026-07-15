@@ -400,7 +400,7 @@
 
   // ---- Automation (record/replay control moves per pattern, up to 8 lanes) ----
   const autoKey = (group, index) => group + ':' + (group === 'knob' ? st.rt.knobBank : group === 'button' ? st.rt.buttonBank : 0) + ':' + index;
-  const patternTicks = (p) => (Math.abs((p.end || 0) - (p.start || 0)) + 1) * (SEQ().SYNC[p.syncRate] || 6);
+  const patternTicks = (p) => { const seq = (st.seqRt && st.seqRt.seq) || (model() && model().sequencer); const b = seq ? SEQ().barBounds(seq, p) : { start: p.start || 0, end: p.end || 0 }; return (Math.abs(b.end - b.start) + 1) * (SEQ().SYNC[p.syncRate] || 6); };
   function recordAutomation(group, index, bytes) {
     if (!st.recording || !seqIsPlaying() || !bytes || !bytes.length || !st.seqRt) return;
     const t = curTrack(); const p = t && t.patterns[t.activePattern]; if (!p) return;
