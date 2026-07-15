@@ -48,20 +48,15 @@
     const start = Math.min(p.start == null ? 0 : p.start, end);
     return { start, end };
   }
-  // Apply a signature and auto-fit every pattern's step rate + start/end so the
-  // grid spans exactly one bar (#83): keep the pattern's rate when the bar fits at
-  // it, coarsen it when it doesn't, then set start=0 / end=last-step-of-the-bar.
+  // Apply a signature and auto-fit every pattern so the grid spans exactly one bar
+  // (#83). Every signature change resets each pattern to the FINEST step rate that
+  // fits (1/16 where it can, coarser only when it must) and start=0 / end=last-
+  // step, so e.g. 5/4 (→1/8) then back to 4/4 resets the rate to 1/16.
   function applySignature(seq, sig) {
     seq.signature = sig;
-    const bar = sigBarTicks(sig);
-    seq.tracks.forEach((t) => t.patterns.forEach((p) => {
-      let rate = p.syncRate || '1/16';
-      if (Math.round(bar / (SYNC[rate] || 6)) > 16) rate = sigGrid(sig).syncRate; // coarsen only when needed
-      p.syncRate = rate;
-      p.start = 0;
-      p.end = Math.min(16, Math.round(bar / SYNC[rate])) - 1;
-    }));
-    return sigGrid(sig);
+    const g = sigGrid(sig);
+    seq.tracks.forEach((t) => t.patterns.forEach((p) => { p.syncRate = g.syncRate; p.start = 0; p.end = g.steps - 1; }));
+    return g;
   }
 
   // Default Part colors (one per track), echoing the SL MkIII's colored Parts.
