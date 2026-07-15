@@ -367,7 +367,13 @@
     // gets maximum lead time. MIDI is always sent in realtime (never delayed).
     scheduleMetronome(beatTick);
     const events = SEQ().onTick(st.seqRt);
+    const recCh = st.recording ? (curTrack() ? (curTrack().channel - 1) & 0x0f : -1) : -1;
     events.forEach((e) => {
+      // While a note is still HELD during recording, don't let the sequencer's
+      // playback of that same pitch/channel emit its note-off — it would cut the
+      // live note you're holding (same note number, same channel). Hold as long as
+      // you like; the recorded gate is finalised on release (#82).
+      if (recCh === e.channel && st.recRef.has(e.note)) return;
       // Drop the sequencer's own echo of a note we just recorded + monitored live
       // this cycle, so the fresh note isn't heard twice (bug: double key on record).
       const ek = e.channel + ':' + e.note, until = st.recEcho.get(ek);
