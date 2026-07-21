@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null, patternStripTimer: null, notifyBusy: false };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null, patternStripTimer: null, notifyBusy: false, startedAt: 0 };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
 
@@ -1028,6 +1028,12 @@
     }
     // Transport controls the sequencer
     if (ev.value > 0 && (ev.control === 'Play' || ev.control === 'Stop' || ev.control === 'Record')) {
+      // On a clean launch the SL dumps its control/transport state the moment we
+      // open its InControl port; if a Play/Record is in that burst it would start
+      // (or arm) the sequencer on its own — you'd hear a phantom note. Swallow
+      // Play/Record for a short settle window after the engine starts; a real
+      // button press comes later. Stop is always honoured.
+      if ((ev.control === 'Play' || ev.control === 'Record') && Date.now() - (st.startedAt || 0) < 800) { log('ignored connect-time ' + ev.control); return; }
       if (ev.control === 'Play') seqPlay();
       else if (ev.control === 'Stop') seqStop();
       else if (ev.control === 'Record') {
@@ -1229,6 +1235,7 @@
     refreshKeyGuide(); // light the keybed in the current Part's color (#51)
     for (let i = 0; i < 8; i++) refreshFaderLed(i, 0); // faders start dim (value unknown until moved)
     st.rt.channel = st.activeChannel;
+    st.startedAt = Date.now();             // settle window: swallow the SL's connect-time transport dump
     st.unsub = midi.subscribeInput(st.slInId, onMsg);
     if (st.keysInId && st.keysInId !== st.slInId) st.keysUnsub = midi.subscribeInput(st.keysInId, onKeys);
     st.running = true;

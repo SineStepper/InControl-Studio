@@ -475,6 +475,16 @@ const panicChans = new Set(sent.slice(mark).filter((m) => m.id === 'dest' && (m.
 ok(panicChans.size === 16, '#29 Play panics all 16 channels (got ' + panicChans.size + ')');
 RT.seqStop();
 
+// --- clean launch: the SL's connect-time transport dump must NOT auto-start the sequencer ---
+st.clock = null; st.seqRt = null;
+st.startedAt = Date.now();               // simulate the engine having just started
+RT.handleControl(CC(0x73, 127));         // a Play arriving in the connect-time burst
+ok(!RT.seqIsPlaying(), 'clean launch: a connect-time Play is ignored (sequencer does not auto-start)');
+st.startedAt = Date.now() - 5000;        // settle window elapsed
+RT.handleControl(CC(0x73, 127));         // a genuine later press
+ok(RT.seqIsPlaying(), 'a Play after the settle window starts the sequencer normally');
+RT.seqStop(); st.clock = null; st.startedAt = 0;
+
 // --- MIDI is ALWAYS realtime: sequencer notes are never scheduled/timestamped,
 //     even with the metronome on and a lead offset set ---
 st.mute.clear(); st.solo.clear(); st.optionsMode = false; st.recording = false;
