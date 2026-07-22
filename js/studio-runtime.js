@@ -22,7 +22,7 @@
     optionsMode: false, optionsMenu: 'velocity', stepPage: 0, padView: 'steps', microstep: 0,
     mute: new Set(), solo: new Set(), activeChannel: 1, litKeys: new Set(), channelRt: {}, keyGuide: true,
     heldPatterns: new Set(), selStep: null, heldMicros: new Set(), changeCbs: [], audioCtx: null, gridFlashTimer: null, partTop: 0,
-    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null, patternStripTimer: null, notifyBusy: false, startedAt: 0 };
+    audioLatencyMs: 0, metroSyncMs: null, metro: null, audioLatencyHint: 'interactive', audioSinkId: null, viewPattern: null, lastGridHead: -1, seqNoteTick: new Map(), noteChan: new Map(), lastStepScreen: null, screen5: null, screen5Timer: null, lastPatternStrip: null, lastKnobMask: null, patternStripTimer: null, notifyBusy: false, startedAt: 0, notifyTimer: null, lastNotify: null, loadedSession: null };
   const opts = () => global.SLMK.studioOptions;
   const $ = (s) => document.querySelector(s);
 
@@ -122,8 +122,21 @@
   // Very-top-edge pattern strip on the center screen, via the notification command
   // (the property text objects have no row above obj 0). '#' current/playing,
   // '+' chained, '-' unchained (#66). Change-detected so it isn't re-sent per tick.
+  // Briefly show an adjusted value's name + value in the centre notification area
+  // (#99). Takes over the notification (setting notifyBusy so the pattern-strip
+  // keep-alive yields), then restores the strip after a moment.
+  function notifyValue(name, value) {
+    if (!st.slOutId || !sysex) return;
+    st.notifyBusy = true;
+    clearTimeout(st.notifyTimer);
+    st.notifyTimer = setTimeout(() => { st.notifyBusy = false; st.lastNotify = null; if (!st.optionsMode) refreshPatternStrip(true); }, 1100);
+    const key = String(name) + '\n' + String(value);
+    if (key === st.lastNotify) return; // unchanged — just keep the window open (no re-send during a sweep)
+    st.lastNotify = key;
+    send(sysex.screenNotify(String(name == null ? '' : name), String(value == null ? '' : value)));
+  }
   function refreshPatternStrip(force) {
-    if (!st.slOutId || !sysex || st.optionsMode) return;
+    if (!st.slOutId || !sysex || st.optionsMode || st.notifyBusy) return; // a value notification owns the area (#99)
     const t = curTrack(); if (!t) return;
     const str = opts().patternStrip(t.activePattern, t.chain, SEQ().PATTERNS);
     if (!force && st.lastPatternStrip === str) return;
@@ -620,6 +633,9 @@
     }
     st.rt.padMode = padMode;
     st.rt.channel = ch;                    // 'default'-channel controls now emit on this channel
+    // Patterns view: jump the visible pair to the page holding the selected Part
+    // so the Part buttons always reveal that Part's row (#100).
+    if (st.padView === 'patterns') st.partTop = Math.min(SEQ().TRACKS - 2, st.gridTrack & ~1);
     refreshChannelLeds();
     if (st.rt.padMode === 'sequencer') refreshGrid(); else refreshNotePads();
     refreshArrowLeds(); refreshKnobScreens(); refreshKeyGuide(); // key guide follows the Part color (#51)
@@ -718,6 +734,7 @@
   const partColorOf = (i) => { const m = model(); const t = m && m.sequencer && m.sequencer.tracks[i]; return (t && t.color) || SEQ().PART_COLORS[i % 8]; };
   function refreshGrid() {
     if (!st.slOutId || !global.SLMK.sysex) return;
+    if (st.padView === 'sessions') return refreshSessionPads();
     if (st.padView === 'patterns') return refreshPatternPads();
     const p = gridPattern(); if (!p) return;
     // Only show the moving play-head when the grid is viewing the pattern that's
@@ -764,6 +781,17 @@
       }
     }
   }
+  // Sessions view (#98): the 16 pads are session slots from the library. A slot
+  // with a session lights purple (the loaded one white); pressing it loads that
+  // session. Empty slots are unlit.
+  function refreshSessionPads() {
+    const m = model(); const sessions = (m && m.sessions) || [];
+    for (let i = 0; i < 16; i++) {
+      const s = sessions[i];
+      if (!s) { ledHex(38 + i, '#000000'); continue; }
+      ledHex(38 + i, st.loadedSession === s.id ? '#ffffff' : '#8a4bff');
+    }
+  }
   // Up/down arrow LEDs, all consistent (lit when there's somewhere to go, else off) (#12/#24).
   //   Pads Up/Down (0/1)      -> pattern list position.
   //   Screen Up/Down (62/63)  -> knob-bank position.
@@ -774,7 +802,9 @@
     // Pads Up/Down: Part-paging position in Patterns view, else the VIEWED pattern
     // position (which the grid previews, #54).
     const viewIdx = st.viewPattern != null ? st.viewPattern : t.activePattern;
-    const a = st.padView === 'patterns'
+    const a = st.padView === 'sessions'
+      ? { up: false, down: false } // Sessions view has no pad paging (#98)
+      : st.padView === 'patterns'
       ? { up: st.gridTrack > 0, down: st.gridTrack < SEQ().TRACKS - 1 } // Part-by-Part selection (#93)
       : opts().arrowLeds(viewIdx, SEQ().PATTERNS);
     ledHex(0, a.up ? AR : '#000000');
@@ -790,7 +820,7 @@
   }
   // Scene 1 (Top) = Patterns view, Scene 2 (Bottom) = Steps view (#4).
   function refreshSceneLeds() {
-    ledHex(2, st.padView === 'patterns' ? '#ffae00' : '#160f00');
+    ledHex(2, st.padView === 'sessions' ? '#8a4bff' : st.padView === 'patterns' ? '#ffae00' : '#160f00'); // sessions purple / patterns amber (#98)
     ledHex(3, st.padView === 'steps' ? '#3bd0ff' : '#001016');
   }
   // Options-mode soft-button LEDs + the Options button itself (#6).
@@ -1048,7 +1078,12 @@
     // Options button: toggle the options-editing surface (#6)
     if (ev.control === 'Options') { if (ev.value > 0) toggleOptions(); return; }
     // Scene 1 (Top) -> Patterns view, Scene 2 (Bottom) -> Steps view (#4)
-    if (ev.control === 'Scene Top' || ev.control === 'Scene Bottom') { if (ev.value > 0) setPadView(ev.control === 'Scene Top' ? 'patterns' : 'steps'); return; }
+    // Scene Top -> Patterns view, Scene Bottom -> Steps view (#4). Shift+Scene Top
+    // opens the Sessions page: the pads become session slots you load (#98).
+    if (ev.control === 'Scene Top' || ev.control === 'Scene Bottom') {
+      if (ev.value > 0) setPadView(ev.control === 'Scene Top' ? (st.shift ? 'sessions' : 'patterns') : 'steps');
+      return;
+    }
     // Track Left/Right select the previous/next Part (like Soft 1-8, but stepping).
     if (ev.control === 'Track Left' || ev.control === 'Track Right') {
       if (ev.value > 0) { const ch = Math.max(1, Math.min(8, st.activeChannel + (ev.control === 'Track Right' ? 1 : -1))); selectChannel(ch); }
@@ -1120,12 +1155,32 @@
           // Tempo, swing, and swing-sync all change the clock's per-tick timing —
           // retune the running clock for any of them, not just tempo, so swing
           // updates immediately without needing a tempo nudge.
-          if (desc) { scheduleOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo|swing/.test(desc)) restartClockIfRunning(); log(desc); }
+          if (desc) {
+            scheduleOptionScreens(); if (st.rt.padMode === 'sequencer') refreshGrid(); contentChanged(); if (/tempo|swing/.test(desc)) restartClockIfRunning(); log(desc);
+            // Show the adjusted value's name + value in the notification area (#99).
+            const cols = opts().columns(seq, t.patterns[t.activePattern], st.optionsMenu, st.stepPage); const col = cols[c.index];
+            if (col) { const mn = opts().MENUS[st.optionsMenu]; notifyValue(mn && mn.perStep ? mn.label : col.top, col.bottom); }
+          }
         }
         return;
       }
     }
 
+    // Sessions view (#98): a pad loads that session slot from the library.
+    if (c && c.group === 'pad' && st.padView === 'sessions' && st.rt && st.rt.padMode === 'sequencer') {
+      if (ev.value > 0) {
+        const m = model(); const s = m && m.sessions && m.sessions[c.index];
+        if (s) {
+          studio().loadSession(m, s.id); st.loadedSession = s.id;
+          st.seqRt = null; ensureSeqRt();                 // rebuild the play runtime for the loaded sequence
+          refreshSessionPads();
+          if (!st.optionsMode) flash5thScreen((s.name || 'Session').slice(0, 9), '#8a4bff', 1400);
+          notifyValue('Session', s.name || ('Session ' + (c.index + 1)));
+          contentChanged(); log('load session ' + (s.name || c.index + 1));
+        }
+      }
+      return;
+    }
     // Patterns view (#17): top row = Part `partTop`, bottom row = `partTop+1`.
     // A pad selects that Part + pattern; two+ in the same row chain them (#11/#3).
     if (c && c.group === 'pad' && st.padView === 'patterns' && st.rt && st.rt.padMode === 'sequencer') {
@@ -1210,6 +1265,9 @@
       const a = c.group === 'knob' ? (st.rt.model.knobBanks[st.rt.knobBank] || [])[c.index] : st.rt.model.faders[c.index];
       const val = c.group === 'knob' ? engine.knobDisplay(st.rt, c.index) : ev.value;
       if (val != null) flash5thScreen(String(val), (a && a.led && a.led.idle) || '#ffffff', 900);
+      // Also show the control's name + value in the notification area (#99). Knobs
+      // only — faders can move eight at once and would thrash the single popup.
+      if (val != null && c.group === 'knob') notifyValue((a && a.name) || 'Knob ' + (c.index + 1), val);
     }
     if (c.group === 'pad') pressFlash('pad', c.index, ev.value > 0); // press-to-lighten in instrument mode (#5)
     else if (res.ledDirty) { const led = engine.ledOne(st.rt, c.group, c.index); if (led) midi.sendToOutput(st.slOutId, led); }

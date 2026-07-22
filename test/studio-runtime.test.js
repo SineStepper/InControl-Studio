@@ -564,6 +564,7 @@ model.sequencer.signature = '4/4'; st.clock = null; st.seqRt.playing = false; mo
 // --- #63/#65/#66 knob screens: colored bars, part label at the bottom, 5th-screen step graphic ---
 st.optionsMode = false; st.clock = null; st.seqRt = null; st.running = true;
 RT.handleControl(CC(0x33 + 0, 127)); // Part 1
+st.notifyBusy = false; st.lastNotify = null; // clear any lingering value-notification takeover (#99)
 mark = sent.length;
 RT.refreshSurface();
 const kscr = sent.slice(mark).filter((m) => m.bytes[7] === 0x02);
@@ -616,5 +617,37 @@ RT.handleControl(CC(0x15, 5)); // knob 1 turn (+5) on the resolved knob CC
 const v5 = sent.slice(mark).filter((m) => m.bytes[7] === 0x02 && m.bytes[8] === 8 && m.bytes[9] === 0x01 && m.bytes[10] === 5);
 ok(v5.length > 0, '#69 turning a knob writes a value overlay onto the 5th screen bottom row (column 8, obj 5)');
 st.screen5 = null; st.running = false;
+
+// --- #100 Part buttons jump the Patterns view to the page holding the Part ---
+st.running = true; st.padView = 'patterns'; st.gridTrack = 0; st.activeChannel = 1; st.partTop = 0; st.rt.padMode = 'sequencer'; st.optionsMode = false;
+RT.handleControl(CC(0x33 + 4, 127)); // Soft 5 -> Part 5
+ok(st.activeChannel === 5 && st.partTop === 4, '#100 selecting Part 5 pages the view to Parts 5-6');
+RT.handleControl(CC(0x33 + 0, 127)); // Soft 1 -> Part 1
+ok(st.partTop === 0, '#100 selecting Part 1 pages back to Parts 1-2');
+st.padView = 'steps';
+
+// --- #99 adjusting a value shows its name + value in the notification area (0x04) ---
+st.notifyBusy = false; st.lastNotify = null; st.optionsMode = false;
+RT.handleControl(CC(0x5a, 127));      // options on
+RT.handleControl(CC(0x33 + 3, 127));  // Tempo menu
+mark = sent.length;
+RT.handleControl(CC(0x15, 4));        // Knob 1 +4 -> tempo up
+const vnote = sent.slice(mark).find((m) => m.bytes[7] === 0x04);
+ok(vnote, '#99 adjusting a value sends a centre-screen notification (0x04)');
+RT.handleControl(CC(0x5a, 127));      // options off
+st.notifyBusy = false; st.lastNotify = null; clearTimeout(st.notifyTimer);
+
+// --- #98 Shift+Scene Top opens the Sessions view; a pad loads a session ---
+st.optionsMode = false; st.padView = 'steps'; st.rt.padMode = 'sequencer';
+global.SLMK.studio.snapshotSession(model, 'Alpha');
+global.SLMK.studio.snapshotSession(model, 'Beta');
+RT.handleControl(CC(0x5b, 127));      // Shift down
+RT.handleControl(CC(0x53, 127));      // Scene Top while shifted -> Sessions view
+RT.handleControl(CC(0x5b, 0));        // Shift up
+ok(st.padView === 'sessions', '#98 Shift+Scene Top opens the Sessions view');
+st.loadedSession = null;
+RT.handleControl([0x90, 0x60 + 1, 127]); // press Pad 2 -> loads session index 1
+ok(st.loadedSession === model.sessions[1].id, '#98 pressing a session pad loads that session');
+st.padView = 'steps'; st.running = false; st.notifyBusy = false; clearTimeout(st.notifyTimer);
 
 console.log('\n' + n + ' integration assertions passed');
