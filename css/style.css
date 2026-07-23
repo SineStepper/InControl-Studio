@@ -13,7 +13,7 @@
   --glyph-size: 80px;
   --glyph-gap: 8px;
   --edit-w: calc(8 * var(--glyph-size) + 7 * var(--glyph-gap));
-  --zoom: 1.3; /* whole-UI scale, like browser zoom */
+  --zoom: 1.1; /* whole-UI scale, like browser zoom */
 }
 :root[data-theme="light"] {
   --bg: #eef1f5;
