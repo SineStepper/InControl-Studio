@@ -103,8 +103,17 @@ Property:  F0 00 20 29 02 0A 01 02 <col> <type> <obj> <data…> F7
 | Property `type` | Meaning | Data |
 | --------------- | ------- | ---- |
 | `01` | Text  | 7-bit ASCII, ≤9 chars, NUL-terminated |
-| `03` | Value | one byte 0–127 (drives the knob arc) |
-| `04` | RGB   | `<R> <G> <B>`, 0–127 each |
+| `02` | Colour | one byte — index into the SL's colour table (0–127) |
+| `03` | Value | one byte 0–127 (see the layout's *value fields*) |
+| `04` | RGB   | `<R> <G> <B>`, 0–127 each — renders as a colour **bar** |
+
+**Knob-layout value fields** (`type 03`): field **0** = the knob-icon value
+(0–127, the arc); field **1** = *"lower text selected"* (`0`/`1`) — when set, a
+box in the **bottom-bar colour** (colour obj `2`) is drawn behind the lower text
+to mark that column as selected. So a Part label is shown **underlined** with the
+bottom-bar colour, or **highlighted** (filled box) by setting value field 1.
+This app highlights the selected Part's label (value field 1 = 1) and leaves the
+others underlined.
 
 **Objects within a column** (knob layout):
 

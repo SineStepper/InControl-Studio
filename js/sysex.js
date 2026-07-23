@@ -114,10 +114,11 @@
   }
   // Set an RGB color property (type 4) on a column's object.
   function screenRgb(col, obj, r, g, b) { return HEADER.concat([0x02, col & 0x7f, 0x04, obj & 0x7f, clamp7(r), clamp7(g), clamp7(b), EOX]); }
-  // Center-screen notification (command 0x04): up to two lines of 7-bit ASCII shown
-  // across the top of the center screen. Each line is NUL-terminated.
+  // Center-screen notification (command 0x04): two lines of 7-bit ASCII shown
+  // across the top of the center screen (up to 18 chars each per the Programmer's
+  // Reference). Each line is NUL-terminated.
   function screenNotify(line1, line2) {
-    const enc = (s) => { const t = []; for (const ch of String(s || '').slice(0, 9)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00); return t; };
+    const enc = (s) => { const t = []; for (const ch of String(s || '').slice(0, 18)) t.push(ch.charCodeAt(0) & 0x7f); t.push(0x00); return t; };
     return HEADER.concat([0x04], enc(line1), enc(line2 || ''), [EOX]);
   }
 

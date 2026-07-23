@@ -96,15 +96,17 @@
         send(sysex.screenRgb(i, 1, r, g, b)); // knob icon (glyph) color — customisable per knob (#12)
         sendKnobValue(i);
       }
-      // Each column's bottom label names Part i+1; underline it with THAT Part's
-      // color, and highlight (full color) the currently-selected Part, others
-      // dimmed (#68). We only get one RGB per object, so bright vs dim stands in
-      // for highlight vs underline.
+      // Each column's bottom label names Part i+1, on text row 4 (below the icon).
+      // Per the Programmer's Reference (Knob Layout), value field 1 = "lower text
+      // selected": when set, a box in the bottom-bar colour is drawn behind that
+      // text. So the SELECTED Part's label is HIGHLIGHTED (a filled box in its Part
+      // colour); the others just get the dim bottom bar (an underline).
       const sel = (i + 1) === st.activeChannel;
       const bar = sysex.hexTo7bit(sel ? partColorOf(i) : opts().scaleColor(partColorOf(i), 0.4));
-      send(sysex.screenText(i, 2, ''));                    // clear obj 2 — the label used to live here (#65); leaving it set showed a duplicate label row
-      send(sysex.screenRgb(i, 2, bar.r, bar.g, bar.b));
-      send(sysex.screenText(i, 3, partLabel(i)));          // part label hugging the bottom edge (#58/#65)
+      send(sysex.screenText(i, 2, ''));                    // clear text row 3 — the label used to live here (#65)
+      send(sysex.screenRgb(i, 2, bar.r, bar.g, bar.b));    // bottom-bar colour (also the highlight-box colour)
+      send(sysex.screenText(i, 3, partLabel(i)));          // part label on text row 4 (below the icon) (#58/#65)
+      send(sysex.screenValue(i, 1, sel ? 1 : 0));          // value field 1 highlights the selected Part's label
     }
     refreshCenterScreen();
     refreshPatternStrip(true); // 5th screen TOP edge: the 8-pattern chain strip (#66)

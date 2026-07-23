@@ -574,6 +574,11 @@ ok(kscr.some((m) => m.bytes[8] === 0 && m.bytes[9] === 0x04 && m.bytes[10] === 2
 ok(stxt(0, 3), '#65 part label sits on the bottom text row (obj 3)');
 ok(stxt(0, 2) === '' || stxt(0, 2) == null, '#65 the old label row (obj 2) is cleared so the label does not appear twice');
 ok(stxt(4, 3), '#65 column 4 is a normal knob screen with its own Part label (obj 3), not the animation');
+// selected Part's label is HIGHLIGHTED (text-highlight property: type 3, obj 3, value 1);
+// the others are not highlighted (value 0). Part 1 is selected here.
+const hi = (col) => { const m = kscr.find((x) => x.bytes[8] === col && x.bytes[9] === 0x03 && x.bytes[10] === 1); return m ? m.bytes[11] : null; };
+ok(hi(0) === 1, 'selected Part label is highlighted (Knob-layout value field 1 = 1)');
+ok(hi(1) === 0, 'non-selected Part labels are not highlighted (value field 1 = 0)');
 const notif = sent.slice(mark).find((m) => m.bytes[7] === 0x04);
 ok(notif, '#66 the 8-pattern chain strip is sent via the center-screen notification command (0x04)');
 { let s = ''; for (let i = 8; i < notif.bytes.length && notif.bytes[i] !== 0; i++) s += String.fromCharCode(notif.bytes[i]); ok(s.length === 8, '#66 the notification carries the 8-pattern strip'); }
