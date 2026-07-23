@@ -265,10 +265,23 @@ const play = lastLed(36), stop = lastLed(35), loop = lastLed(37), dup = lastLed(
 ok(play && play.g > 0 && play.r === 0 && play.b === 0 && play.g < 60, '#12 Play dim green when stopped');
 ok(stop && stop.r > 60 && stop.g > 60 && stop.b > 60, '#12 Stop bright white when stopped');
 ok(loop && loop.r === 0 && loop.g === 0 && loop.b === 0, '#12 Loop unlit');
-ok(dup && dup.g > 0 && dup.r === 0, '#12 Duplicate dim green');
-ok(clr && clr.r > 0 && clr.g === 0, '#12 Clear dim red');
+ok(dup && dup.r > 0 && dup.g > 0 && dup.b > 0 && dup.r < 90, '#103 Duplicate dim white at rest');
+ok(clr && clr.r > 0 && clr.g > 0 && clr.b > 0 && clr.r < 90, '#103 Clear dim white at rest');
 ok(grid && grid.r > 0 && grid.g > 0 && grid.b > 0 && grid.r < 60, '#12 Grid dim white');
-ok(trk && trk.b > 0 && trk.r === 0 && trk.g === 0, '#12 Track Left dim blue');
+ok(trk && trk.r === 0 && trk.g === 0 && trk.b === 0, '#103 Track Left OFF at Part 1 (end reached)');
+// press feedback + white when a move is possible
+RT.handleControl(CC(0x33 + 2, 127)); // Part 3 -> Track Left can go back
+RT.refreshSurface();
+const trkL = lastLed(30); ok(trkL && trkL.r > 0 && trkL.g > 0 && trkL.b > 0, '#103 Track Left white when a Part is available');
+RT.handleControl([0xb0, 0x66, 127]); // Track Left pressed -> bright white while held
+ok((lastLed(30) || {}).r > 90, '#103 Track Left brighter white while pressed');
+RT.handleControl([0xb0, 0x66, 0]);   // release
+RT.handleControl(CC(0x33 + 0, 127)); // back to Part 1
+// Clear pressed -> red, Duplicate pressed -> green
+RT.handleControl([0xb0, 0x5d, 127]); ok((lastLed(67) || {}).r > 90 && (lastLed(67) || {}).g === 0, '#103 Clear red while held');
+RT.handleControl([0xb0, 0x5d, 0]);
+RT.handleControl([0xb0, 0x5c, 127]); ok((lastLed(66) || {}).g > 90 && (lastLed(66) || {}).r === 0, '#103 Duplicate green while held');
+RT.handleControl([0xb0, 0x5c, 0]);
 // Record engaged -> bright red
 st.recording = true; RT.refreshSurface();
 const rec = lastLed(32);
